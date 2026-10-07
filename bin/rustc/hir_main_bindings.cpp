@@ -18,12 +18,16 @@
 using namespace stl;
 
 namespace {
+    const size_t SIMPLE_PATH_EMPTY = 0xFFFFFFFE;
+    const size_t SIMPLE_PATH_FRESH = 0xFFFFFFFF;
+
     template <typename T>
     struct D {};
 
     struct HirDeserialiser {
         RcString crateName;
         Vector<const HIRType*> types;
+        Vector<HIRSimplePath> simplePaths;
         HIRSerialiseReader& in;
         HIRTypeInterner& typeInterner;
         u32& id;
@@ -442,6 +446,7 @@ namespace {
     struct HirSerialiser {
         std::map<RcString, size_t> types;
         IntMap<size_t> typeIds;
+        IntMap<size_t> simplePathIds;
         HIRSerialiseWriter& out;
         HIRTypeInterner& typeInterner;
         unsigned unevaluatedBodyDepth = 0;
@@ -802,6 +807,13 @@ const HIRType* HirDeserialiser::deserialiseType() {
 
 HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
     TRACE_FUNCTION;
+    const auto idx = in.readCount();
+    if (idx == SIMPLE_PATH_EMPTY) {
+        return HIRSimplePath();
+    }
+    if (idx != SIMPLE_PATH_FRESH) {
+        return simplePaths[idx];
+    }
     auto members = deserialiseThinvec<RcString>();
     auto rv = members.empty() ? HIRSimplePath() : HIRSimplePath(members[0], std::span<RcString>(members.begin() + 1, members.end()));
     // HACK! If the read crate name is empty, replace it with the name we're loaded with
@@ -809,6 +821,7 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
         BUG_ASSERT(crateName != "");
         rv.updateCrateName(crateName);
     }
+    simplePaths.pushBack(rv);
     return rv;
 }
 
@@ -3065,6 +3078,7 @@ auto TreeVisitor::decIndent() -> void {
 
 HirSerialiser::HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner, ObjPool& pool)
     : typeIds(&pool)
+    , simplePathIds(&pool)
     , out(out)
     , typeInterner(typeInterner)
 {
@@ -3405,12 +3419,18 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
 auto HirSerialiser::serialiseSimplepath(const HIRSimplePath& path) -> void {
     const auto* data = path.rawData();
     if (!data) {
-        auto _ = out.openObject(typeid(ThinVector<RcString>).name());
-        out.writeCount(0);
+        out.writeCount(SIMPLE_PATH_EMPTY);
         return;
     }
     TRACE_FUNCTION_F(path);
+    const auto key = reinterpret_cast<uintptr_t>(data);
+    if (const auto* known = simplePathIds.find(key)) {
+        out.writeCount(*known);
+        return;
+    }
+    out.writeCount(SIMPLE_PATH_FRESH);
     serialiseVec(data->members);
+    simplePathIds.insert(key, simplePathIds.size());
 }
 
 auto HirSerialiser::serialisePathparams(const HIRPathParams& pp) -> void {
