@@ -9481,7 +9481,24 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         return inner && predicate(inner) ? inner : nullptr;
     };
 
-    if (const auto* objectType = singleTraitScope ? nullptr : getInnerType(receiver, [](const HIRType* type) { return type->is_TraitObject(); })) {
+    const auto derefObject = [&](const HIRType* type) -> const HIRType* {
+        if (!visitTyWith(resolve_.ivars.expandIvars(type), [](const HIRType* inner) { return inner->is_TraitObject(); })) {
+            return nullptr;
+        }
+        for (unsigned depth = 0; type && depth < 16; depth++) {
+            type = resolve_.ivars.getType(type);
+            if (type->is_TraitObject()) {
+                return type;
+            }
+            if (const auto* borrow = type->opt_Borrow()) {
+                type = borrow->inner;
+                continue;
+            }
+            type = resolve_.autoderef(callSpan, type);
+        }
+        return nullptr;
+    };
+    if (const auto* objectType = singleTraitScope ? nullptr : derefObject(receiver)) {
         const auto& object = objectType->as_TraitObject();
         const auto& definition = crate.getTraitByPath(callSpan, object.trait.path.path);
         bool foundObjectMethod = false;
