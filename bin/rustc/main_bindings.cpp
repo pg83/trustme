@@ -308,6 +308,9 @@ namespace {
         if (params.testHarness) {
             CfgSetFlag(*wb.settings, "test");
         }
+        if (params.crateType == ASTCrate::Type::ProcMacro) {
+            CfgSetFlag(*wb.settings, "proc_macro");
+        }
 
         ExpandInit(*wb.expandRegistry);
 
