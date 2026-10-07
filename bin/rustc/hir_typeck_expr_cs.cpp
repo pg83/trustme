@@ -3959,8 +3959,8 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
         }
     }
 
-    const auto* lRevealed = revealOpaqueType(lT);
-    const auto* rRevealed = revealOpaqueType(rT);
+    const auto* lRevealed = revealOpaqueType(lT, rT);
+    const auto* rRevealed = revealOpaqueType(rT, lT);
     if (lRevealed != lT || rRevealed != rT) {
         equateTypesInner(sp, lRevealed, rRevealed);
         return;
@@ -8396,7 +8396,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
 {
 }
 
-const HIRType* Context::revealOpaqueType(const HIRType* type) const {
+const HIRType* Context::revealOpaqueType(const HIRType* type, const HIRType* relatedTo) const {
     type = ivars.getType(type);
     const size_t maxDepth = 1 + erasedTypeAliases.size() + rpitTypes.size() + crate.opaqueTypeDefiners.size();
     for (size_t depth = 0; depth < maxDepth; depth++) {
@@ -8409,9 +8409,17 @@ const HIRType* Context::revealOpaqueType(const HIRType* type) const {
                 }
                 RpitOriginMonomorph monomorph(crate.types);
                 if (monomorph.cmpPath(Span(), *entry.origin, origin, ivars.callbackResolveInfer()) == HIRCompare::Equal) {
+                    const auto* ourType = ivars.getType(entry.ourType);
+                    const bool identity = std::all_of(monomorph.typeBindings.begin(), monomorph.typeBindings.end(), [&](const auto& binding) {
+                        const auto* generic = ivars.getType(binding.second)->opt_Generic();
+                        return generic && generic->binding == binding.first;
+                    });
+                    if (!identity && relatedTo != ourType && ivars.typeContainsIvars(ourType)) {
+                        continue;
+                    }
                     ASSERT_BUG(Span(), !matched, StringView("Multiple RPIT origins match ") << origin << StringView(" at index ") << index);
                     matched = true;
-                    hiddenType = monomorph.monomorphType(Span(), ivars.getType(entry.ourType));
+                    hiddenType = monomorph.monomorphType(Span(), ourType);
                 }
             }
         };

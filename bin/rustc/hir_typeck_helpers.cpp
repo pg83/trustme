@@ -14493,7 +14493,8 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     for (const auto& equality : candidate->headEqualities) {
         const auto left = instantiateHead.monomorphType(span(), equality.left, true);
         const auto right = instantiateHead.monomorphType(span(), equality.right, true);
-        if (headUnifier.unify(left, right) == Unifier::Outcome::Mismatch && !containsDefiningOpaque(equality.left) && !containsDefiningOpaque(equality.right)) {
+        const bool opaqueMayBridge = candidate->source != CandidateSource::ParamEnv && (containsDefiningOpaque(equality.left) || containsDefiningOpaque(equality.right));
+        if (headUnifier.unify(left, right) == Unifier::Outcome::Mismatch && !opaqueMayBridge) {
             return Certainty::NoSolution;
         }
     }

@@ -252,7 +252,7 @@ struct Context {
         return ivars.getType(ty);
     }
 
-    const HIRType* revealOpaqueType(const HIRType* type) const;
+    const HIRType* revealOpaqueType(const HIRType* type, const HIRType* relatedTo = nullptr) const;
     const HIRType* revealOpaqueTypes(const HIRType* type) const;
     /* The inference variable standing for the hidden type of an opaque alias
        defined by this body; made on first use, with the alias's bounds as rules. */
