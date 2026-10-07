@@ -3070,6 +3070,7 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
             break;
         case ASTItem::TAG_Impl: {
             auto& e = item.as_Impl();
+            this->visitVis(vis);
             visitImpl(e);
             break;
         }

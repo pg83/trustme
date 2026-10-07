@@ -5508,7 +5508,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     } else {
                         BUG(lex.pointSpan(), StringView("Parse_Impl returned a variant other than Impl or NegImpl"));
                     }
-                    return ASTNamed<ASTItem>{Span(), mv$(metaItems), ASTVisibility::makeGlobal(), "", mv$(impl)};
+                    return ASTNamed<ASTItem>{Span(), mv$(metaItems), mv$(vis), "", mv$(impl)};
                 }
 
                 case TOK_IDENT:
@@ -5593,7 +5593,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 const bool implIsUnsafe = lex.getTokenIf(TOK_RWORD_UNSAFE);
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_IMPL);
                 auto impl = ParseImpl(lex, metaItems, implIsUnsafe, /*isDefault=*/true);
-                return ASTNamed<ASTItem>{Span(), std::move(metaItems), ASTVisibility::makeGlobal(), "", std::move(impl)};
+                return ASTNamed<ASTItem>{Span(), std::move(metaItems), mv$(vis), "", std::move(impl)};
             } else if (tok.ident().name == "reuse") {
                 itemData = ASTItem(ParseDelegationFunction(lex, itemName));
             } else {
@@ -5603,7 +5603,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
         case TOK_RWORD_IMPL: {
             auto impl = ParseImpl(lex, metaItems);
-            return ASTNamed<ASTItem>{Span(), std::move(metaItems), ASTVisibility::makeGlobal(), "", std::move(impl)};
+            return ASTNamed<ASTItem>{Span(), std::move(metaItems), mv$(vis), "", std::move(impl)};
         }
         case TOK_RWORD_TRAIT: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
