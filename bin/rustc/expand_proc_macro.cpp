@@ -1359,7 +1359,8 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             visitType(tok.fragType());
             break;
         case TOK_INTERPOLATED_PATH:
-            TODO(sp, StringView("TOK_INTERPOLATED_PATH"));
+            visitPath(tok.fragPath());
+            break;
         case TOK_INTERPOLATED_PATTERN: {
             StringBuilder ss;
             pprustPatToString(ss, tok.fragPattern());

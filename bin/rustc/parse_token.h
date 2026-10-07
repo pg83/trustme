@@ -179,6 +179,7 @@ public:
     const ASTType* fragType() const;
 
     ASTPath& fragPath();
+    const ASTPath& fragPath() const;
 
     ASTPattern& fragPattern();
     const ASTPattern& fragPattern() const;
