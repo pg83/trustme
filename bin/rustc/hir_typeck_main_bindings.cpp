@@ -862,13 +862,8 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             ms.setConstevalState(resolve_.board(), HIRItemPath(traitPath));
             const HIRType* tmp;
             auto maybeMonomorph = [&](const HIRType* ty) -> const HIRType* {
-                if (monomorphiseTypeNeeded(ty)) {
-                    tmp = ms.monomorphType(sp, ty);
-                    tmp = resolve_.expandAssociatedTypes(sp, tmp);
-                    return tmp;
-                } else {
-                    return ty;
-                }
+                tmp = monomorphiseTypeNeeded(ty) ? ms.monomorphType(sp, ty) : ty;
+                return resolve_.expandAssociatedTypes(sp, tmp);
             };
 
             std::vector<std::string> failures;
