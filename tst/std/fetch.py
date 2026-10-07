@@ -9,6 +9,7 @@ Set RUST_SRC to an already-unpacked rustc-<version>-src tree to skip the
 download.
 """
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -106,18 +107,6 @@ SOURCE_EDITS = (
         8,
     ),
     (
-        "vendor/libc-0.2.174/Cargo.toml",
-        'build = "build.rs"\n',
-        "build = false\n",
-        1,
-    ),
-    (
-        "vendor/libc-0.2.174/src/macros.rs",
-        "if #[cfg(libc_const_extern_fn)] {",
-        "if #[cfg(all())] {",
-        1,
-    ),
-    (
         "library/std/Cargo.toml",
         '[package]\nname = "std"\n',
         '[package]\nbuild = false\nname = "std"\n',
@@ -144,9 +133,42 @@ SOURCE_EDITS = (
 )
 
 
+# The libc that library/Cargo.lock pins builds without its build script, as std
+# does: no host std exists yet to run one. Each version gets the cfgs its
+# script would have printed for the target.
+LIBC_EDITS = {
+    "0.2.174": (
+        ("src/macros.rs", "if #[cfg(libc_const_extern_fn)] {", "if #[cfg(all())] {", 1),
+    ),
+    "0.2.177": (),
+}
+
+
+def locked_version(lockfile: Path, name: str) -> str:
+    versions = re.findall(
+        rf'^\[\[package\]\]\nname = "{re.escape(name)}"\nversion = "([^"]+)"$',
+        lockfile.read_text(),
+        re.MULTILINE,
+    )
+    if len(versions) != 1:
+        raise RuntimeError(f"{lockfile}: expected one {name}, found {versions}")
+    return versions[0]
+
+
+def source_edits(src: str) -> tuple:
+    libc = locked_version(Path(src) / "library" / "Cargo.lock", "libc")
+    vendored = f"vendor/libc-{libc}"
+    return (
+        *SOURCE_EDITS,
+        (f"{vendored}/Cargo.toml", 'build = "build.rs"\n', "build = false\n", 1),
+        *((f"{vendored}/{relative}", old, new, expected)
+          for relative, old, new, expected in LIBC_EDITS[libc]),
+    )
+
+
 def adjust_sources(src: str) -> None:
     root = Path(src)
-    for relative, old, new, expected in SOURCE_EDITS:
+    for relative, old, new, expected in source_edits(src):
         path = root / relative
         text = path.read_text()
         count = text.count(old)
