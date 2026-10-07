@@ -444,6 +444,7 @@ namespace {
         IntMap<size_t> typeIds;
         HIRSerialiseWriter& out;
         HIRTypeInterner& typeInterner;
+        unsigned unevaluatedBodyDepth = 0;
 
         HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner, ObjPool& pool);
 
@@ -3941,7 +3942,9 @@ auto HirSerialiser::serialise(const HIRConstGenericUnevaluated& v) -> void {
     }
     serialisePathparams(v.paramsImpl);
     serialisePathparams(v.paramsItem);
+    unevaluatedBodyDepth++;
     serialise(*v.expr);
+    unevaluatedBodyDepth--;
 }
 
 auto HirSerialiser::serialise(const HIRConstGeneric& v) -> void {
@@ -4461,7 +4464,7 @@ auto HirSerialiser::serialise(const MIRConstant& v) -> void {
         }
         case MIRConstant::TAG_Const: {
             auto& e = v.as_Const();
-            ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), StringView("Unexpected Constant: ") << *e.p);
+            ASSERT_BUG(Span(), unevaluatedBodyDepth > 0 || monomorphisePathNeeded(*e.p), StringView("Unexpected Constant: ") << *e.p);
             serialisePath(*e.p);
             break;
         }
