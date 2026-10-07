@@ -9192,7 +9192,7 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
 
     if (labels.empty()) {
         builder.pushStmt(node.span(), mv$(ent));
-        if (!node.options.noreturn) {
+        if (!node.options.noreturn && !node.options.naked) {
             builder.setResult(node.span(), MIRRValue::make_Tuple({}));
         } else {
             builder.endBlock(MIRTerminator::make_Unreachable({}));

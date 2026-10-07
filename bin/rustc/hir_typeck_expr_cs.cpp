@@ -11577,7 +11577,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsm2& node) -> void {
     }
     this->popInnerCoerce();
     // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
-    if (node.options.noreturn && !hasLabel) {
+    if ((node.options.noreturn || node.options.naked) && !hasLabel) {
         node.diverges = true;
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
     } else {

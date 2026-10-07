@@ -3035,6 +3035,81 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
     if (!hasPrototype) {
         emitFunctionLinkageLabel(p, item, params, isExternDef);
     }
+    if (item.markings.isNaked) {
+        MIR_ASSERT(localMirRes, code->locals.empty(), StringView("Naked function has MIR locals"));
+        MIR_ASSERT(localMirRes, code->dropFlags.empty(), StringView("Naked function has drop flags"));
+        MIR_ASSERT(localMirRes, code->blocks.size() == 1, StringView("Naked function does not have exactly one basic block"));
+        const auto& block = code->blocks.front();
+        const MIRStatement* nakedAsm = nullptr;
+        unsigned nakedAsmIndex = 0;
+        for (unsigned i = 0; i < block.statements.size(); i++) {
+            const auto& statement = block.statements[i];
+            if (const auto* assembly = statement.opt_Asm2()) {
+                MIR_ASSERT(localMirRes, assembly->options.naked && nakedAsm == nullptr, StringView("Naked function body is not a single naked_asm statement"));
+                nakedAsm = &statement;
+                nakedAsmIndex = i;
+            } else if (const auto* assignment = statement.opt_Assign()) {
+                MIR_ASSERT(localMirRes, assignment->dst.root.is_Return() && assignment->dst.wrappers.empty() && assignment->src.is_Tuple() && assignment->src.as_Tuple().vals.empty(), StringView("Naked function contains a non-unit assignment"));
+            } else {
+                MIR_BUG(localMirRes, StringView("Naked function contains a non-assembly statement: ") << statement);
+            }
+        }
+        MIR_ASSERT(localMirRes, nakedAsm != nullptr, StringView("Naked function body does not contain naked_asm"));
+        MIR_ASSERT(localMirRes, block.terminator.is_Return() || block.terminator.is_Unreachable(), StringView("Naked function has a non-trivial MIR terminator"));
+
+        if (!hasPrototype && (item.linkage.name == "" || item.linkage.name == "main")) {
+            emitFunctionDefinitionPrefix(item, isExternDef);
+            emitFunctionHeader(p, item, params);
+            of << StringView(";\n");
+        }
+        const bool machO = TargetGetCurSpec(wb_).osName == "macos";
+        StringBuilder symbol;
+        if (machO) {
+            symbol << StringView("_");
+        }
+        if (item.linkage.name == "") {
+            symbol << TransMangleValue(p);
+        } else {
+            symbol << StringView(item.linkage.name.c_str() + (item.linkage.name.c_str()[0] == '\1' ? 1 : 0));
+        }
+        const StringView name(symbol);
+        of << StringView("__asm__(\"");
+        if (machO) {
+            of << StringView(".pushsection __TEXT,__text,regular,pure_instructions\\n");
+        } else {
+            of << StringView(".pushsection .text.") << name << StringView(",\\\"ax\\\",@progbits\\n");
+        }
+        of << StringView(".balign ") << (item.markings.alignment != 0 ? item.markings.alignment : 4) << StringView("\\n");
+        if (!isExternDef) {
+            if (item.linkage.type == HIRLinkage::Type::Weak) {
+                if (machO) {
+                    of << StringView(".globl ") << name << StringView("\\n.weak_definition ") << name << StringView("\\n");
+                } else {
+                    of << StringView(".weak ") << name << StringView("\\n");
+                }
+            } else {
+                of << StringView(".globl ") << name << StringView("\\n");
+            }
+        }
+        if (!machO) {
+            of << StringView(".type ") << name << StringView(",@function\\n");
+        }
+        of << name << StringView(":\\n\"\n");
+        localMirRes.setCurStmt(0, nakedAsmIndex);
+        emitStatement(localMirRes, *nakedAsm, 1);
+        of << StringView("\n\"\\n.Lfunc_end_") << name << StringView(":\\n");
+        if (!machO) {
+            of << StringView(".size ") << name << StringView(", . - ") << name << StringView("\\n");
+        }
+        of << StringView(".popsection\\n\");\n\n");
+        of.flush();
+        currentFunctionTracksCaller = false;
+        if (tracksCaller && !hasPrototype) {
+            emitTrackCallerReifyWrapper(p, item, params);
+        }
+        mirRes = nullptr;
+        return;
+    }
     emitFunctionDefinitionPrefix(item, isExternDef);
     if (exceedsBackendOptimizationBudget(item, *code)) {
         of << StringView("TRUSTME_BACKEND_OPTNONE ");
@@ -3066,39 +3141,6 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
             emitCtype(argTy, FMT_CB(os, os << StringView("arg") << i;));
             of << StringView(" = {};\n");
         }
-    }
-
-    if (item.markings.isNaked) {
-        MIR_ASSERT(localMirRes, code->locals.empty(), StringView("Naked function has MIR locals"));
-        MIR_ASSERT(localMirRes, code->dropFlags.empty(), StringView("Naked function has drop flags"));
-        MIR_ASSERT(localMirRes, code->blocks.size() == 1, StringView("Naked function does not have exactly one basic block"));
-        const auto& block = code->blocks.front();
-        const MIRStatement* nakedAsm = nullptr;
-        unsigned nakedAsmIndex = 0;
-        for (unsigned i = 0; i < block.statements.size(); i++) {
-            const auto& statement = block.statements[i];
-            if (const auto* assembly = statement.opt_Asm2()) {
-                MIR_ASSERT(localMirRes, assembly->options.naked && nakedAsm == nullptr, StringView("Naked function body is not a single naked_asm statement"));
-                nakedAsm = &statement;
-                nakedAsmIndex = i;
-            } else if (const auto* assignment = statement.opt_Assign()) {
-                MIR_ASSERT(localMirRes, assignment->dst.root.is_Return() && assignment->dst.wrappers.empty() && assignment->src.is_Tuple() && assignment->src.as_Tuple().vals.empty(), StringView("Naked function contains a non-unit assignment"));
-            } else {
-                MIR_BUG(localMirRes, StringView("Naked function contains a non-assembly statement: ") << statement);
-            }
-        }
-        MIR_ASSERT(localMirRes, nakedAsm != nullptr, StringView("Naked function body does not contain naked_asm"));
-        MIR_ASSERT(localMirRes, block.terminator.is_Return() || block.terminator.is_Unreachable(), StringView("Naked function has a non-trivial MIR terminator"));
-        localMirRes.setCurStmt(0, nakedAsmIndex);
-        emitStatement(localMirRes, *nakedAsm, 1);
-        of << StringView("}\n\n");
-        of.flush();
-        currentFunctionTracksCaller = false;
-        if (tracksCaller && !hasPrototype) {
-            emitTrackCallerReifyWrapper(p, item, params);
-        }
-        mirRes = nullptr;
-        return;
     }
 
     for (unsigned int i = 0; i < argTypes.size(); i++) {
@@ -6075,16 +6117,20 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         }
 
         const bool emitAttSyntax = usesIntelCompilerAsmDialect() && asmOptions.attSyntax;
-        of << indent << StringView("__asm__ ");
-        of << StringView("__volatile__");
-        if (asmGoto) {
-            of << StringView(" goto");
+        if (asmOptions.naked) {
+            of << indent << StringView("\"");
+        } else {
+            of << indent << StringView("__asm__ ");
+            of << StringView("__volatile__");
+            if (asmGoto) {
+                of << StringView(" goto");
+            }
+            of << StringView("(\"");
         }
-        of << StringView("(\"");
         if (emitAttSyntax) {
             of << StringView(".att_syntax prefix; ");
         }
-        bool escapePercent = true || !inputs.empty() || !outputs.empty();
+        const bool escapePercent = !asmOptions.naked;
         for (const auto& l : asmLines) {
             for (const auto& f : l.frags) {
                 of << FmtGccAsm(f.before, escapePercent);
@@ -6172,7 +6218,6 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView("\"");
         if (asmOptions.naked) {
             MIR_ASSERT(localMirRes, outputs.empty() && inputs.empty() && clobbers.empty() && !blockOpen, StringView("naked_asm contains register operands"));
-            of << StringView(");\n");
             return;
         }
         of << StringView(" :");
@@ -6601,9 +6646,6 @@ auto CodeGeneratorC::emitFunctionHeader(const HIRPath& p, const HIRFunction& ite
         parameterCount += (metadata == MetadataType::Slice || metadata == MetadataType::TraitObject) ? 2 : 1;
     }
     const bool compact = parameterCount <= 5;
-    if (item.markings.isNaked) {
-        of << StringView("__attribute__((naked)) ");
-    }
     if (item.markings.inlineType == HIRFunction::Markings::Inline::Always) {
         of << StringView("__attribute__((always_inline)) ");
     }
