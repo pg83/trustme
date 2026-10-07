@@ -137,9 +137,35 @@ func parseVersionSpec(input string) VersionSpec {
 	return spec
 }
 
+// How a version orders against a comparator's: semver compares only the
+// parts the comparator writes (`matches_exact`, `matches_greater`,
+// `matches_less`, semver/src/eval.rs), so `<= 3` takes 3.5.0 and `> 1` starts
+// at 2.0.0.
+func compareToBound(version Version, bound VersionBound) int {
+	if bound.parts >= 3 {
+		return compareVersion(version, bound.version)
+	}
+	if version.major != bound.version.major {
+		if version.major < bound.version.major {
+			return -1
+		}
+
+		return 1
+	}
+	if bound.parts == 2 && version.minor != bound.version.minor {
+		if version.minor < bound.version.minor {
+			return -1
+		}
+
+		return 1
+	}
+
+	return 0
+}
+
 func (s VersionSpec) accepts(version Version) bool {
 	for _, bound := range s.bounds {
-		cmp := compareVersion(version, bound.version)
+		cmp := compareToBound(version, bound)
 
 		switch bound.op {
 		case "=":
