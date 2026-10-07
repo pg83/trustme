@@ -2933,6 +2933,9 @@ auto ProcMacroVisitor::visitImplHdr(const ASTImplDef& impl) -> void {
 
 auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis, const ASTTrait& trait) -> void {
     this->visitVis(vis);
+    if (trait.isConst()) {
+        pmi.sendRword("const");
+    }
     if (trait.isUnsafe()) {
         pmi.sendRword("unsafe");
     }

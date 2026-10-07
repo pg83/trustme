@@ -356,6 +356,7 @@ class ASTTrait {
 
     bool isMarker_;
     bool isUnsafe_;
+    bool isConst_ = false;
     ASTNamedList<ASTItem> items_;
 
 public:
@@ -410,6 +411,14 @@ public:
 
     bool isUnsafe() const {
         return isUnsafe_;
+    }
+
+    void setIsConst() {
+        isConst_ = true;
+    }
+
+    bool isConst() const {
+        return isConst_;
     }
 
     bool hasNamedItem(const RcString& name, bool& outIsFcn) const;

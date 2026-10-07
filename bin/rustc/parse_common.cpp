@@ -5364,7 +5364,24 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     itemData = ASTItem(ASTStatic(ASTStatic::CONST, mv$(type), mv$(val), mv$(params)));
                     break;
                 }
+                case TOK_RWORD_TRAIT: {
+                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                    itemName = tok.ident().hygienicName();
+                    auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
+                    tr.setIsConst();
+                    itemData = ASTItem(std::move(tr));
+                    break;
+                }
                 case TOK_RWORD_UNSAFE: {
+                    if (lex.getTokenIf(TOK_RWORD_TRAIT)) {
+                        GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                        itemName = tok.ident().hygienicName();
+                        auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
+                        tr.setIsConst();
+                        tr.setIsUnsafe();
+                        itemData = ASTItem(std::move(tr));
+                        break;
+                    }
                     auto abi = std::string(ABI_RUST);
                     if (lex.getTokenIf(TOK_RWORD_EXTERN)) {
                         if (!getAbiStringOpt(lex, abi)) {
@@ -5414,7 +5431,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     break;
                 }
                 default:
-                    parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_UNDERSCORE, TOK_RWORD_UNSAFE, TOK_RWORD_FN});
+                    parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_UNDERSCORE, TOK_RWORD_UNSAFE, TOK_RWORD_FN, TOK_RWORD_TRAIT});
             }
             break;
         case TOK_RWORD_STATIC: {

@@ -2345,7 +2345,7 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
         DEBUG(StringView("Supertrait ") << supertraits.back());
     }
     HIRTrait rv{mv$(params), mv$(supertraits)};
-    rv.isConst = attrs.has("const_trait");
+    rv.isConst = f.isConst() || attrs.has("const_trait");
     rv.mustUse = attrs.has("must_use");
     if (const auto* attr = attrs.get("rustc_skip_during_method_dispatch")) {
         TTStream tokens(attr->span(), ParseState(), attr->data());

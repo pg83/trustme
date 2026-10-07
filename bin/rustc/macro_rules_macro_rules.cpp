@@ -1667,6 +1667,9 @@ namespace {
                 if (lex.next() == TOK_RWORD_UNSAFE) {
                     lex.consume();
                 }
+                if (lex.consumeIf(TOK_RWORD_TRAIT)) {
+                    goto trait;
+                }
                 if (lex.next() == TOK_RWORD_EXTERN) {
                     lex.consume();
                 }
