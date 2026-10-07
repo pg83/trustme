@@ -1443,6 +1443,17 @@ namespace {
                             do {
                                 if (lex.consumeIf(TOK_LIFETIME)) {
                                 } else {
+                                    if (lex.next() == TOK_SQUARE_OPEN) {
+                                        if (!consumeTt(lex)) {
+                                            return false;
+                                        }
+                                    } else if (lex.consumeIf(TOK_TILDE)) {
+                                        if (!lex.consumeIf(TOK_RWORD_CONST)) {
+                                            return false;
+                                        }
+                                    } else {
+                                        lex.consumeIf(TOK_RWORD_CONST);
+                                    }
                                     lex.consumeIf(TOK_QMARK);
                                     if (!consumePath(lex, true)) {
                                         return false;
@@ -1521,6 +1532,7 @@ namespace {
                 if (!H::maybeGenerics(lex)) {
                     return false;
                 }
+                lex.consumeIf(TOK_RWORD_CONST);
                 if (!consumeType(lex)) {
                     return false;
                 }
