@@ -9504,7 +9504,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         bool foundObjectMethod = false;
         bool objectAmbiguous = false;
         forEachTraitMethodDeclaration(object.trait.path, definition, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath methodTrait) {
-            const auto result = assembleTraitCandidate(function, object.trait.path.clone(), std::move(methodTrait), nullptr);
+            const auto result = assembleTraitCandidate(function, object.trait.path.clone(), std::move(methodTrait), objectType);
             foundObjectMethod |= result == Certainty::Proven;
             objectAmbiguous |= result == Certainty::Ambiguous;
         });
