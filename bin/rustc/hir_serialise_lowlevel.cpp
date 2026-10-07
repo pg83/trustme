@@ -102,10 +102,10 @@ WriterImpl::~WriterImpl() {
     }
 
     Buffer whole(istrings.length() * 16 + data.length() + 8);
-    const u64 stringCount = istrings.length();
+    const u32 stringCount = static_cast<u32>(istrings.length());
     whole.append(&stringCount, sizeof stringCount);
     for (size_t i = 0; i < istrings.length(); i++) {
-        const u64 len = istrings[i].size();
+        const u32 len = static_cast<u32>(istrings[i].size());
         whole.append(&len, sizeof len);
         whole.append(istrings[i].c_str(), len);
     }
@@ -170,7 +170,8 @@ void WriterImpl::writeTag(unsigned int t) {
 }
 
 void WriterImpl::writeCount(size_t c) {
-    writeU64(c);
+    BUG_ASSERT(c <= 0xFFFFFFFFu);
+    writeU32(static_cast<u32>(c));
 }
 
 void WriterImpl::writeString(const RcString& v) {
@@ -183,7 +184,7 @@ void WriterImpl::writeString(const RcString& v) {
 }
 
 void WriterImpl::writeString(size_t len, const char* s) {
-    writeU64(len);
+    writeCount(len);
     this->write(s, len);
 }
 
@@ -212,7 +213,7 @@ HIRSerialiseWriter::CloseOnDrop::~CloseOnDrop() {
 HIRSerialiseWriter::CloseOnDrop WriterImpl::openObject(const char* name) {
     writeU8(TAG_OPEN_NAMED);
     auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
-    writeU64(iv.first->second);
+    writeCount(iv.first->second);
     if (iv.second) {
         writeString(strlen(name), name);
     }
@@ -309,7 +310,7 @@ FloatValue ReaderImpl::readFloatValue() {
 }
 
 size_t ReaderImpl::readCount() {
-    return readU64();
+    return readU32();
 }
 
 RcString ReaderImpl::readIstring() {
@@ -317,7 +318,7 @@ RcString ReaderImpl::readIstring() {
 }
 
 std::string ReaderImpl::readString() {
-    size_t len = readU64();
+    size_t len = readCount();
     std::string rv(len, '\0');
     read(rv.data(), len);
     return rv;
@@ -356,7 +357,7 @@ HIRSerialiseReader::CloseOnDrop ReaderImpl::openObject(const char* name) {
         sysE << StringView("Expected OpenNamed(") << name << StringView("), got ") << unsigned(v) << StringView("u8") << endL;
         abort();
     }
-    auto key = readU64();
+    auto key = readCount();
     if (key == objnameCache.size()) {
         objnameCache.push_back(readString());
     }
