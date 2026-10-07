@@ -4647,7 +4647,7 @@ namespace {
                 auto& e = path.cls.as_Absolute();
                 DEBUG(StringView("Absolute ") << path);
                 // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
-                if (crate.edition >= ASTEdition::Rust2018 && e.crate.c_str()[0] == '=') {
+                if (e.crate.c_str()[0] == '=') {
                     auto ecIt = settings.implicitCrates.find(e.crate.c_str() + 1);
                     if (ecIt == settings.implicitCrates.end()) {
                         ERROR(span, E0000, StringView("Unable to find external crate for path ") << path);
