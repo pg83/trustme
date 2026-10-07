@@ -16355,6 +16355,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (projectionIsOpen(*left) || projectionIsOpen(*right) || !projectionIsRigid(*left) || !projectionIsRigid(*right)) {
             return;
         }
+        const auto normalizesAway = [&](const HIRType* projection) {
+            const auto* normalizedPath = resolve_.expandAssociatedTypes(span(), projection)->opt_Path();
+            return !normalizedPath || !(normalizedPath->path == projection->as_Path().path);
+        };
+        if (normalizesAway(required) || normalizesAway(output)) {
+            return;
+        }
         const auto appendParams = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
             if (lhs.types.size() == rhs.types.size()) {
                 for (size_t i = 0; i < lhs.types.size(); i++) {
