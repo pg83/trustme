@@ -959,6 +959,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
     std::vector<HIRPatternBinding> bindings;
     for (const auto& pb : pat.bindings()) {
         bindings.push_back(HIRPatternBinding(pb.isMutable, convertBindingType(pb.type), pb.name.name, pb.slot));
+        bindings.back().rust2024 = pb.edition >= ASTEdition::Rust2024;
     }
 
     struct H {

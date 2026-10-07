@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ident.h"
+#include "ast_edition.h"
 #include "floats.h"
 #include "ast_path.h"
 #include "ast_macro.h"
@@ -24,6 +25,7 @@ public:
     Type type;
     bool isMutable;
     unsigned int slot;
+    ASTEdition edition = ASTEdition::Rust2015;
 
     ASTPatternBinding();
 

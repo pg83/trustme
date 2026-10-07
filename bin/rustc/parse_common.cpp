@@ -1205,6 +1205,7 @@ namespace {
     ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
         TRACE_FUNCTION;
         auto ps = lex.startSpan();
+        const auto edition = lex.getEdition();
 
         Token tok;
         tok = lex.getToken();
@@ -1261,9 +1262,12 @@ namespace {
             auto bindName = tok.ident();
             if (GET_TOK(tok, lex) != TOK_AT) {
                 PUTBACK(tok, lex);
-                return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(bindName), bindType, isMut);
+                auto rv = ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(bindName), bindType, isMut);
+                rv.bindings().front().edition = edition;
+                return rv;
             }
             binding = ASTPatternBinding(mv$(bindName), bindType, isMut);
+            binding.edition = edition;
 
             pat = ParsePattern1(lex, allowOr);
         } else if (tok.type() == TOK_IDENT) {
@@ -1284,6 +1288,7 @@ namespace {
                     break;
                 case TOK_AT:
                     binding = ASTPatternBinding(tok.ident(), bindType /*MOVE*/, isMut /*false*/);
+                    binding.edition = edition;
                     GET_TOK(tok, lex);
                     pat = ParsePattern1(lex, allowOr);
                     break;
@@ -1538,6 +1543,7 @@ namespace {
                 }
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 binding = ASTPatternBinding(tok.ident(), bindingType, false);
+                binding.edition = lex.getEdition();
             } else if (tok.type() == TOK_IDENT && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
                 binding = ASTPatternBinding(tok.ident(), ASTPatternBinding::Type::MOVE, false);
             } else if (tok.type() == TOK_UNDERSCORE && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
@@ -1752,6 +1758,7 @@ namespace {
                 pat = ASTPattern(lex.endSpan(innerPs), {});
                 fieldName = fieldIdent.name;
                 pat.bindings().push_back(ASTPatternBinding(mv$(fieldIdent), bindType, isMut));
+                pat.bindings().back().edition = lex.getEdition();
                 if (isBox) {
                     pat = ASTPattern(ASTPattern::TagBox(), lex.endSpan(innerPs), mv$(pat));
                 }

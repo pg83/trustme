@@ -4985,10 +4985,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
 
                 TRACE_FUNCTION_F(pattern << StringView(" : ") << type);
                 for (auto& pb : pattern.bindings) {
-                    if (bindingMode != HIRPatternBinding::Type::Move && context.crate.edition >= ASTEdition::Rust2024 && !context.crate.featureEnabled("mut_ref") && (pb.isMutable || pb.type != HIRPatternBinding::Type::Move)) {
+                    if (bindingMode != HIRPatternBinding::Type::Move && pb.rust2024 && !context.crate.featureEnabled("mut_ref") && (pb.isMutable || pb.type != HIRPatternBinding::Type::Move)) {
                         ERROR(sp, E0000, StringView("cannot bind `") << pb.name << StringView("` with `") << StringView(pb.type != HIRPatternBinding::Type::Move ? "ref" : "mut") << StringView("` within an implicitly-borrowing pattern"));
                     }
-                    if (pb.type == HIRPatternBinding::Type::Move && (!pb.isMutable || context.crate.edition >= ASTEdition::Rust2024)) {
+                    if (pb.type == HIRPatternBinding::Type::Move && (!pb.isMutable || pb.rust2024)) {
                         pb.type = bindingMode;
                     }
                     const HIRType* tmp;
