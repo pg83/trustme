@@ -2189,6 +2189,21 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->path(), path, /*out_path=*/nullptr);
     switch (rv.tag()) {
         case ResolveItemRefMacro::TAG_None: {
+            if (path.isTrivial() && hasDefinitionModule) {
+                const auto& name = path.asTrivial();
+                MacroRef prelude;
+                for (const auto& mri : crate.rootModule().macroImports) {
+                    if (mri.name == name && mri.path.crate != "") {
+                        prelude = mri.ref.clone();
+                    }
+                }
+                if (!prelude.is_None()) {
+                    return prelude;
+                }
+                if (auto* pm = ExpandFindProcMacro(wb, name)) {
+                    return MacroRef(pm);
+                }
+            }
             return MacroRef();
         }
         case ResolveItemRefMacro::TAG_InternalMacro: {
