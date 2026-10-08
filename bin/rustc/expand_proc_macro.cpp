@@ -1868,6 +1868,9 @@ auto ProcMacroVisitor::visitPattern(const ASTPattern& pat) -> void {
         } else {
             pmi.sendIdent(b.name);
         }
+        if (pat.data().is_Any()) {
+            return;
+        }
         pmi.sendSymbol("@");
     }
     switch (pat.data().tag()) {

@@ -29,3 +29,21 @@ pub fn foreign_types_end_at_their_name(_attribute: TokenStream, item: TokenStrea
     }
     item
 }
+
+// The same, after checking that the item's tokens hold no `@`: no binding in
+// it has a subpattern.
+#[proc_macro_attribute]
+pub fn no_subpatterns(_attribute: TokenStream, item: TokenStream) -> TokenStream {
+    use proc_macro::TokenTree;
+    fn walk(stream: TokenStream) {
+        for token in stream {
+            match token {
+                TokenTree::Punct(p) => assert!(p.as_char() != '@', "a binding has a subpattern"),
+                TokenTree::Group(group) => walk(group.stream()),
+                _ => {}
+            }
+        }
+    }
+    walk(item.clone());
+    item
+}
