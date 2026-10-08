@@ -60,7 +60,9 @@ func vendorLayout(pkgs []Pkg, versioned bool) map[int]string {
 // for the first package in the lockfile's order that failed.
 func vendorAll(pkgs []Pkg, vendorDir string, versioned bool) {
 	layout := vendorLayout(pkgs, versioned)
-	client := &http.Client{Timeout: 120 * time.Second}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxConnsPerHost = 2
+	client := &http.Client{Timeout: 120 * time.Second, Transport: transport}
 	failures := make([]*Exception, len(pkgs))
 	total := len(layout)
 	var started atomic.Int32

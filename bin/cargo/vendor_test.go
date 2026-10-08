@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -347,7 +348,7 @@ func TestAVendoredGitPackageCarriesItsSubmodules(t *testing.T) {
 // starts every download, then waits for them (curl multi over HTTP/2). The
 // server here answers only once all of them are in flight.
 func TestVendoringDownloadsTheCratesTogether(t *testing.T) {
-	const count = 4
+	const count = 2
 	registry := "registry+https://github.com/rust-lang/crates.io-index"
 	crates := map[string][]byte{}
 	var pkgs []Pkg
@@ -401,5 +402,67 @@ func TestVendoringDownloadsTheCratesTogether(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(vendorDir, p.name, "Cargo.toml")); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestVendoringKeepsTwoConnectionsToTheRegistry(t *testing.T) {
+	const count = 8
+	registry := "registry+https://github.com/rust-lang/crates.io-index"
+	crates := map[string][]byte{}
+	var pkgs []Pkg
+
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("k%d", i)
+		var archive bytes.Buffer
+		gz := gzip.NewWriter(&archive)
+		tw := tar.NewWriter(gz)
+		manifest := fmt.Sprintf("[package]\nname = %q\nversion = \"1.0.0\"\n", name)
+
+		throw(tw.WriteHeader(&tar.Header{Name: name + "-1.0.0/Cargo.toml", Mode: 0o644, Size: int64(len(manifest)), Typeflag: tar.TypeReg}))
+		throw2(tw.Write([]byte(manifest)))
+		throw(tw.Close())
+		throw(gz.Close())
+
+		sum := sha256.Sum256(archive.Bytes())
+		crates["/crates/"+name+"/"+name+"-1.0.0.crate"] = archive.Bytes()
+		pkgs = append(pkgs, Pkg{name: name, version: "1.0.0", source: registry, checksum: hex.EncodeToString(sum[:])})
+	}
+
+	var open, most atomic.Int32
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(20 * time.Millisecond)
+		throw2(w.Write(crates[r.URL.Path]))
+	}))
+	server.Config.ConnState = func(conn net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			now := open.Add(1)
+			for {
+				seen := most.Load()
+				if now <= seen || most.CompareAndSwap(seen, now) {
+					break
+				}
+			}
+		case http.StateClosed, http.StateHijacked:
+			open.Add(-1)
+		}
+	}
+	server.Start()
+	defer server.Close()
+
+	saved := crateHost
+	crateHost = server.URL
+	defer func() {
+		crateHost = saved
+	}()
+
+	vendorDir := t.TempDir()
+
+	if e := try(func() { vendorAll(pkgs, vendorDir, false) }); e != nil {
+		t.Fatal(e.error())
+	}
+
+	if most.Load() > 2 {
+		t.Fatalf("%d connections to the registry at once", most.Load())
 	}
 }
