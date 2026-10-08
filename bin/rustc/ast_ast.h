@@ -266,6 +266,10 @@ public:
         abi_ = std::move(s);
     }
 
+    void setUnsafe() {
+        flags.isUnsafe = true;
+    }
+
     bool isConst() const {
         return flags.isConst;
     }

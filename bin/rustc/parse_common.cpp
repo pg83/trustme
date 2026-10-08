@@ -5145,6 +5145,9 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
         }
         switch (item.data.tag()) {
             case ASTItem::TAG_Function:
+                item.data.as_Function().setAbi(abi);
+                item.data.as_Function().setUnsafe();
+                break;
             case ASTItem::TAG_Static:
             case ASTItem::TAG_Type:
                 break;
