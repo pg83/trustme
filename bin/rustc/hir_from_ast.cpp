@@ -4535,13 +4535,10 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeBlock& v) -> void {
     }
 
     if (label != "") {
-        const bool endIsReachable = rv->valueNode || rv->nodes.empty() || !(cast<HIRExprNodeLoopControl>(rv->nodes.back().get()) || cast<HIRExprNodeReturn>(rv->nodes.back().get()));
-        if (endIsReachable) {
-            auto* breakNode = ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), label, /*cont=*/false, std::move(rv->valueNode));
-            rv->nodes.push_back(HIRExprNodeP(breakNode));
-            rv->valueNode.reset();
-        }
-        auto* loop = ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), label, HIRExprNodeP(rv));
+        auto* breakNode = ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), label, /*cont=*/false, HIRExprNodeP(rv));
+        auto* body = ctx.crate->pool->make<HIRExprNodeBlock>(v.span());
+        body->nodes.push_back(HIRExprNodeP(breakNode));
+        auto* loop = ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), label, HIRExprNodeP(body));
         loop->requireLabel = true;
         this->rv.reset(loop);
     } else {
