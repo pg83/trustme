@@ -593,11 +593,13 @@ auto TypecheckVisitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisit
     e.type = this->visitType(e.type);
     this->visitPathParams(e.params);
 
-    if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
-        return;
-    }
-    if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
-        return;
+    if (!(e.type->is_Path() && e.type->as_Path().path.data.is_Generic())) {
+        if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
+            return;
+        }
+        if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
+            return;
+        }
     }
 
     if (const auto* te = e.type->opt_Generic()) {

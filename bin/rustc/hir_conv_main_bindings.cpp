@@ -3923,6 +3923,10 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
     }
 }
 
+static bool namesANominalType(const HIRType* ty) {
+    return ty->is_Path() && ty->as_Path().path.data.is_Generic();
+}
+
 auto UfcsVisitor::locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRType* tr, const HIRGenericParams& params, HIRPath::Data& pd) -> bool {
     Span sp;
     for (const auto& b : params.bounds) {
@@ -4423,7 +4427,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             });
         }
 
-        if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
+        if (!namesANominalType(e.type) && resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
             DEBUG(StringView("Found in item params, p = ") << p);
             BUG_ASSERT(!p.data.is_UfcsUnknown());
             if (auto* known = p.data.opt_UfcsKnown()) {
@@ -4431,7 +4435,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             }
             return;
         }
-        if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
+        if (!namesANominalType(e.type) && resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
             DEBUG(StringView("Found in impl params, p = ") << p);
             BUG_ASSERT(!p.data.is_UfcsUnknown());
             if (auto* known = p.data.opt_UfcsKnown()) {
