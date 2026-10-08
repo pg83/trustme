@@ -1005,3 +1005,61 @@ func TestAnIntegrationTestIsToldWhereItsPackagesProgramsAre(t *testing.T) {
 		t.Fatalf("the library is told %v", env)
 	}
 }
+
+// mockall's `[[example]] name = "serde"` has `crate-type = ["lib"]`. Cargo makes
+// such an example an `ExampleLib`: it is compiled with that crate type and is
+// not linked into a program (`TargetKind::ExampleLib`,
+// cargo/util/toml/targets.rs).
+func TestAnExampleWithALibraryCrateTypeIsALibrary(t *testing.T) {
+	if got := crateType(&Target{kind: "example", name: "plain", path: "examples/plain.rs"}); got != "bin" {
+		t.Fatalf("a plain example compiles as %q", got)
+	}
+
+	dir := t.TempDir()
+	for _, file := range []string{"src/lib.rs", "examples/serde.rs"} {
+		path := filepath.Join(dir, filepath.FromSlash(file))
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	example := &Target{kind: "example", name: "serde", path: "examples/serde.rs", crateTypes: []string{"lib"}}
+	pkg := &Package{
+		dir: dir, manifestPath: filepath.Join(dir, "Cargo.toml"), name: "mockall",
+		version: Version{major: 1}, activeFeatures: map[string]bool{},
+		targets: []*Target{{kind: "lib", name: "mockall", path: "src/lib.rs", test: true}, example},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", targetDir: filepath.Join(dir, "target")},
+		root: pkg, workspace: &Workspace{dir: dir}, host: "host", target: "host", cfg: &CfgSet{},
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	builder.rootTasks()
+
+	if got := crateType(example); got != "rlib" {
+		t.Fatalf("the example compiles as %q, want a library", got)
+	}
+
+	found := false
+
+	for task, unit := range builder.units {
+		if task != unit.rs || unit.target != example {
+			continue
+		}
+		found = true
+
+		for _, output := range unit.final.outputs {
+			if output.executable {
+				t.Fatalf("the example is linked into the program %s", output.name)
+			}
+		}
+	}
+
+	if !found {
+		t.Fatal("the example is not built")
+	}
+}

@@ -928,7 +928,7 @@ func (b *Builder) finalTask(compile *Task) *Task {
 	}
 
 	cc := b.codegenTask(compile)
-	needsLink := unit.target.kind != "lib" || unit.target.procMacro || crateType(unit.target) != "rlib"
+	needsLink := !isLibraryTarget(unit.target) || unit.target.procMacro || crateType(unit.target) != "rlib"
 
 	if !needsLink {
 		unit.final = cc
@@ -945,7 +945,7 @@ func (b *Builder) finalTask(compile *Task) *Task {
 		kind:      "LD",
 		deps:      []*Task{cc},
 		inputs:    []string{cxx.compiler},
-		outputs:   []TaskOutput{{name: output, executable: unit.target.kind != "lib" || unit.target.procMacro}},
+		outputs:   []TaskOutput{{name: output, executable: !isLibraryTarget(unit.target) || unit.target.procMacro}},
 		signature: append([]string{"link"}, b.cxxSignature(unit.isHost)...),
 	}
 	b.addSystemInputs(task, unit.isHost, true)
@@ -2119,8 +2119,14 @@ func targetCompileName(target *Target) string {
 	return target.name
 }
 
+// The package's library, or an example given a library crate type: cargo's
+// `ExampleLib` compiles as that crate type and is not linked into a program.
+func isLibraryTarget(target *Target) bool {
+	return target.kind == "lib" || target.kind == "example" && len(target.crateTypes) > 0 && target.crateTypes[0] != "bin"
+}
+
 func crateType(target *Target) string {
-	if target.kind != "lib" {
+	if !isLibraryTarget(target) {
 		return "bin"
 	}
 
