@@ -333,9 +333,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
             } else if (e.crate.c_str()[0] == '=') {
                 const char* n = e.crate.c_str() + 1;
-                if (n == crate.crateNameSet) {
-                    return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
-                }
                 auto ecIt = settings.implicitCrates.find(n);
                 if (ecIt == settings.implicitCrates.end()) {
                     return ResolveModuleRef();
