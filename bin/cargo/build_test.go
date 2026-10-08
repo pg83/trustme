@@ -954,3 +954,21 @@ func TestTheCompilerRunsAsTheReleaseCargoIsGiven(t *testing.T) {
 		t.Fatalf("a build script run's signature %q does not carry the release", script)
 	}
 }
+
+// built's build script reads `RUSTDOC`: cargo tells every build script the
+// rustdoc it resolved - `$RUSTDOC` or `build.rustdoc`, else `rustdoc`
+// (`GlobalContext::rustdoc`, set by `build_work`,
+// cargo/core/compiler/custom_build.rs).
+func TestABuildScriptIsToldTheRustdoc(t *testing.T) {
+	t.Setenv("RUSTDOC", "")
+
+	if env := buildScriptToolEnv("/opt/bin/rustc"); env["RUSTC"] != "/opt/bin/rustc" || env["RUSTDOC"] != "rustdoc" {
+		t.Fatalf("build script tools = %v", env)
+	}
+
+	t.Setenv("RUSTDOC", "/opt/bin/rustdoc")
+
+	if env := buildScriptToolEnv("/opt/bin/rustc"); env["RUSTDOC"] != "/opt/bin/rustdoc" {
+		t.Fatalf("RUSTDOC = %q, want the one in the environment", env["RUSTDOC"])
+	}
+}

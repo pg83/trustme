@@ -1171,6 +1171,19 @@ func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
 	b.runCompiler(dir, b.commonEnv(pkg), pkg, unit.target, ctx.output(unit.diag), args...)
 }
 
+// A build script is told the compiler and the rustdoc cargo resolved: the
+// rustdoc is `$RUSTDOC`, else plain `rustdoc` (`GlobalContext::rustdoc`, set
+// by `build_work`, cargo/core/compiler/custom_build.rs).
+func buildScriptToolEnv(compiler string) map[string]string {
+	rustdoc := os.Getenv("RUSTDOC")
+
+	if rustdoc == "" {
+		rustdoc = "rustdoc"
+	}
+
+	return map[string]string{"RUSTC": compiler, "RUSTDOC": rustdoc}
+}
+
 func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Task) {
 	output := ctx.output(0)
 	script := b.units[executable].target
@@ -1184,8 +1197,11 @@ func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Tas
 	env["OPT_LEVEL"] = profile.optLevel
 	env["DEBUG"] = strconv.FormatBool(profile.debug)
 	env["PROFILE"] = b.context.opts.profile
-	env["RUSTC"] = b.context.compiler
 	env["CARGO_ENCODED_RUSTFLAGS"] = strings.Join(b.context.rustflags, "\x1f")
+
+	for key, value := range buildScriptToolEnv(b.context.compiler) {
+		env[key] = value
+	}
 
 	if len(b.context.opts.libSearch) > 0 {
 		env["TRUSTME_LIBDIR"] = absolutePath(b.context.opts.libSearch[0])
