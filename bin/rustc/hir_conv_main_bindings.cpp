@@ -1099,7 +1099,9 @@ auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
 }
 
 auto BindVisitor::bindConstgeneric(HIRConstGeneric& value, bool repeatCount) -> void {
-    HIRVisitor::visitConstgeneric(value);
+    if (const auto* unevaluated = value.opt_Unevaluated(); unevaluated && !(*unevaluated)->expr->state) {
+        HIRVisitor::visitConstgeneric(value);
+    }
     if (auto* unevaluated = value.opt_Unevaluated()) {
         typeUsesContext = true;
         bool inheritsGenerics = true;
