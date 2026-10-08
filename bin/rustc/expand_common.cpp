@@ -2127,8 +2127,12 @@ ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) 
 }
 
 MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, const ASTAttributeName& path) {
-    ASTPath p = path.crate != RcString() ? ASTPath(path.crate.c_str(), {}) : ASTPath::newRelative({}, {});
+    const bool fromCrateRoot = path.crate == RcString() && !path.hasLeading && path.elems.length() > 1 && path.elems[0] == "crate";
+    ASTPath p = path.crate != RcString() ? ASTPath(path.crate.c_str(), {}) : fromCrateRoot ? ASTPath("", {}) : ASTPath::newRelative({}, {});
     for (const auto& ent : path.elems) {
+        if (fromCrateRoot && &ent == &path.elems[0]) {
+            continue;
+        }
         p += ASTPathNode(ent);
     }
     return ExpandLookupMacro(miSpan, wb, crate, modstack, p);
