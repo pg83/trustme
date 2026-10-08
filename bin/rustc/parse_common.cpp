@@ -3805,6 +3805,7 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
             case TOK_RWORD_LET:
                 ret = ParseStmtLet(lex);
                 GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+                *addSilence = true;
                 return ret;
 
             // HACK: Parse here, but if the next token is one of the set store in a TOK_INTERPOLATED_EXPR and invoke the statement parser
