@@ -2463,8 +2463,8 @@ namespace {
                     lex.getTokenCheck(TOK_BRACE_CLOSE);
                 } else if (tok.type() == TOK_RWORD_CRATE) {
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
-                } else if (tok.type() == TOK_IDENT || Token::typeIsRword(tok.type())) {
-                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                } else if (tok.type() == TOK_IDENT || tok.type() == TOK_UNDERSCORE || Token::typeIsRword(tok.type())) {
+                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(tok.type() == TOK_UNDERSCORE ? RcString() : RcString::newInterned(tok.toStr()));
                     const auto& name = nameIdent.name;
                     const auto* ns = state.findName(nameIdent);
                     if (!ns) {
