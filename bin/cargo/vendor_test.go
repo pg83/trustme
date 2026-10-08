@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -265,5 +266,72 @@ func TestAGitPackageIsFoundByItsInheritedVersion(t *testing.T) {
 	}
 	if dir := gitPackageDir(root, "diplomat", "0.14.0"); dir != "" {
 		t.Fatalf("diplomat 0.14.0 found at %q", dir)
+	}
+}
+
+// zstd-safe's zstd-sys builds the C library from its `zstd` submodule. Cargo
+// checks out a git source's submodules, recursively, at the commits the
+// superproject records (`update_submodules`, sources/git/utils.rs), so the
+// vendored package carries their files; it lists no `.git` entry.
+func TestAVendoredGitPackageCarriesItsSubmodules(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+
+	git := func(dir string, args ...string) string {
+		command := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		out, err := command.CombinedOutput()
+
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+
+		return strings.TrimSpace(string(out))
+	}
+	repo := func(name string, files map[string]string) string {
+		dir := filepath.Join(root, name)
+
+		for file, text := range files {
+			path := filepath.Join(dir, filepath.FromSlash(file))
+
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		git(dir, "init", "-q", "-b", "main")
+		git(dir, "config", "uploadpack.allowAnySHA1InWant", "true")
+		git(dir, "add", ".")
+		git(dir, "commit", "-q", "-m", "one")
+
+		return dir
+	}
+
+	zstd := repo("zstd", map[string]string{"lib/zstd.h": "pinned\n"})
+	top := repo("zstd-rs", map[string]string{
+		"Cargo.toml":          "[workspace]\nmembers = [\"zstd-sys\"]\n",
+		"zstd-sys/Cargo.toml": "[package]\nname = \"zstd-sys\"\nversion = \"2.0.0\"\n",
+		"zstd-sys/src/lib.rs": "",
+	})
+	git(top, "submodule", "add", "-q", "file://"+zstd, "zstd-sys/zstd")
+	git(top, "commit", "-q", "-m", "zstd")
+	commit := git(top, "rev-parse", "HEAD")
+	throw(os.WriteFile(filepath.Join(zstd, "lib", "zstd.h"), []byte("after\n"), 0o644))
+	git(zstd, "commit", "-q", "-am", "after")
+
+	dest := filepath.Join(root, "vendor", "zstd-sys")
+	fetchGitPackage(Pkg{name: "zstd-sys", version: "2.0.0", source: "git+file://" + top + "#" + commit}, dest)
+
+	data, err := os.ReadFile(filepath.Join(dest, "zstd", "lib", "zstd.h"))
+
+	if err != nil || string(data) != "pinned\n" {
+		t.Fatalf("vendored zstd.h = %q, %v", data, err)
+	}
+	if _, err := os.Lstat(filepath.Join(dest, "zstd", ".git")); err == nil {
+		t.Fatal("the vendored submodule carries its .git")
 	}
 }

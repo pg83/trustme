@@ -4349,6 +4349,22 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_git_src_submodules",
+    inputs=[
+        "$(S)/tst/unit/test_git_src_checks_out_submodules.py",
+        "$(S)/tst/git_src.py",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/git_src_submodules.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_git_src_checks_out_submodules.py",
+        "$(S)/tst/git_src.py", "$(B)/tst/unit/git_src_submodules.stamp",
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_build_output_bytes",
     inputs=[
         "$(S)/build",

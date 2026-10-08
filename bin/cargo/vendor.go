@@ -114,6 +114,9 @@ func fetchCrate(client *http.Client, p Pkg, dest string) {
 // A git source is `git+<url>?<reference>#<commit>`; cargo vendor checks out the
 // locked commit and copies the package of that name out of the repository, with
 // a checksum file whose `package` is null (`cargo_util::vendor`, git sources).
+// The checkout brings its submodules, recursively, at the commits it records,
+// a relative submodule url taken against the repository's
+// (`update_submodules`, sources/git/utils.rs).
 func fetchGitPackage(p Pkg, dest string) {
 	url := strings.TrimPrefix(p.source, "git+")
 	commit := ""
@@ -138,8 +141,10 @@ func fetchGitPackage(p Pkg, dest string) {
 
 	for _, args := range [][]string{
 		{"init", "-q", checkout},
-		{"-C", checkout, "fetch", "-q", "--depth", "1", url, commit},
+		{"-C", checkout, "remote", "add", "origin", url},
+		{"-C", checkout, "fetch", "-q", "--depth", "1", "origin", commit},
 		{"-C", checkout, "checkout", "-q", "FETCH_HEAD"},
+		{"-C", checkout, "submodule", "update", "-q", "--init", "--recursive"},
 	} {
 		command := exec.Command("git", args...)
 		command.Stderr = os.Stderr
@@ -302,8 +307,16 @@ func copyPackageTree(from, to string) {
 		rel := throw2(filepath.Rel(from, path))
 		target := filepath.Join(to, rel)
 
+		if rel != "." && entry.Name() == ".git" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
 		if entry.IsDir() {
-			if rel != "." && (entry.Name() == ".git" || entry.Name() == "target") {
+			if rel != "." && entry.Name() == "target" {
 				return filepath.SkipDir
 			}
 
