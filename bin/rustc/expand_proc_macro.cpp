@@ -2637,12 +2637,6 @@ auto ProcMacroVisitor::visitAttrs(const ASTAttributeList& attrs) -> void {
 }
 
 auto ProcMacroVisitor::visitAttr(const ASTAttribute& a) -> void {
-    if (a.name() == "cfg_attr") {
-        auto newAttrs = checkCfgAttr(wb, a);
-        for (const auto& na : newAttrs) {
-            this->visitAttr(na);
-        }
-    }
     if (this->skipDeriveAttrs && a.name().isTrivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
         DEBUG(StringView("Skip ") << a << StringView(" (derive input)"));
         return;

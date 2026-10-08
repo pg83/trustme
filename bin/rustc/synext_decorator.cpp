@@ -4352,7 +4352,47 @@ auto DecoratorDerive::wantsAllAttrs() const -> bool {
     return true;
 }
 
+namespace {
+    template <typename Entries>
+    void cfgEvalEntries(const WireBoard& wb, Entries& entries) {
+        for (auto it = entries.begin(); it != entries.end();) {
+            CfgExpandAttrs(wb, it->attrs);
+            if (checkCfgAttrs(*wb.settings, it->attrs)) {
+                ++it;
+            } else {
+                it = entries.erase(it);
+            }
+        }
+    }
+
+    void cfgEvalStructData(const WireBoard& wb, ASTStructData& data) {
+        if (auto* e = data.opt_Struct()) {
+            cfgEvalEntries(wb, e->ents);
+        } else if (auto* e = data.opt_Tuple()) {
+            cfgEvalEntries(wb, e->ents);
+        }
+    }
+
+    void cfgEvalItem(const WireBoard& wb, ASTItem& i) {
+        if (auto* e = i.opt_Struct()) {
+            cfgEvalStructData(wb, e->data);
+        } else if (auto* e = i.opt_Union()) {
+            cfgEvalEntries(wb, e->variants);
+        } else if (auto* e = i.opt_Enum()) {
+            cfgEvalEntries(wb, e->variants());
+            for (auto& variant : e->variants()) {
+                if (auto* v = variant.data.opt_Tuple()) {
+                    cfgEvalEntries(wb, v->items);
+                } else if (auto* v = variant.data.opt_Struct()) {
+                    cfgEvalEntries(wb, v->fields);
+                }
+            }
+        }
+    }
+}
+
 auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    cfgEvalItem(wb, i);
     switch (i.tag()) {
         case ASTItem::TAG_None: {
             break;

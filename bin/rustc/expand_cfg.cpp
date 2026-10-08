@@ -611,3 +611,17 @@ auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
         i.value = nullptr;
     }
 }
+
+void CfgExpandAttrs(const WireBoard& wb, ASTAttributeList& attrs) {
+    for (auto it = attrs.items.begin(); it != attrs.items.end();) {
+        auto& a = *it;
+        const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
+        if (a.name() == rcstringCfgAttr) {
+            auto newAttrs = checkCfgAttr(wb, a);
+            it = attrs.items.erase(it);
+            it = attrs.items.insert(it, std::make_move_iterator(newAttrs.begin()), std::make_move_iterator(newAttrs.end()));
+        } else {
+            ++it;
+        }
+    }
+}
