@@ -5475,6 +5475,21 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_a_module_block_in_a_non_mod_rs_file_owns_its_directory",
+    inputs=["$(S)/tst/unit/test_a_module_block_in_a_non_mod_rs_file_owns_its_directory.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/a_module_block_in_a_non_mod_rs_file_owns_its_directory.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_a_module_block_in_a_non_mod_rs_file_owns_its_directory.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/a_module_block_in_a_non_mod_rs_file_owns_its_directory.stamp",
+    ],
+    deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.92.0"},
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_trait_object_supertrait_binding",
     inputs=[
         "$(S)/tst/unit/test_trait_object_supertrait_binding.py",

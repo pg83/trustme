@@ -5750,6 +5750,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         }
                     }
                     submod.fileInfo.path = subPath.str() + "/";
+                    submod.fileInfo.controlsDir = true;
                     submod.fileInfo.inModBlock = true;
                     submod.fileInfo.isDisabled = !H::checkItemCfg(*lex.parseState().wb->settings, metaItems);
                     // TODO: If cfg fails, just eat the TT until a matching #[cfg]?
