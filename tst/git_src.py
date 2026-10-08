@@ -4,9 +4,10 @@ a `<proj>_src` graph node.
 
     git_src.py <url> <rev> <out.tar> [lockfile [lockfile-subdir]]
 
-A pinned revision no branch or tag reaches is fetched by its id, as Cargo
-fetches a git dependency's locked revision. Its submodules are checked out,
-recursively, at the commits it records, as Cargo does for a git source.
+The pinned revision is fetched alone, by its id, as Cargo fetches a git
+dependency's locked revision; a server that refuses that gets a full fetch.
+Its submodules are checked out, recursively, at the commits it records, as
+Cargo does for a git source.
 
 Set SRC_OVERRIDE to a local checkout to skip the clone.
 """
@@ -29,14 +30,16 @@ def main() -> int:
         if override:
             shutil.copytree(override, src, symlinks=True)
         else:
-            lib.log(f"[src] cloning {url} @ {rev}")
-            lib.run(["git", "clone", "--no-checkout", url, src])
-            present = subprocess.run(["git", "cat-file", "-e", rev + "^{commit}"], cwd=src,
-                                     stderr=subprocess.DEVNULL).returncode == 0
-            if not present:
-                lib.run(["git", "fetch", "-q", "origin", rev], cwd=src)
+            lib.log(f"[src] fetching {url} @ {rev}")
+            lib.run(["git", "init", "-q", src])
+            lib.run(["git", "remote", "add", "origin", url], cwd=src)
+            shallow = subprocess.run(["git", "fetch", "-q", "--depth", "1", "origin", rev],
+                                     cwd=src).returncode == 0
+            if not shallow:
+                lib.run(["git", "fetch", "-q", "origin"], cwd=src)
             lib.run(["git", "checkout", "-q", rev], cwd=src)
-            lib.run(["git", "submodule", "update", "-q", "--init", "--recursive"], cwd=src)
+            lib.run(["git", "submodule", "update", "-q", "--init", "--recursive", "--depth", "1"],
+                    cwd=src)
         if lockfile:
             shutil.copyfile(
                 lockfile,
