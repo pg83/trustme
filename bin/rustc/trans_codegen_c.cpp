@@ -10420,7 +10420,7 @@ auto CodeGeneratorC::emitFunctionArgument(const RcString& abi, const HIRType* ty
 }
 
 auto CodeGeneratorC::argumentIsIndirect(const RcString& abi, const HIRType* ty) -> bool {
-    if (!(abi == ABI_RUST || abi == "unadjusted" || strncmp(abi.c_str(), "rust-", 5) == 0)) {
+    if (!(abi == ABI_RUST || strncmp(abi.c_str(), "rust-", 5) == 0)) {
         return false;
     }
     if (const auto* known = indirectArgumentTypes.find(reinterpret_cast<uintptr_t>(ty))) {
