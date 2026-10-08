@@ -2834,7 +2834,20 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
         } else if (item.linkage.name == "llvm.x86.bmi.pdep.64") {
             of << StringView("\trv = 0;\n") << StringView("\tu64 input_bit = 1;\n") << StringView("\twhile(arg1) {\n") << StringView("\t\tu64 mask_bit = arg1 & -arg1;\n") << StringView("\t\tif(arg0 & input_bit) rv |= mask_bit;\n") << StringView("\t\targ1 &= arg1 - 1; input_bit <<= 1;\n") << StringView("\t}\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.pclmulqdq") {
+            of << StringView("#if defined(__x86_64__) || defined(__i386__)\n");
+            of << StringView("\ttypedef long long clmul_v2di __attribute__((vector_size(16)));\n");
+            of << StringView("\tclmul_v2di a, b;\n");
+            of << StringView("\tmemcpy(&a, &arg0, sizeof(a)); memcpy(&b, &arg1, sizeof(b));\n");
+            of << StringView("\tswitch(arg2 & 0x11) {\n");
+            for (const char* imm : {"0x00", "0x01", "0x10", "0x11"}) {
+                of << StringView("\tcase ") << imm << StringView(": __asm__(\"pclmulqdq {$") << imm << StringView(", %1, %0|%0, %1, ") << imm << StringView("}\" : \"+x\" (a) : \"x\" (b)); break;\n");
+            }
+            of << StringView("\t}\n");
+            of << StringView("\tmemcpy(&rv, &a, sizeof(a));\n");
+            of << StringView("\treturn rv;\n");
+            of << StringView("#else\n");
             of << StringView("\tu64 a_words[2], b_words[2], result[2] = {0, 0};\n") << StringView("\tmemcpy(a_words, &arg0, sizeof(a_words));\n") << StringView("\tmemcpy(b_words, &arg1, sizeof(b_words));\n") << StringView("\tu64 a = a_words[arg2 & 1];\n") << StringView("\tu64 b = b_words[(arg2 >> 4) & 1];\n") << StringView("\tfor(unsigned i = 0; i < 64; i++) {\n") << StringView("\t\tif((b >> i) & 1) {\n") << StringView("\t\t\tresult[0] ^= a << i;\n") << StringView("\t\t\tif(i != 0) result[1] ^= a >> (64 - i);\n") << StringView("\t\t}\n") << StringView("\t}\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
+            of << StringView("#endif\n");
         } else if (item.linkage.name == "llvm.x86.addcarry.32") {
             of << StringView("\trv._0 = __builtin_add_overflow(arg1, arg2, &rv._1);\n");
             of << StringView("\tif(arg0) rv._0 |= __builtin_add_overflow(rv._1, 1, &rv._1);\n");
