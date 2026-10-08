@@ -466,3 +466,54 @@ func TestVendoringKeepsTwoConnectionsToTheRegistry(t *testing.T) {
 		t.Fatalf("%d connections to the registry at once", most.Load())
 	}
 }
+
+// A full projects run failed to vendor pin-project-lite's git dependency:
+// "unlinkat .../cargo-vendor-git-.../.git/objects: directory not empty". Git
+// starts its automatic maintenance in the background after a fetch, and it
+// was still writing into the temporary checkout as the checkout was removed.
+// Cargo fetches with libgit2 and gix, which maintain nothing on their own; a
+// checkout made only to be copied out is fetched with that maintenance off.
+func TestAGitCheckoutIsNotMaintainedInTheBackground(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper := filepath.Join(root, "bin")
+	argsLog := filepath.Join(root, "git-args")
+	throw(os.MkdirAll(wrapper, 0o755))
+	throw(os.WriteFile(filepath.Join(wrapper, "git"), []byte("#!/bin/sh\necho \"$@\" >> "+argsLog+"\nexec "+realGit+" \"$@\"\n"), 0o755))
+
+	repo := filepath.Join(root, "repo")
+	throw(os.MkdirAll(filepath.Join(repo, "src"), 0o755))
+	throw(os.WriteFile(filepath.Join(repo, "Cargo.toml"), []byte("[package]\nname = \"small\"\nversion = \"1.0.0\"\n"), 0o644))
+	throw(os.WriteFile(filepath.Join(repo, "src", "lib.rs"), []byte(""), 0o644))
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"},
+		{"config", "uploadpack.allowAnySHA1InWant", "true"},
+		{"add", "."},
+		{"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "one"},
+	} {
+		if out, err := exec.Command(realGit, append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	commit, err := exec.Command(realGit, "-C", repo, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PATH", wrapper+":"+os.Getenv("PATH"))
+	fetchGitPackage(Pkg{name: "small", version: "1.0.0", source: "git+file://" + repo + "#" + strings.TrimSpace(string(commit))}, filepath.Join(root, "vendor", "small"))
+
+	logged := throw2(os.ReadFile(argsLog))
+	for _, line := range strings.Split(strings.TrimSpace(string(logged)), "\n") {
+		if strings.Contains(line, " fetch ") && (!strings.Contains(line, "maintenance.auto=false") || !strings.Contains(line, "gc.auto=0")) {
+			t.Fatalf("git fetches with background maintenance on: %s", line)
+		}
+	}
+}

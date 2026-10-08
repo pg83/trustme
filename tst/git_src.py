@@ -19,6 +19,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib  # noqa: E402
 
+GIT = ["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false"]
+
 
 def main() -> int:
     url, rev, out = sys.argv[1], sys.argv[2], os.path.abspath(sys.argv[3])
@@ -31,14 +33,14 @@ def main() -> int:
             shutil.copytree(override, src, symlinks=True)
         else:
             lib.log(f"[src] fetching {url} @ {rev}")
-            lib.run(["git", "init", "-q", src])
-            lib.run(["git", "remote", "add", "origin", url], cwd=src)
-            shallow = subprocess.run(["git", "fetch", "-q", "--depth", "1", "origin", rev],
+            lib.run([*GIT, "init", "-q", src])
+            lib.run([*GIT, "remote", "add", "origin", url], cwd=src)
+            shallow = subprocess.run([*GIT, "fetch", "-q", "--depth", "1", "origin", rev],
                                      cwd=src).returncode == 0
             if not shallow:
-                lib.run(["git", "fetch", "-q", "origin"], cwd=src)
-            lib.run(["git", "checkout", "-q", rev], cwd=src)
-            lib.run(["git", "submodule", "update", "-q", "--init", "--recursive", "--depth", "1"],
+                lib.run([*GIT, "fetch", "-q", "origin"], cwd=src)
+            lib.run([*GIT, "checkout", "-q", rev], cwd=src)
+            lib.run([*GIT, "submodule", "update", "-q", "--init", "--recursive", "--depth", "1"],
                     cwd=src)
         if lockfile:
             shutil.copyfile(

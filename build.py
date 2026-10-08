@@ -5616,6 +5616,22 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_git_src_no_background_maintenance",
+    inputs=[
+        "$(S)/tst/unit/test_git_src_fetches_without_background_maintenance.py",
+        "$(S)/tst/git_src.py",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/git_src_no_background_maintenance.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_git_src_fetches_without_background_maintenance.py",
+        "$(S)/tst/git_src.py", "$(B)/tst/unit/git_src_no_background_maintenance.stamp",
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_git_src_pinned_commit_only",
     inputs=[
         "$(S)/tst/unit/test_git_src_fetches_only_the_pinned_commit.py",

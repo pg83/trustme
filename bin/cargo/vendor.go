@@ -167,7 +167,7 @@ func fetchGitPackage(p Pkg, dest string) {
 		{"-C", checkout, "checkout", "-q", "FETCH_HEAD"},
 		{"-C", checkout, "submodule", "update", "-q", "--init", "--recursive"},
 	} {
-		command := exec.Command("git", args...)
+		command := exec.Command("git", append([]string{"-c", "gc.auto=0", "-c", "maintenance.auto=false"}, args...)...)
 		command.Stderr = os.Stderr
 		throw(command.Run())
 	}
