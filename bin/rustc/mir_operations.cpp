@@ -7002,7 +7002,9 @@ namespace {
                         if (lv.root.is_Local()) {
                             auto e = lv.root.as_Local();
                             MIR_ASSERT(state, e < localRewriteTable.length(), StringView("Variable out of range - ") << lv);
-                            MIR_ASSERT(state, localRewriteTable[e] != ~0u, StringView("LValue ") << lv << StringView(" incorrectly marked as unused"));
+                            if (localRewriteTable[e] == ~0u) {
+                                ERROR(state.sp, E0000, StringView("used binding isn't initialized: ") << lv << StringView(" is read, and nothing assigns it"));
+                            }
                             lv.root = MIRLValue::Storage::newLocal(localRewriteTable[e]);
                         }
                         for (auto& w : lv.wrappers) {

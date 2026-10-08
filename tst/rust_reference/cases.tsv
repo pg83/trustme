@@ -499,7 +499,7 @@ types/closure__L189.rs	src/types/closure.md:189	2024	compile
 types/closure__L208.rs	src/types/closure.md:208	2024	compile
 types/closure__L250.rs	src/types/closure.md:250	2024	compile
 types/closure__L264.rs	src/types/closure.md:264	2024	compile
-types/closure__L276.rs	src/types/closure.md:276	2024	compile
+types/closure__L276.rs	src/types/closure.md:276	2024	fail
 types/closure__L294.rs	src/types/closure.md:294	2024	xfail
 types/closure__L327.rs	src/types/closure.md:327	2024	compile
 types/closure__L375.rs	src/types/closure.md:375	2024	xfail
