@@ -9528,26 +9528,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (erasedAmbiguous) {
             return boundsAmbiguousPickOrAmbiguous(restoreUncoveredBoundAmbiguities(), true);
         }
-    } else if (const auto* projectionType = singleTraitScope ? nullptr : getInnerType(receiver, [](const HIRType* type) {
-        const auto* path = type->opt_Path();
-        return path && path->path.data.is_UfcsKnown();
-    })) {
-        const auto& projection = projectionType->as_Path().path.data.as_UfcsKnown();
-        auto monomorph = MonomorphStatePtr(crate.types, projection.type, &projection.trait.params, &projection.params);
-        bool projectionAmbiguous = false;
-        resolve_.iterateAtyBounds(callSpan, projection, [&](const HIRTraitPath& declaredTrait) {
-            auto hrtb = HIRPathParams();
-            monomorph.ppHrb = &hrtb;
-            const auto proofTrait = monomorph.monomorphGenericpath(callSpan, declaredTrait.path, false);
-            monomorph.ppHrb = nullptr;
-            forEachTraitMethodDeclaration(proofTrait, *declaredTrait.traitPtr, projectionType, [&](const HIRFunction& function, HIRGenericPath methodTrait) {
-                projectionAmbiguous |= assembleTraitCandidate(function, proofTrait.clone(), std::move(methodTrait), nullptr) == Certainty::Ambiguous;
-            });
-            return false;
-        });
-        if (projectionAmbiguous) {
-            return boundsAmbiguousPickOrAmbiguous(restoreUncoveredBoundAmbiguities(), true);
-        }
     }
 
     bool inScopeAmbiguous = false;
