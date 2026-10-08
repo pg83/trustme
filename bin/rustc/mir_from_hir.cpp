@@ -2936,6 +2936,12 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
         return;
     }
 
+    for (const auto& armRule : armRules) {
+        if (armRule.rules.size() != armRules[0].rules.size()) {
+            fallBackOnSimple = true;
+        }
+    }
+
     if (!fallBackOnSimple && armRules[0].rules.size() > 1) {
         // TODO: Should columns be sorted within equal sub-arms too?
         Vector<unsigned> columnWeights;
