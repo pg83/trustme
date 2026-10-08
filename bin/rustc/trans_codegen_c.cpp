@@ -9634,9 +9634,19 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
             decltype(val.as_Local()) e = val.as_Local();
             if (e == MIRLValue::Storage::MAX_ARG) {
                 of << StringView("i");
-            } else {
-                of << StringView("var") << e;
+                break;
             }
+            const HIRType* tmp;
+            const auto& ty = mirRes->getLvalueType(val);
+            if (this->typeIsBadZst(ty)) {
+                size_t alignment = 0;
+                MIR_ASSERT(*mirRes, TargetGetAlignOf(sp, resolve_, ty, alignment), StringView("Unknown ZST alignment"));
+                of << StringView("(*(");
+                emitCtype(ty);
+                of << StringView("*)(uintptr_t)") << alignment << StringView(")");
+                break;
+            }
+            of << StringView("var") << e;
             break;
         }
         case MIRLValue::RefCommon::TAG_Static: {
