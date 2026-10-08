@@ -5479,7 +5479,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     getAbiStringOpt(lex, abi);
                     if (lex.getTokenIf(TOK_BRACE_OPEN)) {
                         itemName = "";
-                        itemData = ASTItem(ParseExternBlock(lex, "C", metaItems));
+                        auto block = ParseExternBlock(lex, mv$(abi), metaItems);
+                        block.setUnsafe();
+                        itemData = ASTItem(mv$(block));
                     } else {
                         GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                         auto definitionSpan = lex.tokenStartSpan(tok);

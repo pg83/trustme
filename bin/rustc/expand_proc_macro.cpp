@@ -304,7 +304,7 @@ namespace {
 
         void visitUnion(const RcString& name, const ASTVisibility& vis, const ASTUnion& unn);
 
-        void visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn);
+        void visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn, bool foreign = false);
 
         void visitStatic(const RcString& name, const ASTVisibility& vis, const ASTStatic& i);
 
@@ -2835,7 +2835,7 @@ auto ProcMacroVisitor::visitUnion(const RcString& name, const ASTVisibility& vis
     pmi.sendSymbol("}");
 }
 
-auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn) -> void {
+auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn, bool foreign) -> void {
     this->visitVis(vis);
 
     if (fcn.isConst()) {
@@ -2844,10 +2844,10 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
     if (fcn.isAsync()) {
         pmi.sendRword("async");
     }
-    if (fcn.isUnsafe()) {
+    if (fcn.isUnsafe() && !foreign) {
         pmi.sendRword("unsafe");
     }
-    if (fcn.abi() != ABI_RUST) {
+    if (fcn.abi() != ABI_RUST && !foreign) {
         pmi.sendRword("extern");
         pmi.sendString(fcn.abi());
     }
@@ -3101,6 +3101,39 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
         default:
             TODO(sp, StringView("visit_item - ") << item.tagStr());
             break;
+        case ASTItem::TAG_ExternBlock: {
+            auto& e = item.as_ExternBlock();
+            if (e.isUnsafe()) {
+                pmi.sendRword("unsafe");
+            }
+            pmi.sendRword("extern");
+            pmi.sendString(e.abi());
+            pmi.sendSymbol("{");
+            for (const auto& inner : e.items()) {
+                visitAttrs(inner.attrs);
+                if (inner.data.is_Function()) {
+                    visitFunction(inner.name, inner.vis, inner.data.as_Function(), /*foreign=*/true);
+                } else {
+                    visitItem(inner.name, inner.vis, inner.data);
+                }
+            }
+            pmi.sendSymbol("}");
+            break;
+        }
+        case ASTItem::TAG_Type: {
+            auto& e = item.as_Type();
+            this->visitVis(vis);
+            pmi.sendRword("type");
+            pmi.sendIdent(name.c_str());
+            this->visitParams(e.params_);
+            this->visitBounds(e.params_);
+            if (e.type_->isValid() && !e.type_->isUnbounded()) {
+                pmi.sendSymbol("=");
+                this->visitType(e.type_);
+            }
+            pmi.sendSymbol(";");
+            break;
+        }
         case ASTItem::TAG_Impl: {
             auto& e = item.as_Impl();
             this->visitVis(vis);

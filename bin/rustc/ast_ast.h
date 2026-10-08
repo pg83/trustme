@@ -705,6 +705,7 @@ struct ASTUseItem {
 class ASTExternBlock {
     std::string abi_;
     std::vector<ASTNamed<ASTItem>> items_;
+    bool isUnsafe_ = false;
 
 public:
     struct Link {
@@ -720,6 +721,14 @@ public:
 
     const std::string& abi() const {
         return abi_;
+    }
+
+    bool isUnsafe() const {
+        return isUnsafe_;
+    }
+
+    void setUnsafe() {
+        isUnsafe_ = true;
     }
 
     void addItem(ASTNamed<ASTItem> namedItem);
