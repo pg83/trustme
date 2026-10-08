@@ -121,6 +121,7 @@ func (ex *TaskExecutor) run(roots []*Task) {
 		}
 	}
 
+	priority := taskPriorities(unique, dependents)
 	ready := make([]*Task, 0)
 
 	for _, task := range unique {
@@ -129,7 +130,7 @@ func (ex *TaskExecutor) run(roots []*Task) {
 		}
 	}
 
-	sortTasks(ready)
+	sortTasks(ready, priority)
 	results := make(chan TaskResult, ex.jobs)
 	running := 0
 	completed := 0
@@ -180,7 +181,7 @@ func (ex *TaskExecutor) run(roots []*Task) {
 			}
 		}
 
-		sortTasks(ready)
+		sortTasks(ready, priority)
 	}
 
 	for running > 0 {
@@ -648,8 +649,48 @@ func uniqueTasks(roots []*Task) []*Task {
 	return result
 }
 
-func sortTasks(tasks []*Task) {
+// Cargo's dependency queue gives every unit the same cost and dequeues,
+// among the ready units, the one whose cost plus the costs of all units that
+// transitively depend on it is the largest: the start of the longest wait
+// goes first. Equal priorities keep the key order.
+func taskPriorities(tasks []*Task, dependents map[*Task][]*Task) map[*Task]int {
+	reach := map[*Task]map[*Task]bool{}
+	var collect func(*Task) map[*Task]bool
+	collect = func(task *Task) map[*Task]bool {
+		if set, ok := reach[task]; ok {
+			return set
+		}
+
+		set := map[*Task]bool{}
+
+		for _, next := range dependents[task] {
+			set[next] = true
+
+			for waiting := range collect(next) {
+				set[waiting] = true
+			}
+		}
+
+		reach[task] = set
+
+		return set
+	}
+
+	priority := map[*Task]int{}
+
+	for _, task := range tasks {
+		priority[task] = 1 + len(collect(task))
+	}
+
+	return priority
+}
+
+func sortTasks(tasks []*Task, priority map[*Task]int) {
 	sort.Slice(tasks, func(i, j int) bool {
+		if priority[tasks[i]] != priority[tasks[j]] {
+			return priority[tasks[i]] > priority[tasks[j]]
+		}
+
 		return tasks[i].key < tasks[j].key
 	})
 }

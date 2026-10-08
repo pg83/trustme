@@ -226,3 +226,37 @@ func TestSiblingCompilerKeepsInstalledLayout(t *testing.T) {
 		t.Fatalf("sibling compiler = %q, want %q", got, rustc)
 	}
 }
+
+// Cargo's dependency queue dequeues, among the units whose dependencies are
+// done, the one the most other units transitively wait on (a unit's priority
+// is its cost plus its dependents' costs). The key order does not decide it.
+func TestTaskExecutorStartsTheTaskMoreUnitsWaitOnFirst(t *testing.T) {
+	root := t.TempDir()
+	var order []string
+	newTask := func(key string, deps ...*Task) *Task {
+		return &Task{
+			key:     key,
+			name:    key,
+			kind:    "RS",
+			deps:    deps,
+			outputs: []TaskOutput{{name: key + ".out"}},
+			action: func(ctx *TaskContext) {
+				order = append(order, key)
+
+				if err := os.WriteFile(ctx.output(0), []byte(key), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+		}
+	}
+
+	leaf := newTask("a-leaf")
+	chainStart := newTask("b-chain")
+	chainMiddle := newTask("c-chain", chainStart)
+	chainEnd := newTask("d-chain", chainMiddle)
+	runTasks([]*Task{leaf, chainEnd}, 1, root, false)
+
+	if len(order) != 4 || order[0] != "b-chain" {
+		t.Fatalf("execution order = %v, want b-chain first", order)
+	}
+}
