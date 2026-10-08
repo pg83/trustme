@@ -2273,6 +2273,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
                 auto tyName = RcString::newInterned(FMT(path.name << StringView("#") << var.name));
                 auto variantStruct = HIRStruct{LowerHIRGenericParams(ent.params(), nullptr), variantRepr, mv$(data)};
                 variantStruct.forcedAlignment = ent.markings.alignValue;
+                variantStruct.variantOfEnum = RcString::newInterned(path.name);
                 pushStruct.push(tyName, mv$(variantStruct));
                 auto tyIpath = path;
                 tyIpath.name = tyName.c_str();

@@ -2905,17 +2905,10 @@ auto ExpanderSelf::visitEnum(HIRItemPath p, HIREnum& enm) -> void {
 
 auto ExpanderSelf::visitStruct(HIRItemPath p, HIRStruct& str) -> void {
     const HIRType* ty = crate.types.path(HIRGenericPath(p.getSimplePath(), str.params.makeNopParams(crate.types, 0)), &str);
-    for (const auto* separator = p.name; *separator; separator++) {
-        if (*separator != '#') {
-            continue;
-        }
+    if (str.variantOfEnum != RcString()) {
         auto path = p.getSimplePath();
-        path.updateLastComponent(RcString::newInterned(p.name, separator - p.name));
-        const auto* item = crate.getTypeitemByPathOpt(path);
-        if (item && item->is_Enum()) {
-            ty = crate.types.path(HIRGenericPath(path, str.params.makeNopParams(crate.types, 0)), &item->as_Enum());
-            break;
-        }
+        path.updateLastComponent(str.variantOfEnum);
+        ty = crate.types.path(HIRGenericPath(path, str.params.makeNopParams(crate.types, 0)), &crate.getTypeitemByPathOpt(path)->as_Enum());
     }
     implType = ty;
     HIRVisitor::visitStruct(p, str);
@@ -3556,6 +3549,11 @@ auto UfcsVisitor::visitUnion(HIRItemPath p, HIRUnion& item) -> void {
 auto UfcsVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
     auto _ = resolve_.setImplGenerics(item.structMarkings.dstType, item.params);
     auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
+    if (item.variantOfEnum != RcString()) {
+        auto path = p.getSimplePath();
+        path.updateLastComponent(item.variantOfEnum);
+        ty = crate.types.path(HIRGenericPath(path), &crate.getTypeitemByPathOpt(path)->as_Enum());
+    }
     currentType_ = ty;
     DeclaredTypeGuard declaredTypes(*this);
     HIRVisitor::visitStruct(p, item);

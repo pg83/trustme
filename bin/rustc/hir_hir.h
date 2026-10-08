@@ -432,6 +432,8 @@ public:
     HIRConstEvalState constEvalState = HIRConstEvalState::None;
 
     bool mustUse = false;
+
+    RcString variantOfEnum;
 };
 
 class HIRUnion {
