@@ -829,6 +829,29 @@ struct OrderPlace {
         return finder.found;
     }
 
+    bool coercionPastPendingNode(const Context& context, const IvarCoercionIndex& coercionIndex, Vector<unsigned>& ivars, const Context::Coercion& rule) {
+        const auto* pendingCuts = coercionIndex.pendingNodeCut;
+        if (!pendingCuts) {
+            return false;
+        }
+        const auto place = rule.assignmentSite ? bindingPlace(rule) : coercionPlace(rule);
+        ivars.clear();
+        coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
+        coercionIndex.collectIvars(context.getType(rule.sourceType()), ivars);
+        for (const auto index : ivars) {
+            if (index >= coercionIndex.count) {
+                continue;
+            }
+            const auto& cut = pendingCuts[coercionIndex.componentOf(index)];
+            if (!cut.isNone() && place.after(cut) && !(place.start <= cut.start && place.end >= cut.end)) {
+                DEBUG(StringView("- Binding R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the pending node at ") << cut.end);
+                context.pendingCutHolds++;
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool coercionPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Coercion& rule) {
         const auto count = coercionIndex.count;
         const auto place = rule.assignmentSite ? bindingPlace(rule) : coercionPlace(rule);
@@ -7527,13 +7550,12 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             for (const auto& revisit : context.advRevisits) {
                 revisit->collectPatternVariables(context, patternVariables);
             }
-            const Vector<OrderPlace> noBindingCuts;
             Vector<unsigned> cutIvars;
             for (const auto& rule : context.linkCoerce) {
                 if (!rule->rightNodePtr) {
                     continue;
                 }
-                if ((ivarCoercionIndex->pendingNodeCut || ivarCoercionIndex->pendingObligationCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, noBindingCuts, cutIvars, *rule)) {
+                if (coercionPastPendingNode(context, *ivarCoercionIndex, cutIvars, *rule)) {
                     continue;
                 }
                 const auto binding = rule->argumentSite ? argumentBinding(context, *rule) : variableBinding(context, *ivarCoercionIndex, *rule);
