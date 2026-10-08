@@ -317,10 +317,12 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
         case ASTPathClass::TAG_Super: {
             DEBUG(StringView("Super ") << path);
             size_t i = 0;
-            while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
+            for (unsigned int level = 0; level < path.cls.as_Super().count; level++) {
+                while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
+                    i += 1;
+                }
                 i += 1;
             }
-            i += 1;
             ASSERT_BUG(sp, i <= baseNodes.size(), StringView(""));
             const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
             return getModuleAst(startMod, path, 0, ignoreLast, outPath);
