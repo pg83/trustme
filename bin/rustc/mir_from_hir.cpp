@@ -9110,6 +9110,28 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm& node) -> void {
     builder.setResult(node.span(), MIRRValue::make_Tuple({}));
 }
 
+namespace {
+    void checkAsmOperandType(const StaticTraitResolve& resolve, const Span& sp, const HIRType* ty, bool isInput) {
+        bool allowed = false;
+        if (const auto* e = ty->opt_Primitive()) {
+            allowed = *e != HIRCoreType::Bool && *e != HIRCoreType::Char && *e != HIRCoreType::Str;
+        } else if (const auto* e = ty->opt_Pointer()) {
+            allowed = resolve.typeIsSized(sp, e->inner);
+        } else if (const auto* e = ty->opt_Borrow()) {
+            allowed = resolve.typeIsSized(sp, e->inner);
+        } else if (ty->is_Function()) {
+            allowed = true;
+        } else if (ty->is_Diverge()) {
+            allowed = isInput;
+        } else if (const auto* e = ty->opt_Path(); e && e->binding.is_Struct()) {
+            allowed = e->binding.as_Struct()->repr == HIRStruct::Repr::Simd;
+        }
+        if (!allowed) {
+            ERROR(sp, E0000, StringView("cannot use value of type `") << ty << StringView("` for inline assembly"));
+        }
+    }
+}
+
 auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
     TRACE_FUNCTION_F(StringView("_Asm2"));
     // TODO: How to represent inout in the MIR?
@@ -9159,6 +9181,9 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
                 auto& e = v.as_RegSingle();
                 std::unique_ptr<MIRParam> input;
                 std::unique_ptr<MIRLValue> output;
+                if (e.val) {
+                    checkAsmOperandType(builder.resolve(), e.val->span(), e.val->resType, e.dir == AsmDirection::In || e.dir == AsmDirection::InOut || e.dir == AsmDirection::InLateOut);
+                }
                 this->visitNodePtr(e.val);
                 switch (e.dir) {
                     case AsmDirection::In:
@@ -9188,6 +9213,12 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
                 auto& e = v.as_Reg();
                 std::unique_ptr<MIRParam> input;
                 std::unique_ptr<MIRLValue> output;
+                if (e.valIn) {
+                    checkAsmOperandType(builder.resolve(), e.valIn->span(), e.valIn->resType, true);
+                }
+                if (e.valOut) {
+                    checkAsmOperandType(builder.resolve(), e.valOut->span(), e.valOut->resType, false);
+                }
                 switch (e.dir) {
                     case AsmDirection::In:
                         ASSERT_BUG(node.span(), e.valIn, StringView("`in` register with no input"));
