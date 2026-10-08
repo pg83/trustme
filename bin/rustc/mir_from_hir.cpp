@@ -8235,7 +8235,7 @@ ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<const HIRType
         generatorState.bbOpen = builder.pauseCurBlock();
         generatorState.states.push_back(GeneratorState::State(builder.newBbUnlinked()));
         builder.setCurBlock(generatorState.states.back().entrypoint);
-        if (generatorState.isFuture) {
+        if (generatorState.isFuture && builder.crate().featureEnabled("async_drop")) {
             builder.setDropEmitter(this);
         }
     }
