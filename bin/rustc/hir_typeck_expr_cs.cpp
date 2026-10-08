@@ -7527,8 +7527,13 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             for (const auto& revisit : context.advRevisits) {
                 revisit->collectPatternVariables(context, patternVariables);
             }
+            const Vector<OrderPlace> noBindingCuts;
+            Vector<unsigned> cutIvars;
             for (const auto& rule : context.linkCoerce) {
                 if (!rule->rightNodePtr) {
+                    continue;
+                }
+                if ((ivarCoercionIndex->pendingNodeCut || ivarCoercionIndex->pendingObligationCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, noBindingCuts, cutIvars, *rule)) {
                     continue;
                 }
                 const auto binding = rule->argumentSite ? argumentBinding(context, *rule) : variableBinding(context, *ivarCoercionIndex, *rule);
