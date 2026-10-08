@@ -294,7 +294,11 @@ def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
     real = generated_function(generated, "trustme_real_cleanup_probe")
     if "auto trustme_run_cleanup" not in real or "try {" not in real:
         raise RuntimeError("real unwind cleanup lost its EH scaffolding")
-    if "\n\t\ttrustme_run_cleanup(" not in real:
+    if real.count("try {") != 1 or real.count("catch (...)") != 1:
+        raise RuntimeError("real unwind cleanup does not share one handler across the function")
+    if "trustme_unwind_state = " not in real:
+        raise RuntimeError("real unwind cleanup does not record the cleanup entry before the call")
+    if "\n\t\t\ttrustme_run_cleanup(trustme_unwind_state);" not in real:
         raise RuntimeError("real unwind cleanup is not called from the handler")
     if "try { trustme_run_cleanup" in real:
         raise RuntimeError("cleanup runner is redundantly wrapped in try/catch")

@@ -153,6 +153,7 @@ namespace {
         Vector<u8> blockLabels;
         MIRBasicBlockId fallthroughBlock = ~0u;
         bool currentFunctionTracksCaller = false;
+        bool unwindRegion = false;
         bool currentFunctionRealignsArguments = false;
 
         static constexpr size_t maxCTypeAlignment = 1u << 28;
@@ -3239,7 +3240,10 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
     findForwardedBlocks(localMirRes, *code);
     findBlockLabels(*code, cleanupBlocks);
     if (!cleanupBlocks.empty()) {
+        of << StringView("\tunsigned trustme_unwind_state = 0;\n");
         emitCleanupRunner(localMirRes, cleanupBlocks);
+        of << StringView("\ttry {\n");
+        unwindRegion = true;
     }
 
     for (unsigned i = 0; i < code->blocks.size(); i++) {
@@ -3265,6 +3269,15 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
         emitBlockTerminator(localMirRes, block.terminator, i, false, 1);
     }
     fallthroughBlock = ~0u;
+    if (unwindRegion) {
+        unwindRegion = false;
+        of << StringView("\t} catch (...) {\n");
+        of << StringView("\t\tif (trustme_unwind_state != 0) {\n");
+        of << StringView("\t\t\ttrustme_run_cleanup(trustme_unwind_state);\n");
+        of << StringView("\t\t}\n");
+        of << StringView("\t\tthrow;\n");
+        of << StringView("\t}\n");
+    }
     of << StringView("}\n\n");
     if (item.linkage.name == "main") {
         emitCMainShim(p, item, params, retType);
@@ -3578,6 +3591,12 @@ auto CodeGeneratorC::emitOperationWithUnwindCb(const MIRUnwindAction& action, un
             auto& target = action.as_Cleanup();
             if (cleanupBlockIsNoOp(target)) {
                 emitOperation.emit(indentLevel);
+                break;
+            }
+            if (unwindRegion) {
+                of << indent << StringView("trustme_unwind_state = ") << target << StringView(";\n");
+                emitOperation.emit(indentLevel);
+                of << indent << StringView("trustme_unwind_state = 0;\n");
                 break;
             }
             of << indent << StringView("try {\n");
