@@ -1115,6 +1115,10 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	env["OUT_DIR"] = outDir
 	env["CARGO_CRATE_NAME"] = targetCompileName(target)
 
+	for key, value := range b.programEnv(pkg, target, unit.isHost) {
+		env[key] = value
+	}
+
 	if tmp := b.targetTmpDir(target, unit.isHost); tmp != "" {
 		if !b.context.opts.dryRun {
 			throw(os.MkdirAll(tmp, 0o755))
@@ -1182,6 +1186,25 @@ func buildScriptToolEnv(compiler string) map[string]string {
 	}
 
 	return map[string]string{"RUSTC": compiler, "RUSTDOC": rustdoc}
+}
+
+// An integration test or a bench is compiled with the path of each program
+// of its package as `CARGO_BIN_EXE_<name>` (`prepare_rustc`,
+// cargo/core/compiler/mod.rs).
+func (b *Builder) programEnv(pkg *Package, target *Target, isHost bool) map[string]string {
+	env := map[string]string{}
+
+	if target.kind != "test" && target.kind != "bench" {
+		return env
+	}
+
+	for _, program := range pkg.targets {
+		if program.kind == "bin" {
+			env["CARGO_BIN_EXE_"+program.name] = absolutePath(b.artifact(pkg, program, isHost))
+		}
+	}
+
+	return env
 }
 
 func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Task) {

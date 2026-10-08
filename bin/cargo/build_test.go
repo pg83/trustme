@@ -972,3 +972,36 @@ func TestABuildScriptIsToldTheRustdoc(t *testing.T) {
 		t.Fatalf("RUSTDOC = %q, want the one in the environment", env["RUSTDOC"])
 	}
 }
+
+// brotli-decompressor's integration tests run
+// `env!("CARGO_BIN_EXE_brotli-decompressor")`. Cargo compiles an integration
+// test or a bench with the path of each program of its package as
+// `CARGO_BIN_EXE_<name>` (`prepare_rustc`, cargo/core/compiler/mod.rs); the
+// library and its own unit tests are not told.
+func TestAnIntegrationTestIsToldWhereItsPackagesProgramsAre(t *testing.T) {
+	dir := t.TempDir()
+	pkg := &Package{
+		dir: dir, manifestPath: filepath.Join(dir, "Cargo.toml"), name: "brotli-decompressor",
+		version: Version{major: 6}, activeFeatures: map[string]bool{},
+		targets: []*Target{
+			{kind: "lib", name: "brotli_decompressor", path: "src/lib.rs", test: true},
+			{kind: "bin", name: "brotli-decompressor", path: "src/bin/brotli-decompressor.rs"},
+			{kind: "test", name: "cli", path: "tests/cli.rs", harness: true, test: true},
+		},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", targetDir: filepath.Join(dir, "target")},
+		root: pkg, workspace: &Workspace{dir: dir}, host: "host", target: "host", cfg: &CfgSet{},
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+
+	env := builder.programEnv(pkg, pkg.targets[2], false)
+	want := builder.artifact(pkg, pkg.targets[1], false)
+
+	if got := env["CARGO_BIN_EXE_brotli-decompressor"]; got != want || !filepath.IsAbs(got) {
+		t.Fatalf("CARGO_BIN_EXE_brotli-decompressor = %q, want %q", got, want)
+	}
+	if env := builder.programEnv(pkg, pkg.targets[0], false); len(env) != 0 {
+		t.Fatalf("the library is told %v", env)
+	}
+}
