@@ -3912,6 +3912,7 @@ auto NewvalState::newStatic(const HIRType* type, EncodedLiteral value, size_t al
     s.valueRes = std::move(value);
     s.valueGenerated = true;
     s.saveLiteral = true;
+    s.isPromoted = true;
 
     DEBUG(rv << StringView(": ") << s.type << StringView(" = ") << s.valueRes);
     mod.inlineStatics.push_back(std::make_pair(mv$(name), box$(s)));
