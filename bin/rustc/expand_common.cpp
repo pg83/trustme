@@ -659,6 +659,12 @@ namespace {
                 mac = MacroRef(pm);
             }
         }
+        const auto* localInnerMacrosRoot = path.isTrivial() && path.cls.is_Relative() ? path.cls.as_Relative().hygiene.localInnerMacrosRoot() : nullptr;
+        if (mac.is_None() && localInnerMacrosRoot) {
+            ASTPath rooted(path);
+            rooted.cls.as_Relative().hygiene.setModPath(*wb.pool, *localInnerMacrosRoot);
+            mac = ExpandLookupMacro(miSpan, wb, crate, modstack, rooted);
+        }
         if (mac.is_None()) {
             mac = ExpandLookupMacro(miSpan, wb, crate, modstack, path);
         }

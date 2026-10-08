@@ -171,6 +171,7 @@ Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope
     v.parent = inner && inner->depth ? inner : nullptr;
     v.context = s.context;
     v.macroDefinition = s.macroDefinition;
+    v.localInnerMacros = s.localInnerMacros;
     v.depth = hygieneDepth(inner) + 1;
     if (inner) {
         v.searchModule = inner->searchModule;
@@ -222,6 +223,12 @@ void Ident::Hygiene::setModPath(ObjPool& pool, ModPath p) {
     Inner v = inner ? *inner : Inner{};
     v.searchModule = std::make_shared<ModPath>(std::move(p));
     *this = Hygiene(store(pool, std::move(v)));
+}
+
+Ident::Hygiene Ident::Hygiene::withLocalInnerMacros(ObjPool& pool, ModPath root) const {
+    Inner v = inner ? *inner : Inner{};
+    v.localInnerMacros = pool.make<ModPath>(std::move(root));
+    return Hygiene(store(pool, std::move(v)));
 }
 
 const Ident::ModPath& Ident::Hygiene::modPath() const {

@@ -130,6 +130,8 @@ public:
 
     bool transparent = false;
 
+    bool localInnerMacros = false;
+
     RcString sourceCrate;
     ASTEdition edition;
 

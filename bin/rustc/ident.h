@@ -30,6 +30,7 @@ struct Ident {
             unsigned int macroDefinition = 0;
             unsigned int depth = 0;
             std::shared_ptr<ModPath> searchModule;
+            const ModPath* localInnerMacros = nullptr;
         };
 
     private:
@@ -66,6 +67,12 @@ struct Ident {
         const ModPath& modPath() const;
 
         void setModPath(stl::ObjPool& pool, ModPath p);
+
+        const ModPath* localInnerMacrosRoot() const {
+            return inner ? inner->localInnerMacros : nullptr;
+        }
+
+        Hygiene withLocalInnerMacros(stl::ObjPool& pool, ModPath root) const;
 
         bool isVisible(const Hygiene& source) const;
 

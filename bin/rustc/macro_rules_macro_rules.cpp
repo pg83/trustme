@@ -169,7 +169,7 @@ namespace {
 
         MacroExpander(const MacroExpander& x) = delete;
 
-        MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
+        MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition, const Ident::ModPath* localInnerMacrosRoot);
 
         Position getPosition() const override;
 
@@ -3152,7 +3152,9 @@ std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroR
     DEBUG(StringView("Using macro '") << name << StringView("' #") << ruleIndex << StringView(" - ") << rule.contents.size() << StringView(" rule contents with ") << boundTts.mappings().size() << StringView(" bound values"));
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(wb.id, *crate.hirPool, name, sp, crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
+    Ident::ModPath localInnerMacrosRoot;
+    localInnerMacrosRoot.crate = rules.sourceCrate;
+    TokenStream* retPtr = new MacroExpander(wb.id, *crate.hirPool, name, sp, crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition, rules.localInnerMacros ? &localInnerMacrosRoot : nullptr);
 
     return std::unique_ptr<TokenStream>(retPtr);
 }
@@ -3917,7 +3919,7 @@ auto MacroExpandState::topPos() const -> unsigned int {
     return offsets[0].readPos;
 }
 
-MacroExpander::MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
+MacroExpander::MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition, const Ident::ModPath* localInnerMacrosRoot)
     : TokenStream(ParseState())
     , pool(pool)
     , thisSpan(sp, crateName, macroName)
@@ -3932,6 +3934,10 @@ MacroExpander::MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, 
     , hygiene_(Ident::Hygiene::newScopeChained(id, pool, parentHygiene, definitionId, isMacroItem))
     , lastHygiene(hygiene_)
 {
+    if (localInnerMacrosRoot) {
+        hygiene_ = hygiene_.withLocalInnerMacros(pool, *localInnerMacrosRoot);
+        lastHygiene = hygiene_;
+    }
 }
 
 auto MacroExpander::outerSpan() const -> Span {

@@ -1776,6 +1776,7 @@ auto HirDeserialiser::deserialiseMacrorules() -> ::MacroRules {
     ::MacroRules rv(id, crateName, edition);
     rv.isMacroItem = in.readBool();
     rv.transparent = in.readBool();
+    rv.localInnerMacros = in.readBool();
     rv.rules = deserialiseVecC<::MacroRulesArm>([&]() {
         return deserialiseMacrorulesarm();
     });
@@ -3850,6 +3851,7 @@ auto HirSerialiser::serialise(const ::MacroRules& mac) -> void {
     BUG_ASSERT(mac.rules.size() > 0);
     out.writeBool(mac.isMacroItem);
     out.writeBool(mac.transparent);
+    out.writeBool(mac.localInnerMacros);
     serialiseVec(mac.rules);
     serialise(mac.hygiene);
 }
