@@ -15,14 +15,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/klauspost/compress/zstd"
 )
 
+var crateHost = "https://static.crates.io"
+
 func crateURL(p Pkg) string {
-	return fmt.Sprintf("https://static.crates.io/crates/%s/%s-%s.crate", p.name, p.name, p.version)
+	return fmt.Sprintf("%s/crates/%s/%s-%s.crate", crateHost, p.name, p.name, p.version)
 }
 
 func vendorLayout(pkgs []Pkg, versioned bool) map[int]string {
@@ -51,11 +55,16 @@ func vendorLayout(pkgs []Pkg, versioned bool) map[int]string {
 	return names
 }
 
+// Cargo starts the download of every package it vendors, then waits for them
+// all (`PackageSet::get_many`, curl multi over HTTP/2). A failure is reported
+// for the first package in the lockfile's order that failed.
 func vendorAll(pkgs []Pkg, vendorDir string, versioned bool) {
 	layout := vendorLayout(pkgs, versioned)
 	client := &http.Client{Timeout: 120 * time.Second}
-	n := 0
+	failures := make([]*Exception, len(pkgs))
 	total := len(layout)
+	var started atomic.Int32
+	var done sync.WaitGroup
 
 	for i, p := range pkgs {
 		dir, ok := layout[i]
@@ -64,21 +73,31 @@ func vendorAll(pkgs []Pkg, vendorDir string, versioned bool) {
 			continue
 		}
 
-		n++
+		done.Add(1)
 
-		dest := filepath.Join(vendorDir, dir)
+		go func() {
+			defer done.Done()
 
-		fmt.Fprintf(os.Stderr, "vendoring (%d/%d) %s %s\n", n, total, p.name, p.version)
+			fmt.Fprintf(os.Stderr, "vendoring (%d/%d) %s %s\n", started.Add(1), total, p.name, p.version)
 
-		try(func() {
-			if p.isGit() {
-				fetchGitPackage(p, dest)
-			} else {
-				fetchCrate(client, p, dest)
-			}
-		}).catch(func(e *Exception) {
-			throwFmt("%s %s: %v", p.name, p.version, e.error())
-		})
+			failures[i] = try(func() {
+				dest := filepath.Join(vendorDir, dir)
+
+				if p.isGit() {
+					fetchGitPackage(p, dest)
+				} else {
+					fetchCrate(client, p, dest)
+				}
+			})
+		}()
+	}
+
+	done.Wait()
+
+	for i, failure := range failures {
+		if failure != nil {
+			throwFmt("%s %s: %v", pkgs[i].name, pkgs[i].version, failure.error())
+		}
 	}
 }
 

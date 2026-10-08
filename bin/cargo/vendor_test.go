@@ -3,12 +3,19 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -333,5 +340,66 @@ func TestAVendoredGitPackageCarriesItsSubmodules(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(dest, "zstd", ".git")); err == nil {
 		t.Fatal("the vendored submodule carries its .git")
+	}
+}
+
+// Cargo downloads the packages it vendors together: `PackageSet::get_many`
+// starts every download, then waits for them (curl multi over HTTP/2). The
+// server here answers only once all of them are in flight.
+func TestVendoringDownloadsTheCratesTogether(t *testing.T) {
+	const count = 4
+	registry := "registry+https://github.com/rust-lang/crates.io-index"
+	crates := map[string][]byte{}
+	var pkgs []Pkg
+
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("c%d", i)
+		var archive bytes.Buffer
+		gz := gzip.NewWriter(&archive)
+		tw := tar.NewWriter(gz)
+		manifest := fmt.Sprintf("[package]\nname = %q\nversion = \"1.0.0\"\n", name)
+
+		throw(tw.WriteHeader(&tar.Header{Name: name + "-1.0.0/Cargo.toml", Mode: 0o644, Size: int64(len(manifest)), Typeflag: tar.TypeReg}))
+		throw2(tw.Write([]byte(manifest)))
+		throw(tw.Close())
+		throw(gz.Close())
+
+		sum := sha256.Sum256(archive.Bytes())
+		crates["/crates/"+name+"/"+name+"-1.0.0.crate"] = archive.Bytes()
+		pkgs = append(pkgs, Pkg{name: name, version: "1.0.0", source: registry, checksum: hex.EncodeToString(sum[:])})
+	}
+
+	var arrived atomic.Int32
+	all := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if arrived.Add(1) == count {
+			close(all)
+		}
+
+		select {
+		case <-all:
+			throw2(w.Write(crates[r.URL.Path]))
+		case <-time.After(5 * time.Second):
+			http.Error(w, "the downloads came one at a time", http.StatusServiceUnavailable)
+		}
+	}))
+	defer server.Close()
+
+	saved := crateHost
+	crateHost = server.URL
+	defer func() {
+		crateHost = saved
+	}()
+
+	vendorDir := t.TempDir()
+
+	if e := try(func() { vendorAll(pkgs, vendorDir, false) }); e != nil {
+		t.Fatal(e.error())
+	}
+
+	for _, p := range pkgs {
+		if _, err := os.Stat(filepath.Join(vendorDir, p.name, "Cargo.toml")); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
