@@ -812,6 +812,7 @@ struct HIREvaluator::MIREvalCallStackEntry {
     Vector<const HIRType*> localTypes;
     std::vector<MIREvalAllocationPtr> locals;
     Vector<bool> dropFlags;
+    const Vector<bool>* stepBlocks = nullptr;
 
     MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
     MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
@@ -1613,30 +1614,202 @@ HIREvaluator::CsePtr::~CsePtr() {
 void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, const HIRType* exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
     MIREvalPathCallback pathCallback(printPath);
     this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, pathCallback, std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef, std::move(callerLocation), tracksCaller));
+    this->callStack.back()->stepBlocks = &stepBlocksOf(fcn);
     this->numFrames += 1;
 }
 
-MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
-    const unsigned MAX_BLOCK_COUNT = 4'000'000;
-    const unsigned MAX_STMT_COUNT = 8'000'000;
-    BUG_ASSERT(!this->callStack.empty());
-    unsigned int numStmtsRun = 0;
-    unsigned int idx;
-    for (idx = 0; idx < MAX_BLOCK_COUNT; idx += 1) {
-        if (numStmtsRun > MAX_STMT_COUNT) {
-            break;
+auto HIREvaluator::stepBlocksOf(const MIRFunction& fcn) -> const Vector<bool>& {
+    auto* pool = valuePool.mutPtr();
+    if (!stepBlocks) {
+        stepBlocks = pool->make<IntMap<const Vector<bool>*>>(pool);
+    }
+    const u64 key = reinterpret_cast<uintptr_t>(&fcn);
+    if (const auto* known = stepBlocks->find(key)) {
+        return **known;
+    }
+    const unsigned none = ~0u;
+    const unsigned count = static_cast<unsigned>(fcn.blocks.size());
+    Vector<unsigned> targetStart;
+    Vector<unsigned> targets;
+    struct Collect final: public MIRTargetVisitor {
+        Vector<unsigned>& out;
+
+        explicit Collect(Vector<unsigned>& out)
+            : out(out)
+        {
         }
 
-        auto& state = this->callStack.back()->state;
-        const auto& bb = state.fcn.blocks[state.getCurBlock()];
-        for (const auto& stmt : bb.statements) {
-            state.setCurStmt(state.getCurBlock(), &stmt - bb.statements.data());
-            this->runStatement(*this->callStack.back(), stmt);
-            numStmtsRun += 1;
+        void visitTarget(const MIRBasicBlockId& target) override {
+            out.pushBack(target);
         }
-        state.setCurStmtTerm(state.getCurBlock());
-        auto nextBlock = runTerminator(*this->callStack.back(), bb.terminator);
-        numStmtsRun += 1;
+    } collect{targets};
+    for (unsigned block = 0; block < count; block++) {
+        targetStart.pushBack(static_cast<unsigned>(targets.length()));
+        visitTerminatorTarget(fcn.blocks[block].terminator, collect);
+    }
+    targetStart.pushBack(static_cast<unsigned>(targets.length()));
+
+    Vector<unsigned> postIndex;
+    Vector<unsigned> idom;
+    Vector<unsigned> predecessorStart;
+    for (unsigned block = 0; block <= count; block++) {
+        postIndex.pushBack(none);
+        idom.pushBack(none);
+        predecessorStart.pushBack(0);
+    }
+    Vector<unsigned> postorder;
+    Vector<unsigned> stackBlocks;
+    Vector<unsigned> stackNext;
+    if (count > 0) {
+        postIndex.mut(0) = none - 1;
+        stackBlocks.pushBack(0);
+        stackNext.pushBack(targetStart[0]);
+    }
+    while (!stackBlocks.empty()) {
+        const auto block = stackBlocks.back();
+        auto& next = stackNext.mutBack();
+        if (next < targetStart[block + 1]) {
+            const auto target = targets[next];
+            next += 1;
+            if (postIndex[target] == none) {
+                postIndex.mut(target) = none - 1;
+                stackBlocks.pushBack(target);
+                stackNext.pushBack(targetStart[target]);
+            }
+            continue;
+        }
+        postIndex.mut(block) = static_cast<unsigned>(postorder.length());
+        postorder.pushBack(block);
+        stackBlocks.popBack();
+        stackNext.popBack();
+    }
+
+    for (const auto target : targets) {
+        predecessorStart.mut(target + 1) += 1;
+    }
+    for (unsigned block = 0; block < count; block++) {
+        predecessorStart.mut(block + 1) += predecessorStart[block];
+    }
+    Vector<unsigned> predecessors;
+    predecessors.zero(targets.length());
+    Vector<unsigned> predecessorFill;
+    predecessorFill.append(predecessorStart.begin(), count);
+    for (unsigned block = 0; block < count; block++) {
+        for (auto i = targetStart[block]; i < targetStart[block + 1]; i++) {
+            const auto target = targets[i];
+            predecessors.mut(predecessorFill[target]) = block;
+            predecessorFill.mut(target) += 1;
+        }
+    }
+
+    const auto intersect = [&](unsigned left, unsigned right) {
+        while (left != right) {
+            while (postIndex[left] < postIndex[right]) {
+                left = idom[left];
+            }
+            while (postIndex[right] < postIndex[left]) {
+                right = idom[right];
+            }
+        }
+        return left;
+    };
+    if (count > 0) {
+        idom.mut(0) = 0;
+    }
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (size_t i = postorder.length(); i-- > 0;) {
+            const auto block = postorder[i];
+            if (block == 0) {
+                continue;
+            }
+            auto dominator = none;
+            for (auto j = predecessorStart[block]; j < predecessorStart[block + 1]; j++) {
+                const auto predecessor = predecessors[j];
+                if (idom[predecessor] == none) {
+                    continue;
+                }
+                dominator = dominator == none ? predecessor : intersect(predecessor, dominator);
+            }
+            if (idom[block] != dominator) {
+                idom.mut(block) = dominator;
+                changed = true;
+            }
+        }
+    }
+    const auto dominates = [&](unsigned dominator, unsigned block) {
+        for (;;) {
+            if (block == dominator) {
+                return true;
+            }
+            if (block == 0) {
+                return false;
+            }
+            block = idom[block];
+        }
+    };
+
+    const auto countedCall = [](const MIRTerminator& terminator) {
+        const char* const lowered[] = {
+            "add_with_overflow", "aggregate_raw_ptr", "align_of", "assume", "contract_checks", "copy_nonoverlapping",
+            "discriminant_value", "forget", "mul_with_overflow", "offset", "ptr_metadata", "read_via_copy", "size_of",
+            "slice_get_unchecked", "sub_with_overflow", "three_way_compare", "transmute", "transmute_unchecked", "ub_checks",
+            "unchecked_add", "unchecked_div", "unchecked_mul", "unchecked_rem", "unchecked_shl", "unchecked_shr",
+            "unchecked_sub", "unreachable", "wrapping_add", "wrapping_mul", "wrapping_sub", "write_via_move",
+        };
+        const auto* call = terminator.opt_Call();
+        if (!call) {
+            return false;
+        }
+        if (const auto* intrinsic = call->fcn.opt_Intrinsic()) {
+            for (const auto* name : lowered) {
+                if (intrinsic->name == name) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+    auto* steps = pool->make<Vector<bool>>();
+    for (unsigned block = 0; block < count; block++) {
+        bool step = false;
+        if (idom[block] != none) {
+            step = countedCall(fcn.blocks[block].terminator);
+            for (auto i = targetStart[block]; i < targetStart[block + 1] && !step; i++) {
+                step = dominates(targets[i], block);
+            }
+        }
+        steps->pushBack(step);
+    }
+    stepBlocks->insert(key, steps);
+    return *steps;
+}
+
+MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
+    const u64 STEP_LINT_LIMIT = 2'000'000;
+    const u64 STEP_PROGRESS_START = 4'000'000;
+    BUG_ASSERT(!this->callStack.empty());
+    u64 steps = 0;
+    for (;;) {
+        auto& frame = *this->callStack.back();
+        auto& state = frame.state;
+        const auto block = state.getCurBlock();
+        const auto& bb = state.fcn.blocks[block];
+        for (const auto& stmt : bb.statements) {
+            state.setCurStmt(block, &stmt - bb.statements.data());
+            this->runStatement(frame, stmt);
+        }
+        if ((*frame.stepBlocks)[block]) {
+            steps += 1;
+            if (steps == STEP_LINT_LIMIT && stepLimitIsError) {
+                ERROR(this->rootSpan, E0000, StringView("constant evaluation is taking a long time (`long_running_const_eval`): ") << steps << StringView(" calls and loop iterations"));
+            }
+            if (steps > STEP_PROGRESS_START && (steps & (steps - 1)) == 0) {
+                WARNING(this->rootSpan, W0000, StringView("constant evaluation is taking a long time: ") << steps << StringView(" calls and loop iterations"));
+            }
+        }
+        state.setCurStmtTerm(block);
+        auto nextBlock = runTerminator(frame, bb.terminator);
         switch (nextBlock) {
             case TERM_RET_PUSHED:
                 continue;
@@ -1659,7 +1832,6 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
                 state.setCurStmt(nextBlock, 0);
         }
     }
-    ERROR(this->rootSpan, E0000, StringView("Constant evaluation ran for too long - ") << numStmtsRun << StringView(" statements, ") << idx << StringView(" blocks"));
 }
 
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {
@@ -3537,6 +3709,7 @@ HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
     , nvs(nvs)
     , numFrames(0)
     , requireConstCalls(false)
+    , stepLimitIsError(wb.settings->lintLevel(RcString::newInterned("long_running_const_eval"), CfgLintLevel::Deny) >= CfgLintLevel::Deny)
 {
 }
 

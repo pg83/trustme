@@ -4,6 +4,8 @@
 #include "hir_typeck_static.h"
 
 #include <std/mem/obj_pool.h>
+#include <std/lib/vector.h>
+#include <std/sym/i_map.h>
 
 struct WireBoard;
 class MIRLValue;
@@ -62,6 +64,8 @@ struct HIREvaluator {
     Newval& nvs;
     unsigned int numFrames;
     bool requireConstCalls;
+    bool stepLimitIsError;
+    stl::IntMap<const stl::Vector<bool>*>* stepBlocks = nullptr;
 
     std::vector<CsePtr> callStack;
 
@@ -86,6 +90,7 @@ private:
     void pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, const HIRType* exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 
     MIREvalAllocationPtr runUntilStackEmpty();
+    const stl::Vector<bool>& stepBlocksOf(const MIRFunction& fcn);
     void runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt);
 
     unsigned runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& stmt);
