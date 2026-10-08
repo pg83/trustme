@@ -8,6 +8,7 @@
 #include <std/alg/qsort.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
+#include <std/sym/h_table.h>
 
 #include <cstdint>
 
@@ -1435,10 +1436,23 @@ namespace {
         return kept;
     }
 
+    struct TypeNode: public HashTable::Node, public HIRType {
+        TypeNode* same;
+
+        TypeNode(HIRType data, u64 hash, TypeNode* same);
+    };
+
+    TypeNode::TypeNode(HIRType data, u64 hash, TypeNode* same)
+        : HIRType(mv$(data))
+        , same(same)
+    {
+        key = hash;
+    }
+
     struct HIRTypeInternerImpl final: public HIRTypeInterner {
         ObjPool& pool;
         u32& id;
-        std::unordered_multimap<size_t, const HIRType*> nodes;
+        HashTable nodes;
 
         const HIRType* inferAnon[NUM_INFER_CLASSES] = {};
         const HIRType* inferVars[NUM_INFER_CLASSES][NUM_PREINTERNED_INFER] = {};
@@ -1493,14 +1507,13 @@ namespace {
             size_t hash = static_cast<size_t>(HIRType::TAG_Path);
             hash = hashMix(hash, hashPath(path));
             hash = hashMix(hash, hashBinding(binding));
-            const auto range = nodes.equal_range(hash);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (!it->second->is_Path()) {
+            for (const auto* node = static_cast<const TypeNode*>(nodes.find(hash)); node; node = node->same) {
+                if (!node->is_Path()) {
                     continue;
                 }
-                const auto& e = it->second->as_Path();
+                const auto& e = node->as_Path();
                 if (exactPathEqual(e.path, path) && exactBindingEqual(e.binding, binding)) {
-                    return it->second;
+                    return node;
                 }
             }
             return intern(HIRType::make_Path({path.clone(), binding.clone()}));
@@ -1515,19 +1528,19 @@ namespace {
                 traitObject->markers.resize(canonicalMarkers(traitObject->markers.data(), traitObject->markers.size()));
             }
             data.flags = typeFlags(data);
-            const auto hash = hashTypeData(data);
-            const auto range = nodes.equal_range(hash);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (exactTypeDataEqual(*it->second, data)) {
+            const u64 hash = hashTypeData(data);
+            auto* head = static_cast<TypeNode*>(nodes.find(hash));
+            for (const auto* node = head; node; node = node->same) {
+                if (exactTypeDataEqual(*node, data)) {
                     if (slot) {
-                        *slot = it->second;
+                        *slot = node;
                     }
-                    return it->second;
+                    return node;
                 }
             }
-            auto* node = pool.make<HIRType>(mv$(data));
+            auto* node = pool.make<TypeNode>(mv$(data), hash, head);
             node->uid = ++id;
-            nodes.emplace(hash, node);
+            nodes.insert(node);
             if (slot) {
                 *slot = node;
             }

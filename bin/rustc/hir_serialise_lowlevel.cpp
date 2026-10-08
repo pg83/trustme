@@ -25,10 +25,6 @@ using namespace stl;
 namespace {
     const int COMPRESSION_LEVEL = 9;
 
-    const u8 TAG_OPEN_NAMED = 0xFD;
-    const u8 TAG_OPEN_ANON = 0xFE;
-    const u8 TAG_CLOSE = 0xFF;
-
     struct InternedStringHasher {
         static u64 hash(RcString name) noexcept {
             return splitMix64(name.rawId());
@@ -71,28 +67,9 @@ namespace {
 
     struct ReaderImpl final: public HIRSerialiseReader {
         Buffer data;
-        size_t pos;
-        Vector<RcString> strings;
+        Vector<RcString> stringTable;
 
         explicit ReaderImpl(const std::string& path);
-
-        size_t getPos() const override;
-        void setPos(size_t at) override;
-        void read(void* dst, size_t count) override;
-        u8 readU8() override;
-        u16 readU16() override;
-        u32 readU32() override;
-        u64 readU64() override;
-        U128 readU128() override;
-        double readDouble() override;
-        FloatValue readFloatValue() override;
-        size_t readCount() override;
-        RcString readIstring() override;
-        std::string readString() override;
-        bool readBool() override;
-        CloseOnDrop openObject(const char* name) override;
-        CloseOnDrop openAnonObject() override;
-        void closeObject() override;
     };
 }
 
@@ -242,7 +219,7 @@ HIRSerialiseWriter::CloseOnDrop::~CloseOnDrop() {
 }
 
 HIRSerialiseWriter::CloseOnDrop WriterImpl::openObject(const char* name) {
-    writeU8(TAG_OPEN_NAMED);
+    writeU8(HIRSerialiseReader::TAG_OPEN_NAMED);
     const auto key = reinterpret_cast<uintptr_t>(name);
     const auto* index = objectNames.find(key);
     if (!index) {
@@ -253,13 +230,12 @@ HIRSerialiseWriter::CloseOnDrop WriterImpl::openObject(const char* name) {
 }
 
 HIRSerialiseWriter::CloseOnDrop WriterImpl::openAnonObject() {
-    writeU8(TAG_OPEN_ANON);
+    writeU8(HIRSerialiseReader::TAG_OPEN_ANON);
     return CloseOnDrop(*this);
 }
 
 ReaderImpl::ReaderImpl(const std::string& path)
     : data()
-    , pos(0)
 {
     Buffer name(StringView(path.c_str()));
     Buffer packed;
@@ -276,98 +252,59 @@ ReaderImpl::ReaderImpl(const std::string& path)
         throw std::runtime_error("Unable to decompress " + path + ": " + ZSTD_getErrorName(len));
     }
     data.seekAbsolute(len);
+    begin = static_cast<const u8*>(data.data());
+    cur = begin;
+    end = begin + len;
 
     size_t nStrings = readCount();
-    strings.grow(nStrings);
+    stringTable.grow(nStrings);
     DEBUG(StringView("n_strings = ") << nStrings);
     for (size_t i = 0; i < nStrings; i++) {
-        auto s = readString();
-        strings.pushBack(RcString::newInterned(s));
+        const size_t length = readCount();
+        need(length);
+        stringTable.pushBack(RcString::newInterned(reinterpret_cast<const char*>(cur), length));
+        cur += length;
     }
+    strings = stringTable.data();
 }
 
-size_t ReaderImpl::getPos() const {
-    return pos;
+void HIRSerialiseReader::setPos(size_t at) {
+    BUG_ASSERT(at <= static_cast<size_t>(end - begin));
+    cur = begin + at;
 }
 
-void ReaderImpl::setPos(size_t at) {
-    BUG_ASSERT(at <= data.length());
-    pos = at;
+void HIRSerialiseReader::overrun(size_t count) const {
+    throw std::runtime_error(FMT(StringView("Reader::read - requested ") << count << StringView(" bytes at ") << getPos() << StringView(" of ") << static_cast<size_t>(end - begin)));
 }
 
-void ReaderImpl::read(void* dst, size_t count) {
-    if (data.length() - pos < count) {
-        throw std::runtime_error(FMT(StringView("Reader::read - requested ") << count << StringView(" bytes at ") << pos << StringView(" of ") << data.length()));
-    }
-    memcpy(dst, static_cast<const u8*>(data.data()) + pos, count);
-    pos += count;
+void HIRSerialiseReader::badBool(u8 v) const {
+    sysE << StringView("Expected false(0)/true(1), got ") << unsigned(v) << StringView("u8") << endL;
+    abort();
 }
 
-u8 ReaderImpl::readU8() {
-    u8 v;
-    read(&v, sizeof v);
-    return v;
+void HIRSerialiseReader::badClose() const {
+    sysE << StringView("Expected CloseObject(0xFF), got ") << unsigned(cur[-1]) << endL;
+    abort();
 }
 
-u16 ReaderImpl::readU16() {
-    u16 v;
-    read(&v, sizeof v);
-    return v;
-}
-
-u32 ReaderImpl::readU32() {
-    u32 v;
-    read(&v, sizeof v);
-    return v;
-}
-
-u64 ReaderImpl::readU64() {
-    u64 v;
-    read(&v, sizeof v);
-    return v;
-}
-
-U128 ReaderImpl::readU128() {
+U128 HIRSerialiseReader::readU128() {
     auto lo = readU64();
     auto hi = readU64();
     return U128(lo, hi);
 }
 
-double ReaderImpl::readDouble() {
-    double v;
-    read(&v, sizeof v);
-    return v;
-}
-
-FloatValue ReaderImpl::readFloatValue() {
+FloatValue HIRSerialiseReader::readFloatValue() {
     F128 encoded;
     encoded.lo = readU64();
     encoded.hi = readU64();
     return encoded;
 }
 
-size_t ReaderImpl::readCount() {
-    return readU32();
-}
-
-RcString ReaderImpl::readIstring() {
-    return strings[readCount()];
-}
-
-std::string ReaderImpl::readString() {
+std::string HIRSerialiseReader::readString() {
     size_t len = readCount();
     std::string rv(len, '\0');
     read(rv.data(), len);
     return rv;
-}
-
-bool ReaderImpl::readBool() {
-    auto v = readU8();
-    if (v > 1) {
-        sysE << StringView("Expected false(0)/true(1), got ") << unsigned(v) << StringView("u8") << endL;
-        abort();
-    }
-    return v != 0;
 }
 
 HIRSerialiseReader::CloseOnDrop::CloseOnDrop(HIRSerialiseReader& r)
@@ -388,35 +325,32 @@ HIRSerialiseReader::CloseOnDrop::~CloseOnDrop() {
     r = nullptr;
 }
 
-HIRSerialiseReader::CloseOnDrop ReaderImpl::openObject(const char* name) {
+HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name) {
     auto v = readU8();
     if (v != TAG_OPEN_NAMED) {
         sysE << StringView("Expected OpenNamed(") << name << StringView("), got ") << unsigned(v) << StringView("u8") << endL;
         abort();
     }
-    const auto got = readIstring();
-    if (got != name) {
-        sysE << StringView("Expecting OpenNamed(") << name << StringView("), got OpenNamed(") << got << StringView(")") << endL;
-        abort();
+    const u32 index = readU32();
+    auto& seen = objectNames[(reinterpret_cast<uintptr_t>(name) >> 3) % (sizeof objectNames / sizeof objectNames[0])];
+    if (seen.name != name || seen.index != index) {
+        const auto got = strings[index];
+        if (got != name) {
+            sysE << StringView("Expecting OpenNamed(") << name << StringView("), got OpenNamed(") << got << StringView(")") << endL;
+            abort();
+        }
+        seen = ObjectName{name, index};
     }
     return CloseOnDrop(*this);
 }
 
-HIRSerialiseReader::CloseOnDrop ReaderImpl::openAnonObject() {
+HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openAnonObject() {
     auto v = readU8();
     if (v != TAG_OPEN_ANON) {
         sysE << StringView("Expected OpenAnon, got ") << unsigned(v) << endL;
         abort();
     }
     return CloseOnDrop(*this);
-}
-
-void ReaderImpl::closeObject() {
-    auto v = readU8();
-    if (v != TAG_CLOSE) {
-        sysE << StringView("Expected CloseObject(0xFF), got ") << unsigned(v) << endL;
-        abort();
-    }
 }
 
 void HIRSerialiseWriter::writeU8(u8 v) {
@@ -436,7 +370,7 @@ void HIRSerialiseWriter::writeString(const std::string& v) {
 }
 
 void HIRSerialiseWriter::closeObject() {
-    writeU8(TAG_CLOSE);
+    writeU8(HIRSerialiseReader::TAG_CLOSE);
 }
 
 HIRSerialiseWriter* HIRSerialiseWriter::create(ObjPool& pool) {
@@ -449,10 +383,6 @@ i64 HIRSerialiseReader::readI64() {
 
 S128 HIRSerialiseReader::readI128() {
     return S128(readU128());
-}
-
-unsigned int HIRSerialiseReader::readTag() {
-    return static_cast<unsigned int>(readU8());
 }
 
 bool HIRSerialiseReader::isMetadata(const std::string& path) {

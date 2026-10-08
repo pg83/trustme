@@ -6,6 +6,7 @@
 
 #include <string>
 #include <stddef.h>
+#include <string.h>
 
 namespace stl {
     class ObjPool;
@@ -60,29 +61,109 @@ struct HIRSerialiseReader {
         ~CloseOnDrop();
     };
 
-    virtual size_t getPos() const = 0;
-    virtual void setPos(size_t at) = 0;
-    virtual void read(void* dst, size_t count) = 0;
-    virtual u8 readU8() = 0;
-    virtual u16 readU16() = 0;
-    virtual u32 readU32() = 0;
-    virtual u64 readU64() = 0;
-    virtual U128 readU128() = 0;
-    virtual double readDouble() = 0;
-    virtual FloatValue readFloatValue() = 0;
-    virtual size_t readCount() = 0;
-    virtual RcString readIstring() = 0;
-    virtual std::string readString() = 0;
-    virtual bool readBool() = 0;
-    virtual CloseOnDrop openObject(const char* name) = 0;
-    virtual CloseOnDrop openAnonObject() = 0;
-    virtual void closeObject() = 0;
+    struct ObjectName {
+        const char* name;
+        u32 index;
+    };
 
+    const u8* begin = nullptr;
+    const u8* cur = nullptr;
+    const u8* end = nullptr;
+    const RcString* strings = nullptr;
+    ObjectName objectNames[32] = {};
+
+    size_t getPos() const {
+        return static_cast<size_t>(cur - begin);
+    }
+
+    void setPos(size_t at);
+
+    void read(void* dst, size_t count) {
+        need(count);
+        memcpy(dst, cur, count);
+        cur += count;
+    }
+
+    u8 readU8() {
+        need(1);
+        return *cur++;
+    }
+
+    u16 readU16() {
+        return readRaw<u16>();
+    }
+
+    u32 readU32() {
+        return readRaw<u32>();
+    }
+
+    u64 readU64() {
+        return readRaw<u64>();
+    }
+
+    double readDouble() {
+        return readRaw<double>();
+    }
+
+    size_t readCount() {
+        return readU32();
+    }
+
+    RcString readIstring() {
+        return strings[readCount()];
+    }
+
+    bool readBool() {
+        const u8 v = readU8();
+        if (v > 1) {
+            badBool(v);
+        }
+        return v != 0;
+    }
+
+    unsigned int readTag() {
+        return readU8();
+    }
+
+    void closeObject() {
+        if (readU8() != TAG_CLOSE) {
+            badClose();
+        }
+    }
+
+    U128 readU128();
+    FloatValue readFloatValue();
+    std::string readString();
+    CloseOnDrop openObject(const char* name);
+    CloseOnDrop openAnonObject();
     i64 readI64();
     S128 readI128();
-    unsigned int readTag();
 
     static bool isMetadata(const std::string& path);
     static HIRSerialiseReader* create(stl::ObjPool& pool, const std::string& path);
     static RcString readFirstString(stl::StringView path);
+
+    static constexpr u8 TAG_OPEN_NAMED = 0xFD;
+    static constexpr u8 TAG_OPEN_ANON = 0xFE;
+    static constexpr u8 TAG_CLOSE = 0xFF;
+
+protected:
+    template <typename T>
+    T readRaw() {
+        need(sizeof(T));
+        T v;
+        memcpy(&v, cur, sizeof(T));
+        cur += sizeof(T);
+        return v;
+    }
+
+    void need(size_t count) const {
+        if (static_cast<size_t>(end - cur) < count) [[unlikely]] {
+            overrun(count);
+        }
+    }
+
+    [[noreturn]] void overrun(size_t count) const;
+    [[noreturn]] void badBool(u8 v) const;
+    [[noreturn]] void badClose() const;
 };
