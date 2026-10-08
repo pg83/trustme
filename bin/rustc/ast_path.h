@@ -136,6 +136,10 @@ public:
         return ident_.hygienicName();
     }
 
+    const Ident::Hygiene& hygiene() const {
+        return ident_.hygiene;
+    }
+
     const ASTPathParams& args() const {
         return params_;
     }

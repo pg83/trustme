@@ -966,7 +966,8 @@ namespace {
                 auto item = lex.lookahead(0) == TOK_STRING ? ASTPath(lex.getTokenCheck(TOK_STRING).str().c_str(), {}) : ASTPath((std::string("=") + lex.getTokenCheck(TOK_IDENT).ident().name.c_str()).c_str(), {});
                 lex.getTokenCheck(TOK_DOUBLE_COLON);
                 do {
-                    item += ASTPathNode(lex.getTokenCheck(TOK_IDENT).ident().name);
+                    const auto segment = lex.getTokenCheck(TOK_IDENT).ident();
+                    item += ASTPathNode(segment.hygiene, segment.name);
                 } while (lex.getTokenIf(TOK_DOUBLE_COLON));
                 rv.push_back(std::move(item));
             } else if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
@@ -1432,7 +1433,8 @@ namespace {
             const auto* dp = findBuiltinDerive(registry, sp, wb, crate, mod, traitPath);
             Vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath, dp != nullptr);
             if (!macPath.empty()) {
-                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item, traitPath.cls.is_Relative() ? traitPath.cls.as_Relative().hygiene : Ident::Hygiene());
+                const auto& callSite = traitPath.cls.is_Relative() ? traitPath.cls.as_Relative().hygiene : traitPath.nodes().empty() ? Ident::Hygiene() : traitPath.nodes().back().hygiene();
+                auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item, callSite);
                 if (lex) {
                     lex->parseState().module = &mod;
                     ParseModRootItems(*lex, mod);
