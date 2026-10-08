@@ -1570,6 +1570,7 @@ namespace {
                 break;
             case TOK_RWORD_STATIC:
                 lex.consume();
+                lex.consumeIf(TOK_RWORD_MUT);
                 if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
@@ -1579,10 +1580,7 @@ namespace {
                 if (!consumeType(lex)) {
                     return false;
                 }
-                if (!lex.consumeIf(TOK_EQUAL)) {
-                    return false;
-                }
-                if (!consumeExpr(lex)) {
+                if (lex.consumeIf(TOK_EQUAL) && !consumeExpr(lex)) {
                     return false;
                 }
                 if (!lex.consumeIf(TOK_SEMICOLON)) {
@@ -1695,10 +1693,9 @@ namespace {
                         return false;
                     }
                     consumeType(lex);
-                    if (!lex.consumeIf(TOK_EQUAL)) {
-                        return false;
+                    if (lex.consumeIf(TOK_EQUAL)) {
+                        consumeExpr(lex);
                     }
-                    consumeExpr(lex);
                     if (!lex.consumeIf(TOK_SEMICOLON)) {
                         return false;
                     }
