@@ -3641,7 +3641,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
 
     if (!langClone().components().empty() && trait == langClone()) {
         switch ((*type).tag()) {
-            case HIRType::TAG_Array:
             case HIRType::TAG_Tuple:
             case HIRType::TAG_NamedFunction:
             case HIRType::TAG_Function:
