@@ -306,6 +306,8 @@ namespace {
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
     };
 
     struct AliasConstGenericParamBinder: public HIRVisitor {
@@ -2932,6 +2934,12 @@ auto ExpanderSelf::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& 
     Span sp;
     implType = impl.type;
     HIRVisitor::visitTraitImpl(traitPath, impl);
+    implType = nullptr;
+}
+
+auto ExpanderSelf::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
+    implType = impl.type;
+    HIRVisitor::visitMarkerImpl(traitPath, impl);
     implType = nullptr;
 }
 
