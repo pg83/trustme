@@ -1849,6 +1849,7 @@ namespace {
             }
             isFirst = false;
 
+            const bool hasParens = lex.getTokenIf(TOK_PAREN_OPEN);
             if (lex.getTokenIf(TOK_LIFETIME, tok)) {
                 auto lft = getLifetimeRef(lex, mv$(tok));
                 bool boundByOuterHrb = false;
@@ -1878,8 +1879,11 @@ namespace {
                 }
                 auto traitPath = ParsePath(lex, PATH_GENERIC_TYPE);
 
-                auto thisOuterHrbs = (lex.lookahead(0) == TOK_PLUS ? ASTHigherRankedBounds(outerHrbs) : mv$(outerHrbs));
+                auto thisOuterHrbs = (lex.lookahead(hasParens ? 1 : 0) == TOK_PLUS ? ASTHigherRankedBounds(outerHrbs) : mv$(outerHrbs));
                 ret.addBound(ASTGenericBound::make_IsTrait({lex.endSpan(ps), mv$(thisOuterHrbs), checkedType->clone(), mv$(innerHrls), mv$(traitPath), constness}));
+            }
+            if (hasParens) {
+                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
             }
         } while ([&]() {
             if (lex.getTokenIf(TOK_PLUS_EQUAL)) {
