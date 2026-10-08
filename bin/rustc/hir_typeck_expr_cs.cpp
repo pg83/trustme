@@ -12140,7 +12140,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
 
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" ") << HIRExprNodeUniOp::opname(node.op) << StringView("..."));
     node.value->resType = this->context.addIvars(node.value->resType);
-    this->visitChild(*node.value);
+    this->visitExpecting(node.value, this->expectationFor(node));
     this->inheritDivergence(node, *node.value);
 
     const char* itemName = nullptr;
