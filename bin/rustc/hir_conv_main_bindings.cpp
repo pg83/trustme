@@ -1624,6 +1624,11 @@ auto BindVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     fcnPtr = &item;
     defineOpaque = &item.defineOpaque;
 
+    for (size_t i = 0, n = item.params.bounds.size(); i < n; i++) {
+        auto bound = mv$(item.params.bounds[i]);
+        visitGenericBound(bound);
+        item.params.bounds[i] = mv$(bound);
+    }
     for (auto& arg : item.args) {
         TRACE_FUNCTION_F(StringView("ARG ") << arg);
         arg.second = visitType(arg.second);
