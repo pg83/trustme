@@ -469,7 +469,7 @@ namespace {
         } else if (targetName == "i586-linux-gnu" || targetName == "i586-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, archX86()};
         } else if (targetName == "x86_64-linux-gnu" || targetName == "x86_64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {true /*false*/, "x86_64-linux-gnu", BACKEND_C_OPTS_GNU}, archX86_64()};
+            return TargetSpec{"unix", "linux", "gnu", {true /*false*/, "x86_64-linux-gnu", {"-ffunction-sections", "-pthread"}, {"-fuse-ld=lld", "-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}}, archX86_64()};
         } else if (targetName == "x86_64-linux-musl" || targetName == "x86_64-unknown-linux-musl") {
             return TargetSpec{"unix", "linux", "musl", {true /*false*/, "x86_64-linux-musl", BACKEND_C_OPTS_GNU}, archX86_64()};
         } else if (targetName == "x86_64-unknown-linux-gnux32") {
