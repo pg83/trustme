@@ -6009,6 +6009,9 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
     }
     const auto idx = val.root.as_Local();
     bool isTemp = (idx >= firstTempIdx);
+    if (!isTemp) {
+        return;
+    }
 
     size_t sourcePos = scopeStack.length();
     bool sourceFound = false;
