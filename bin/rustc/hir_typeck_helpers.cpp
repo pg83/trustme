@@ -2823,6 +2823,13 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         }
     }
 
+    const auto decidedProjection = [&](const HIRType* type) {
+        const auto* path = type->opt_Path();
+        return path && path->path.data.is_UfcsKnown() && table_.typeContainsIvars(type) ? table_.expandIvars(type) : type;
+    };
+    left = decidedProjection(left);
+    right = decidedProjection(right);
+
     if (relateProjectionInputs_) {
         const auto* leftPath = left->opt_Path();
         const auto* rightPath = right->opt_Path();
