@@ -5490,6 +5490,21 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_an_empty_path_attribute_names_the_module_directory",
+    inputs=["$(S)/tst/unit/test_an_empty_path_attribute_names_the_module_directory.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/an_empty_path_attribute_names_the_module_directory.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_an_empty_path_attribute_names_the_module_directory.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/an_empty_path_attribute_names_the_module_directory.stamp",
+    ],
+    deps=[rustc],
+    env={"RUSTC_OVERRIDE_VERSION_STRING": "1.92.0"},
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_trait_object_supertrait_binding",
     inputs=[
         "$(S)/tst/unit/test_trait_object_supertrait_binding.py",

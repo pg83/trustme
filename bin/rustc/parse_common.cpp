@@ -1789,6 +1789,12 @@ namespace {
         if (file.empty()) {
             return FsPath(rest);
         }
+        if (*rest == '\0') {
+            if (file.size() > 1) {
+                file.pop_back();
+            }
+            return FsPath(file);
+        }
         return FsPath(file) / rest;
     }
 
@@ -5703,15 +5709,18 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             };
 
             std::string pathAttr;
+            bool hasPathAttr = false;
             for (const auto& a : metaItems.items) {
                 DEBUG(StringView("[mod path_attr] ") << a);
                 if (a.name() == "path") {
                     pathAttr = a.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
+                    hasPathAttr = true;
                 } else if (a.name() == "cfg_attr") {
                     for (const auto& a2 : checkCfgAttr(*lex.parseState().wb, a)) {
                         DEBUG(StringView("[mod path_attr cfg_attr] ") << a2);
                         if (a2.name() == "path") {
                             pathAttr = a2.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
+                            hasPathAttr = true;
                         }
                     }
                 } else {
@@ -5722,11 +5731,11 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             FsPath subPath;
             bool subFileControlsDir = true;
             if (modFileinfo.path == "-") {
-                if (pathAttr.size()) {
+                if (hasPathAttr) {
                     ERROR(lex.pointSpan(), E0000, StringView("Cannot load module from file when reading stdin"));
                 }
                 subPath = "-";
-            } else if (pathAttr.size() > 0) {
+            } else if (hasPathAttr) {
                 bool inSubmod = modFileinfo.path[modFileinfo.path.size() - 1] == '/';
                 if (modFileinfo.inModBlock) {
                     subPath = joinDirOf(modFileinfo.path, pathAttr.c_str());
@@ -5747,7 +5756,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             switch (GET_TOK(tok, lex)) {
                 case TOK_BRACE_OPEN:
                     ParseParentAttrs(lex, metaItems);
-                    if (pathAttr.empty()) {
+                    if (!hasPathAttr) {
                         std::string innerPath;
                         for (const auto& a : metaItems.items) {
                             if (a.name() == "path") {
@@ -5775,7 +5784,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         itemName = mv$(name);
                         itemData = ASTItem();
                         break;
-                    } else if (pathAttr.size() == 0 && !modFileinfo.controlsDir) {
+                    } else if (!hasPathAttr && !modFileinfo.controlsDir) {
                         ASSERT_BUG(lex.pointSpan(), modPath.nodes.length() >= 1, StringView("Crate root should control its directory?"));
                         std::string newpathFileDirect = joinDirOf(modFileinfo.path, modPath.nodes.back().c_str()) / name.c_str() + ".rs";
                         std::string newpathFileMod = joinDirOf(modFileinfo.path, modPath.nodes.back().c_str()) / name.c_str() / "mod.rs";
@@ -5802,7 +5811,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         GET_CHECK_TOK(tok, subLex, TOK_EOF);
                     } else {
                         std::string newpathDir = subPath.str() + "/";
-                        std::string newpathFile = pathAttr.size() > 0 ? subPath : subPath + ".rs";
+                        std::string newpathFile = hasPathAttr ? subPath : subPath + ".rs";
                         DEBUG(StringView("newpath_dir = '") << newpathDir << StringView("', newpath_file = '") << newpathFile << StringView("'"));
                         std::ifstream ifsDir(newpathDir + "mod.rs");
                         std::ifstream ifsFile(newpathFile);
@@ -5812,7 +5821,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             submod.fileInfo.path = newpathDir + "mod.rs";
                         } else if (ifsFile.is_open()) {
                             submod.fileInfo.path = newpathFile;
-                            if (pathAttr == "") {
+                            if (!hasPathAttr) {
                                 submod.fileInfo.controlsDir = false;
                             }
                         }
