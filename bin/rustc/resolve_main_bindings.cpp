@@ -4011,22 +4011,22 @@ namespace {
 
         for (const auto& vi : srcMod.namespaceItems) {
             if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-                _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
+                _add_item(sp, dstMod, IndexName::Namespace, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
             }
         }
         for (const auto& vi : srcMod.typeItems) {
             if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-                _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
+                _add_item(sp, dstMod, IndexName::Type, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
             }
         }
         for (const auto& vi : srcMod.valueItems) {
             if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-                _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
+                _add_item(sp, dstMod, IndexName::Value, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
             }
         }
         for (const auto& vi : srcMod.macroItems) {
             if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-                _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
+                _add_item(sp, dstMod, IndexName::Macro, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
             }
         }
 
@@ -4045,7 +4045,7 @@ namespace {
                     if (e.name != "") {
                         continue;
                     }
-                    ResolveIndexModuleWildcardUseStmt(crate, dstMod, e, dstVis, fromPrelude, &recursionNode, /*nested=*/true);
+                    ResolveIndexModuleWildcardUseStmt(crate, dstMod, e, i->vis.isAtLeast(dstVis) ? dstVis : i->vis, fromPrelude, &recursionNode, /*nested=*/true);
                 }
             }
         }

@@ -52,6 +52,8 @@ public:
 
     bool contains(const ASTVisibility& x) const;
 
+    bool isAtLeast(const ASTVisibility& x) const;
+
     void inplaceUnion(const ASTVisibility& x);
 };
 

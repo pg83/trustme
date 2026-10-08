@@ -95,6 +95,13 @@ bool ASTVisibility::contains(const ASTVisibility& value) const {
     return visPath_ ? value.isVisible(*visPath_) : true;
 }
 
+bool ASTVisibility::isAtLeast(const ASTVisibility& value) const {
+    if (!visPath_) {
+        return true;
+    }
+    return value.visPath_ && isVisible(*value.visPath_);
+}
+
 void ASTVisibility::inplaceUnion(const ASTVisibility& value) {
     if (contains(value)) {
         return;
