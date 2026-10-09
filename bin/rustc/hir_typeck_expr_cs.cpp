@@ -6283,8 +6283,12 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
            the body, so the bound on the parameter it binds (`impl FnOnce(PathBuf) ->
            R`) types its arguments before the body relates `&path` to `&Path`
            (tempfile's `create_helper(dir, .., |path| create_unlinked(&path))`). */
-        const bool closureSource = cast<HIRExprNodeClosure>(&*nodePtr) != nullptr;
-        this->linkCoerce.back()->bindingOrder = closureSource ? nodePtr->checkOrder : nodePtr->checkOrderEnd;
+        const HIRExprNode* source = &*nodePtr;
+        while (const auto* borrow = cast<const HIRExprNodeBorrow>(source)) {
+            source = &*borrow->value;
+        }
+        const bool closureSource = cast<const HIRExprNodeClosure>(source) != nullptr;
+        this->linkCoerce.back()->bindingOrder = closureSource ? source->checkOrder : nodePtr->checkOrderEnd;
         this->linkCoerce.back()->bindingStart = nodePtr->checkOrder;
     }
     DEBUG(StringView("++ ") << *this->linkCoerce.back());
