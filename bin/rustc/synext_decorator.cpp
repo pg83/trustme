@@ -972,6 +972,8 @@ namespace {
                     item += ASTPathNode(segment.hygiene, segment.name);
                 } while (lex.getTokenIf(TOK_DOUBLE_COLON));
                 rv.push_back(std::move(item));
+            } else if (lex.lookahead(0) == TOK_RWORD_CRATE || lex.lookahead(0) == TOK_RWORD_SELF || lex.lookahead(0) == TOK_RWORD_SUPER) {
+                rv.push_back(ParsePath(lex, PATH_GENERIC_NONE));
             } else if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
                 const auto& ty = tok.fragType();
                 ASSERT_BUG(lex.pointSpan(), ty->isPath(), StringView("TODO: No path :ty in derive, ") << ty);
