@@ -3954,6 +3954,10 @@ fs_extra_1_3_0 = add_project_test(
     rust="1.92.0",
     url="https://github.com/webdesus/fs_extra.git",
     rev="1754296075e7cc4a25feaa876a3f4b9daccc0b98",
+    # tests/file.rs: `it_copy_work` and `it_copy_not_file` both recreate
+    # tests/temp/file/it_copy_work, so in parallel each can see the other's
+    # files or lose its directory mid-test.
+    adapter_args=["--", "--test-threads=1"],
     lockfile="$(S)/tst/projects/fs_extra_1_3_0/Cargo.lock",
 )
 
