@@ -797,6 +797,14 @@ struct OrderPlace {
         return OrderPlace{rule.order, rule.order};
     }
 
+    bool coercionComesAfter(const Context::Coercion& rule, const OrderPlace& place) {
+        if (!rule.coercesAfterItsValue) {
+            return coercionPlace(rule).after(place);
+        }
+        const auto binding = bindingPlace(rule);
+        return binding.after(place) || (binding.start <= place.start && place.end <= binding.end);
+    }
+
     /* A coercion decided in the sweep - `Err(From::from(e))`'s outer coercion of the
        inner call's result variable - comes at its argument's place too, and past a
        ready binding of its component it waits like an obligation would. */
@@ -9471,7 +9479,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                    waiting would hold the very coercion that waits for this call. */
                 const OrderPlace callPlace{node.checkOrderEnd, node.checkOrder};
                 for (const auto* coercion : methodCoercions[infer->index].coercions) {
-                    if (node.checkOrderEnd == 0 || !coercionPlace(*coercion).after(callPlace)) {
+                    if (node.checkOrderEnd == 0 || !coercionComesAfter(*coercion, callPlace)) {
                         hasPendingReceiverCoercion = true;
                         break;
                     }
