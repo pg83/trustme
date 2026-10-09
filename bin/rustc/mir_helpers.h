@@ -92,6 +92,7 @@ public:
 
     const HIRType* monomorphedRettype;
     const stl::Vector<const HIRType*>* monomorphedLocals;
+    const Monomorphiser* monomorphedParams = nullptr;
 
 private:
     const HIRSimplePath* langBox_ = nullptr;
@@ -157,6 +158,11 @@ public:
     const HIRType* getParamType(const MIRParam& val) const;
 
     const HIRType* getConstType(const MIRConstant& c) const;
+
+private:
+    const HIRType* getConstTypeInBody(const MIRConstant& c) const;
+
+public:
 
     bool lvalueIsCopy(const MIRLValue& val) const;
     const HIRType* isTypeOwnedBox(const HIRType* ty) const;

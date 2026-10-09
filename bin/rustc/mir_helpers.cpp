@@ -744,6 +744,14 @@ const HIRType* MIRTypeResolve::getParamType(const MIRParam& val) const {
 }
 
 const HIRType* MIRTypeResolve::getConstType(const MIRConstant& c) const {
+    const auto* type = getConstTypeInBody(c);
+    if (monomorphedParams && monomorphiseTypeNeeded(type)) {
+        return resolve.monomorphExpand(this->sp, type, *monomorphedParams);
+    }
+    return type;
+}
+
+const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
     switch (c.tag()) {
         case MIRConstant::TAG_Int: {
             auto& e = c.as_Int();

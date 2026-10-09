@@ -4731,6 +4731,7 @@ MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameI
 
     state.monomorphedRettype = retType;
     state.monomorphedLocals = &localTypes;
+    state.monomorphedParams = &this->ms;
 }
 
 auto MIREvalCallStackEntry::monomorphExpand(const HIRType* ty) const -> const HIRType* {
