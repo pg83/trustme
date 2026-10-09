@@ -1095,7 +1095,7 @@ namespace {
             toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
             toks.push_back(ident("str"));
             toks.push_back(Token(TOK_SEMICOLON));
-            toks.push_back(Token(U128(fragments.size() + 1), CORETYPE_UINT));
+            toks.push_back(Token(U128(fragments.size() + (tail.empty() ? 0 : 1)), CORETYPE_UINT));
             toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
 
             toks.push_back(Token(TOK_EQUAL));
@@ -1105,7 +1105,9 @@ namespace {
                 toks.push_back(Token(TOK_STRING, frag.leadingText, h));
                 toks.push_back(TokenTree(TOK_COMMA));
             }
-            toks.push_back(Token(TOK_STRING, tail, h));
+            if (!tail.empty()) {
+                toks.push_back(Token(TOK_STRING, tail, h));
+            }
             toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
 
             toks.push_back(Token(TOK_SEMICOLON));
