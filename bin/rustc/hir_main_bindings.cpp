@@ -2265,8 +2265,8 @@ auto HirDeserialiser::deserialiseStrMarkings() -> HIRStructMarkings {
     u8 bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
     BIT(0, m.canUnsize)
-    BIT(1, m.isNonzero)
-    BIT(2, m.boundedMax)
+    BIT(1, m.validStartSet)
+    BIT(2, m.validEndSet)
     BIT(3, m.isFundamental)
     BIT(4, m.isNoNiche)
     BIT(5, m.isAsyncDropGlue)
@@ -2278,8 +2278,11 @@ auto HirDeserialiser::deserialiseStrMarkings() -> HIRStructMarkings {
     m.coerceParam = in.readCount();
     m.unsizedField = in.readCount();
     m.unsizedParam = in.readCount();
-    if (m.boundedMax) {
-        m.boundedMaxValue = in.readU128();
+    if (m.validStartSet) {
+        m.validStart = in.readU128();
+    }
+    if (m.validEndSet) {
+        m.validEnd = in.readU128();
     }
     // TODO: auto_impls
     return m;
@@ -4918,8 +4921,8 @@ auto HirSerialiser::serialise(const HIRStructMarkings& m) -> void {
     if (fld)        \
         bitflag1 |= 1 << (i);
     BIT(0, m.canUnsize)
-    BIT(1, m.isNonzero)
-    BIT(2, m.boundedMax)
+    BIT(1, m.validStartSet)
+    BIT(2, m.validEndSet)
     BIT(3, m.isFundamental)
     BIT(4, m.isNoNiche)
     BIT(5, m.isAsyncDropGlue)
@@ -4933,8 +4936,11 @@ auto HirSerialiser::serialise(const HIRStructMarkings& m) -> void {
     out.writeCount(m.coerceParam);
     out.writeCount(m.unsizedField);
     out.writeCount(m.unsizedParam);
-    if (m.boundedMax) {
-        out.writeU128(m.boundedMaxValue);
+    if (m.validStartSet) {
+        out.writeU128(m.validStart);
+    }
+    if (m.validEndSet) {
+        out.writeU128(m.validEnd);
     }
     // TODO: auto_impls
 }

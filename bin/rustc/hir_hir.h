@@ -310,12 +310,12 @@ struct HIRStructMarkings {
 
     unsigned int coerceParam = ~0u;
 
-    bool isNonzero = false;
-
     bool isNoNiche = false;
 
-    bool boundedMax = false;
-    U128 boundedMaxValue;
+    bool validStartSet = false;
+    bool validEndSet = false;
+    U128 validStart;
+    U128 validEnd;
 };
 
 class HIRExternType {

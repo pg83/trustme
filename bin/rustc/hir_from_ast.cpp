@@ -2086,96 +2086,24 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
     rv.structMarkings.isFundamental = attrs.has("fundamental");
     const auto& simplePath = path.getSimplePath();
     rv.structMarkings.isNoNiche = simplePath == crate->getLangItemPathOpt("unsafe_cell") || simplePath == crate->getLangItemPathOpt("unsafe_pinned");
-    if (ent.markings.scalarValidStartSet) {
-        if (ent.markings.scalarValidStart == U128(1)) {
-            rv.structMarkings.isNonzero = true;
-        } else {
-            //TODO(sp, StringView("Handle #[rustc_layout_scalar_valid_range_start(") << ent.m_markings.scalar_valid_start << ")]");
-        }
-    }
-    // TODO: Store the scalar valid range information for downstream
     if (ent.markings.scalarValidStartSet || ent.markings.scalarValidEndSet) {
         const HIRType* ty = nullptr;
-        const HIRType* ty2 = nullptr;
         if (const auto* d = rv.data.opt_Named()) {
-            switch (d->size()) {
-                case 2:
-                    ty2 = (*d)[1].ty;
-                case 1:
-                    ty = (*d)[0].ty;
-                    break;
+            if (d->size() == 1 || d->size() == 2) {
+                ty = (*d)[0].ty;
             }
         } else if (const auto* d = rv.data.opt_Tuple()) {
             if (d->size() == 1) {
                 ty = (*d)[0].ent;
             }
-            //TODO: Ensure that the other fields are ZSTs
-        } else {
         }
         if (!ty) {
             ERROR(sp, E0000, StringView("Invalid use of #[rustc_layout_scalar_valid_range_start] or #[rustc_layout_scalar_valid_range_end] on invalid struct"));
         }
-        if (ty2) {
-            //TODO: Ensure that this second field is PhantomData
-        }
-
-        u64 TGT_PTR_MAX = TargetGetPointerBits() == 64 ? UINT64_MAX : UINT32_MAX;
-        U128 min = U128(0), max = U128(UINT64_MAX, UINT64_MAX);
-        bool ignore = false;
-        if (ty->is_Pointer()) {
-            min = U128(0);
-            max = U128(TGT_PTR_MAX);
-        } else {
-            HIRCoreType ct = HIRCoreType::Str;
-            if (ty->is_Primitive()) {
-                ct = ty->as_Primitive();
-            }
-            switch (ct) {
-                case HIRCoreType::U8:
-                    max = U128(0xFF);
-                    break;
-                case HIRCoreType::U16:
-                    max = U128(UINT16_MAX);
-                    break;
-                case HIRCoreType::U32:
-                    max = U128(UINT32_MAX);
-                    break;
-                case HIRCoreType::U64:
-                    max = U128(UINT64_MAX);
-                    break;
-                case HIRCoreType::U128:
-                    break;
-                case HIRCoreType::Usize:
-                    max = U128(TGT_PTR_MAX);
-                    break;
-
-                case HIRCoreType::I8:
-                case HIRCoreType::I16:
-                case HIRCoreType::I32:
-                case HIRCoreType::I64:
-                case HIRCoreType::I128:
-                case HIRCoreType::Isize:
-                    ignore = true;
-                    break;
-
-                default:
-                    ignore = true;
-                    break;
-            }
-        }
-
-        if (!ignore) {
-            if (ent.markings.scalarValidStartSet) {
-                if (ent.markings.scalarValidStart < min) {
-                }
-            }
-            if (ent.markings.scalarValidEndSet) {
-                if (ent.markings.scalarValidEnd > max) {
-                }
-                rv.structMarkings.boundedMax = true;
-                rv.structMarkings.boundedMaxValue = ent.markings.scalarValidEnd;
-            }
-        }
+        rv.structMarkings.validStartSet = ent.markings.scalarValidStartSet;
+        rv.structMarkings.validStart = ent.markings.scalarValidStart;
+        rv.structMarkings.validEndSet = ent.markings.scalarValidEndSet;
+        rv.structMarkings.validEnd = ent.markings.scalarValidEnd;
     }
 
     return rv;

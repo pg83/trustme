@@ -1270,7 +1270,7 @@ namespace {
             }
             if (str.structMarkings.isNoNiche) {
                 repr->hasNiche = false;
-            } else if ((str.structMarkings.isNonzero || str.structMarkings.boundedMax) && !repr->fields.empty() && repr->fields[0].offset == 0) {
+            } else if ((str.structMarkings.validStartSet || str.structMarkings.validEndSet) && !repr->fields.empty() && repr->fields[0].offset == 0) {
                 const auto* fieldTy = repr->fields[0].ty;
                 size_t scalarSize = 0;
                 if (fieldTy->is_Pointer() || fieldTy->is_Borrow()) {
@@ -1286,11 +1286,11 @@ namespace {
                         niche.end = fieldNiche.end;
                     }
                     niche.path.pushBack(0);
-                    if (str.structMarkings.isNonzero) {
-                        niche.start = U128(1);
+                    if (str.structMarkings.validStartSet) {
+                        niche.start = str.structMarkings.validStart & nicheMask(scalarSize);
                     }
-                    if (str.structMarkings.boundedMax) {
-                        niche.end = str.structMarkings.boundedMaxValue & nicheMask(scalarSize);
+                    if (str.structMarkings.validEndSet) {
+                        niche.end = str.structMarkings.validEnd & nicheMask(scalarSize);
                     }
                     if (nicheAvailable(niche) != U128(0) && (!repr->hasNiche || nicheAvailable(repr->niche) <= nicheAvailable(niche))) {
                         repr->niche = mv$(niche);
@@ -3117,7 +3117,7 @@ auto TransmuteLayoutBuilder::build(const HIRType* ty) -> Built {
         }
         if (path->binding.is_Struct()) {
             const auto& str = *path->binding.as_Struct();
-            if (str.structMarkings.isNonzero || str.structMarkings.boundedMax) {
+            if (str.structMarkings.validStartSet || str.structMarkings.validEndSet) {
                 supported = false;
                 return {nfa.uninhabited(), repr->size};
             }
