@@ -2571,29 +2571,19 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
         const auto& ty = path.data.as_UfcsUnknown().type;
         const auto& name = path.data.as_UfcsUnknown().item;
 
-        const HIRGenericPath* gpP;
-        if (ty->is_Generic() && ty->as_Generic().binding == GENERICSelf) {
-            if (!implType) {
-                ERROR(sp, E0000, StringView("Use of `Self` pattern outside of an impl block"));
-            }
-            const auto resolvedImplType = visitType(implType);
-            if (!(resolvedImplType->is_Path() && resolvedImplType->as_Path().path.data.is_Generic())) {
-                ERROR(sp, E0000, StringView("Use of `Self` pattern in non-struct impl block - ") << resolvedImplType);
-            }
-            gpP = &resolvedImplType->as_Path().path.data.as_Generic();
-        } else {
-            if (ty->is_Generic()) {
-                return HIRPattern::PathBinding();
-            }
-            if (!ty->is_Path()) {
-                ERROR(sp, E0000, StringView("Expeted path in pattern binding, got ") << ty);
-            }
-            if (!ty->as_Path().path.data.is_Generic()) {
-                ERROR(sp, E0000, StringView("Expeted generic path in pattern binding, got ") << ty);
-            }
-            gpP = &ty->as_Path().path.data.as_Generic();
+        if (ty->is_Generic() && ty->as_Generic().binding == GENERICSelf && !implType) {
+            ERROR(sp, E0000, StringView("Use of `Self` pattern outside of an impl block"));
         }
-        const auto& gp = *gpP;
+        if (ty->is_Generic()) {
+            return HIRPattern::PathBinding();
+        }
+        if (!ty->is_Path()) {
+            ERROR(sp, E0000, StringView("Expeted path in pattern binding, got ") << ty);
+        }
+        if (!ty->as_Path().path.data.is_Generic()) {
+            ERROR(sp, E0000, StringView("Expeted generic path in pattern binding, got ") << ty);
+        }
+        const auto& gp = ty->as_Path().path.data.as_Generic();
         const auto& ti = crate.getTypeitemByPath(sp, gp.path);
         if (!ti.is_Enum()) {
             ERROR(sp, E0000, StringView("Expeted enum path in pattern binding, got ") << ti.tagStr());
@@ -2619,11 +2609,7 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
         if (!implType) {
             ERROR(sp, E0000, StringView("Use of `Self` pattern outside of an impl block"));
         }
-        const auto resolvedImplType = visitType(implType);
-        if (!(resolvedImplType->is_Path() && resolvedImplType->as_Path().path.data.is_Generic())) {
-            ERROR(sp, E0000, StringView("Use of `Self` pattern in non-struct impl block - ") << resolvedImplType);
-        }
-        path = resolvedImplType->as_Path().path.data.as_Generic().clone();
+        return HIRPattern::PathBinding();
     }
 
     if (path.data.is_UfcsKnown()) {
@@ -4616,7 +4602,19 @@ auto UfcsVisitor::resolvePatternBinding(const Span& sp, HIRPath& path, HIRPatter
         return;
     }
 
-    auto ty = crate.types.path(path.clone(), {});
+    if (const auto* gp = path.data.opt_Generic(); gp && gp->path.components().size() > 1) {
+        if (const auto* enm = crate.getTypeitemByPath(sp, gp->path, false, true).opt_Enum()) {
+            const auto idx = enm->findVariant(gp->path.components().back());
+            if (idx == ~0u) {
+                ERROR(sp, E0000, StringView("No variant `") << gp->path.components().back() << StringView("` in ") << gp->path);
+            }
+            binding = HIRPattern::PathBinding::make_Enum({enm, static_cast<unsigned>(idx)});
+            return;
+        }
+    }
+
+    const auto* selfType = path.data.opt_UfcsInherent();
+    auto ty = selfType && selfType->item == "" ? selfType->type : crate.types.path(path.clone(), {});
     ty = this->visitType(ty);
     ASSERT_BUG(sp, ty->is_Path(), StringView("Pattern associated type didn't resolve to a path - ") << ty);
 
