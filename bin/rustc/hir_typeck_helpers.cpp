@@ -7019,6 +7019,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                 return result;
             }
 
+            if (result == SolverCertainty::Ambiguous && (resolveKnown(destinationBorrow->inner)->is_Infer() || resolveKnown(sourceBorrow->inner)->is_Infer())) {
+                return result;
+            }
             const HIRType* current = sourceBorrow->inner;
             ThinVector<const HIRType*> sourceAutoderef;
             for (unsigned depth = 0; depth < board().settings->recursionLimit; depth++) {
@@ -7033,8 +7036,11 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                         sourceAutoderef.push_back(current);
                         break;
                 }
-                SolverCoercionRelation dereferencedRelation = SolverCoercionRelation::None;
-                const auto dereferenced = unsize(destinationBorrow->inner, current, true, alternativeGroup, &dereferencedRelation);
+                const auto dereferenced = relateEquality(destinationBorrow->inner, current);
+                const auto dereferencedRelation = SolverCoercionRelation::Equality;
+                if (dereferenced == SolverCertainty::Ambiguous) {
+                    return dereferenced;
+                }
                 if (dereferenced == SolverCertainty::Proven) {
                     if (deferred) {
                         deferred->resize(deferredStart);
@@ -7048,9 +7054,6 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                         }
                     }
                     return dereferenced;
-                }
-                if (dereferenced == SolverCertainty::Ambiguous) {
-                    result = dereferenced;
                 }
             }
             if (reachedAutoderefLimit) {
