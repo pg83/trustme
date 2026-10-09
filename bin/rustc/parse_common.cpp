@@ -2254,7 +2254,16 @@ namespace {
         return rv;
     }
 
-    ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags) {
+    void hoistBodyAttrs(ASTFunction& fcn, ASTAttributeList& itemAttrs) {
+        if (auto* body = fcn.code()) {
+            for (auto& attr : body->attrs().items) {
+                itemAttrs.push_back(mv$(attr));
+            }
+            body->attrs().items.clear();
+        }
+    }
+
+    ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags, ASTAttributeList& itemAttrs) {
         Token tok;
         auto ret = ParseFunctionDef(lex, std::move(definitionSpan), allowSelf, /*can_be_prototype=*/false, std::move(abi), flags);
         GET_TOK(tok, lex);
@@ -2270,6 +2279,7 @@ namespace {
         PUTBACK(tok, lex);
         ret.setCode(ParseExprBlock(lex));
         lex.popHygine();
+        hoistBodyAttrs(ret, itemAttrs);
         return ret;
     }
 
@@ -4847,6 +4857,7 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
                 lex.pushHygine();
                 fcn.setCode(ParseExprBlock(lex));
                 lex.popHygine();
+                hoistBodyAttrs(fcn, itemAttrs);
             } else if (lex.getTokenIf(TOK_SEMICOLON)) {
             } else {
                 GET_TOK(tok, lex);
@@ -5135,7 +5146,7 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
     auto sourceName = tok.ident().name;
     auto name = tok.ident().hygienicName();
     DEBUG(StringView("Function ") << name);
-    auto fcn = ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/true, std::move(abi), fnFlags);
+    auto fcn = ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/true, std::move(abi), fnFlags, itemAttrs);
     impl.addFunction(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn), mv$(sourceName));
 }
 
@@ -5306,7 +5317,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             auto definitionSpan = lex.tokenStartSpan(tok);
                             GET_CHECK_TOK(tok, lex, TOK_IDENT);
                             itemName = tok.ident().hygienicName();
-                            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags()));
+                            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags(), metaItems));
                             break;
                         }
                         case TOK_BRACE_OPEN:
@@ -5322,7 +5333,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, "C", ASTFunction::Flags()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, "C", ASTFunction::Flags(), metaItems));
                     break;
                 }
 
@@ -5423,7 +5434,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst().setUnsafe()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst().setUnsafe(), metaItems));
                     break;
                 }
                 case TOK_RWORD_ASYNC: {
@@ -5441,7 +5452,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, flags));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, flags, metaItems));
                     break;
                 }
                 case TOK_RWORD_EXTERN: {
@@ -5451,14 +5462,14 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst(), metaItems));
                     break;
                 }
                 case TOK_RWORD_FN: {
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, ABI_RUST, ASTFunction::Flags().setConst()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, ABI_RUST, ASTFunction::Flags().setConst(), metaItems));
                     break;
                 }
                 default:
@@ -5503,7 +5514,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         auto definitionSpan = lex.tokenStartSpan(tok);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         itemName = tok.ident().hygienicName();
-                        itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, abi, ASTFunction::Flags().setUnsafe()));
+                        itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, abi, ASTFunction::Flags().setUnsafe(), metaItems));
                     }
                     break;
                 }
@@ -5512,7 +5523,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setUnsafe()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setUnsafe(), metaItems));
                     break;
                 }
 
@@ -5571,14 +5582,14 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             itemName = tok.ident().hygienicName();
-            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, flags));
+            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, flags, metaItems));
             break;
         }
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             itemName = tok.ident().hygienicName();
-            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags()));
+            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags(), metaItems));
             break;
         }
         case TOK_RWORD_TYPE:
@@ -5603,7 +5614,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 auto definitionSpan = lex.tokenStartSpan(tok);
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 itemName = tok.ident().hygienicName();
-                itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setGen()));
+                itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setGen(), metaItems));
             } else if (tok.ident().name == "union") {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 itemName = tok.ident().hygienicName();
