@@ -7071,13 +7071,16 @@ namespace {
                             removeDrop = true;
                         }
                     }
-                    if (drop->slot.is_Local() && localRewriteTable[drop->slot.as_Local()] == ~0u) {
+                    if (drop->slot.root.is_Local() && localRewriteTable[drop->slot.root.as_Local()] == ~0u) {
                         removeDrop = true;
                     }
                     if (removeDrop) {
                         auto target = drop->target;
                         it->terminator = MIRTerminator::make_Goto(target);
                     }
+                } else if (auto* sw = it->terminator.opt_Switch(); sw && sw->validFlag != ~0u && sw->val.root.is_Local() && localRewriteTable[sw->val.root.as_Local()] == ~0u) {
+                    auto target = sw->invalidTarget;
+                    it->terminator = MIRTerminator::make_Goto(target);
                 }
                 optVisitMirLvaluesMut(it->terminator, lvalueCb);
                 if (auto* drop = it->terminator.opt_Drop()) {
