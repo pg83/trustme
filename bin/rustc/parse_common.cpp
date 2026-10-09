@@ -4478,8 +4478,13 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                             if (lex.lookahead(0) == TOK_LIFETIME) {
                                 GET_TOK(tok, lex);
                             } else {
+                                auto constness = ParseBoundConstness(lex);
                                 auto hrbs = ParseHRBOpt(lex);
-                                traits.push_back(TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)));
+                                const auto postHrbConstness = ParseBoundConstness(lex);
+                                if (postHrbConstness != ASTBoundConstness::Never) {
+                                    constness = postHrbConstness;
+                                }
+                                traits.push_back(TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness));
                             }
                             if (lex.lookahead(0) != TOK_PLUS) {
                                 break;

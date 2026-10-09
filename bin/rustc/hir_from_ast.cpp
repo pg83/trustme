@@ -889,7 +889,8 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                     const auto& srcTrait = bound.second.sourceTrait;
                     const auto& params = bound.second.atyParams;
                     for (auto& trait : bound.second.traits) {
-                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait), HIRBoundConstness::Never, isTrivial}));
+                        const auto constness = trait.constness;
+                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait), constness, isTrivial}));
                     }
                     bound.second.traits.clear();
                 }
