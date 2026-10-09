@@ -5236,15 +5236,14 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                     const auto& r = rules[i][0][ofs];
                     ASSERT_BUG(sp, r.is_Value(), StringView("Matching without _Value pattern - ") << r.tagStr());
                     const auto& re = r.as_Value();
-                    if (re.is_Const()) {
-                        TODO(sp, StringView("Handle Constant::Const in match"));
+                    if (re.is_Const() || re.as_Int().v > S128(INT64_MAX) || re.as_Int().v < S128(INT64_MIN)) {
+                        auto nextBlock = builder.newBbUnlinked();
+                        pushIfEqual(sp, builder, val.clone(), MIRParam(re.clone()), armTargets[tgtOfs], nextBlock);
+                        builder.setCurBlock(nextBlock);
+                    } else {
+                        values.pushBack(re.as_Int().v.truncateI64());
+                        targets.pushBack(armTargets[tgtOfs]);
                     }
-
-                    if (re.as_Int().v > S128(INT64_MAX) || re.as_Int().v < S128(INT64_MIN)) {
-                        TODO(sp, StringView("Handle 128-bit values in SwitchValue"));
-                    }
-                    values.pushBack(re.as_Int().v.truncateI64());
-                    targets.pushBack(armTargets[tgtOfs]);
 
                     tgtOfs += rules[i].size();
                 }
