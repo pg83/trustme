@@ -106,12 +106,21 @@ impl Span
         Span::from_raw(0)
     }
     // 1.45
-    pub fn resolved_at(&self, _other: Span) -> Span {
-        Span::from_raw(0)
+    pub fn resolved_at(&self, other: Span) -> Span {
+        other.located_at(*self)
     }
-    // 1.45
-    pub fn located_at(&self, _other: Span) -> Span {
-        Span::from_raw(0)
+    // 1.45: this span's resolution at `other`'s position
+    pub fn located_at(&self, other: Span) -> Span {
+        let context = self.to_raw();
+        let at = other.real();
+        let lh = unsafe { &mut SPANS };
+        lh.push(Some(RealSpan {
+            file: at.file.clone(),
+            lines: at.lines.clone(),
+            ofs: at.ofs.clone(),
+            context,
+            }));
+        Span::from_raw(lh.len() - 1)
     }
 
     // 1.66

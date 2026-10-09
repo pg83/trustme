@@ -130,6 +130,7 @@ namespace {
         size_t lastSentSpan = 1;
         Ident::Hygiene receivedHygiene;
         Ident::Hygiene callSiteHygiene;
+        Ident::Hygiene mixedSiteHygiene;
         TokenSpacing receivedSpacing = TokenSpacing::Alone;
         bool receivedFromInput = false;
 
@@ -368,6 +369,8 @@ namespace {
         }
         pmi.callSiteHygiene = callSite;
         pmi.receivedHygiene = callSite;
+        const unsigned definition = ++wb.id;
+        pmi.mixedSiteHygiene = Ident::Hygiene::newScopeChained(wb.id, *wb.pool, callSite, definition);
         if (attrInput) {
             // TODO: Assert that this is a `#[proc_macro_attribute]` macro
             if (attrInput->size() != 0) {
@@ -770,7 +773,7 @@ Token ProcMacroInv::realGetToken_() {
         }
         const auto index = this->recvV128u();
         this->receivedFromInput = index >= 2 && index - 2 < spanContexts.length();
-        this->receivedHygiene = this->receivedFromInput ? spanContexts[index - 2] : callSiteHygiene;
+        this->receivedHygiene = this->receivedFromInput ? spanContexts[index - 2] : index == 0 ? mixedSiteHygiene : callSiteHygiene;
         this->receivedSpanIndex = index;
         v = this->recvU8();
     }
