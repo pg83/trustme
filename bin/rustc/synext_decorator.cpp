@@ -2403,7 +2403,7 @@ auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
     } else {
-        TODO(sp, StringView("#[link] on ") << i.tagStr());
+        WARNING(sp, W0000, StringView("attribute should be applied to an `extern` block with non-Rust ABI"));
     }
 }
 
