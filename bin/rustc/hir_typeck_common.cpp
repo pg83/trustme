@@ -88,6 +88,19 @@ namespace {
         bool visitConstGeneric(const HIRConstGeneric& value) override;
     };
 
+    struct TyVisitorIvarsFrom final: TyVisitor<WConst> {
+        size_t firstType;
+        size_t firstValue;
+
+        TyVisitorIvarsFrom(size_t firstType, size_t firstValue);
+
+        const HIRType& getTyData(const HIRType* ty) const override;
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override;
+
+        bool visitType(const HIRType* ty) override;
+    };
+
     struct TyRewriter {
         HIRTypeInterner& types;
         HIRTypeRewriteCallback& callback;
@@ -136,6 +149,21 @@ bool typeContainsConstGeneric(const HIRType* type) {
 bool pathParamsContainConstGeneric(const HIRPathParams& params) {
     TyVisitorConstGeneric visitor;
     return visitor.visitPathParams(params);
+}
+
+bool typeMentionsIvarsFrom(const HIRType* type, size_t firstType, size_t firstValue) {
+    TyVisitorIvarsFrom visitor(firstType, firstValue);
+    return visitor.visitType(type);
+}
+
+bool valueMentionsIvarsFrom(const HIRConstGeneric& value, size_t firstType, size_t firstValue) {
+    TyVisitorIvarsFrom visitor(firstType, firstValue);
+    return visitor.visitConstGeneric(value);
+}
+
+bool traitPathMentionsIvarsFrom(const HIRTraitPath& trait, size_t firstType, size_t firstValue) {
+    TyVisitorIvarsFrom visitor(firstType, firstValue);
+    return visitor.visitTraitPath(trait);
 }
 
 const HIRType* rewriteTyWithCb(HIRTypeInterner& types, const HIRType* ty, HIRTypeRewriteCallback& callback) {
@@ -836,7 +864,9 @@ auto TyVisitor<W>::visitType(const HIRType* ty) -> bool {
                         return true;
                     }
                 }
-                visitPathParams(e.use);
+                if (visitPathParams(e.use)) {
+                    return true;
+                }
                 switch (e.inner.tag()) {
                     case TypeDataErasedTypeInner::TAG_Fcn: {
                         auto& ee = e.inner.as_Fcn();
@@ -854,7 +884,9 @@ auto TyVisitor<W>::visitType(const HIRType* ty) -> bool {
                     }
                     case TypeDataErasedTypeInner::TAG_Alias: {
                         auto& ee = e.inner.as_Alias();
-                        visitPathParams(ee.params);
+                        if (visitPathParams(ee.params)) {
+                            return true;
+                        }
                         break;
                     }
                 }
@@ -978,6 +1010,33 @@ auto TyVisitorConstGeneric::visitConstGeneric(const HIRConstGeneric& value) -> b
         return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType)) || visitPathParams((*unevaluated)->paramsImpl) || visitPathParams((*unevaluated)->paramsItem);
     }
     return false;
+}
+
+TyVisitorIvarsFrom::TyVisitorIvarsFrom(size_t firstType, size_t firstValue)
+    : firstType(firstType)
+    , firstValue(firstValue)
+{
+}
+
+auto TyVisitorIvarsFrom::getTyData(const HIRType* ty) const -> const HIRType& {
+    return *ty;
+}
+
+auto TyVisitorIvarsFrom::visitConstGeneric(const HIRConstGeneric& value) -> bool {
+    if (const auto* infer = value.opt_Infer()) {
+        return infer->index != ~0u && infer->index >= firstValue;
+    }
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
+        return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType)) || visitPathParams((*unevaluated)->paramsImpl) || visitPathParams((*unevaluated)->paramsItem);
+    }
+    return false;
+}
+
+auto TyVisitorIvarsFrom::visitType(const HIRType* ty) -> bool {
+    if (const auto* infer = ty->opt_Infer(); infer && infer->index != ~0u && infer->index >= firstType) {
+        return true;
+    }
+    return TyVisitor::visitType(ty);
 }
 
 auto TyRewriter::rewritePathParams(HIRPathParams& params) -> void {

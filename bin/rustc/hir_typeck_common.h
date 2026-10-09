@@ -96,6 +96,9 @@ bool typeContainsGenericGroup(const HIRType*, HIRGenericGroup group);
 bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
 bool typeContainsConstGeneric(const HIRType*);
 bool pathParamsContainConstGeneric(const HIRPathParams&);
+bool typeMentionsIvarsFrom(const HIRType*, size_t firstType, size_t firstValue);
+bool valueMentionsIvarsFrom(const HIRConstGeneric&, size_t firstType, size_t firstValue);
+bool traitPathMentionsIvarsFrom(const HIRTraitPath&, size_t firstType, size_t firstValue);
 
 template <typename F>
 bool visitTyWith(const HIRType* type, F f) {
