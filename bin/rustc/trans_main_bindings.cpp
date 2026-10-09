@@ -2013,7 +2013,7 @@ static void TransEnumerateFillFromStatic(EnumState& state, const HIRPath& path, 
         }
     } else if (item.type->is_Infer()) {
         BUG(Span(), StringView("Enumerating static with no assigned type (unused elevated literal)"));
-    } else if (item.valueGenerated) {
+    } else if (item.valueGenerated && !item.noEmitValue) {
         TransEnumerateFillFromLiteral(state, item.valueRes, pp);
     }
     outStat.ptr = &item;
