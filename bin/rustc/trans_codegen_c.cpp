@@ -5101,6 +5101,93 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         return;
     }
 
+    if (dstPrimitive && isInteger(*dstPrimitive) && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
+        unsigned bits = 0;
+        bool isSigned = false;
+        switch (*dstPrimitive) {
+            case HIRCoreType::I8:
+                isSigned = true;
+                bits = 8;
+                break;
+            case HIRCoreType::U8:
+                bits = 8;
+                break;
+            case HIRCoreType::I16:
+                isSigned = true;
+                bits = 16;
+                break;
+            case HIRCoreType::U16:
+                bits = 16;
+                break;
+            case HIRCoreType::I32:
+                isSigned = true;
+                bits = 32;
+                break;
+            case HIRCoreType::U32:
+                bits = 32;
+                break;
+            case HIRCoreType::I64:
+                isSigned = true;
+                bits = 64;
+                break;
+            case HIRCoreType::U64:
+                bits = 64;
+                break;
+            case HIRCoreType::Isize:
+                isSigned = true;
+                bits = TargetGetCurSpec(wb_).arch.pointerBits;
+                break;
+            case HIRCoreType::Usize:
+                bits = TargetGetCurSpec(wb_).arch.pointerBits;
+                break;
+            default:
+                MIR_BUG(localMirRes, StringView("Bad float to integer cast - ") << ty << StringView(" to ") << ve.type);
+        }
+        const auto emitTarget = [&]() {
+            of << StringView("(");
+            emitCtype(dstTy);
+            of << StringView(")");
+        };
+        emitLvalue(dst);
+        of << StringView(" = ");
+        if (isSigned) {
+            const u64 maximum = (u64(1) << (bits - 1)) - 1;
+            of << StringView("(");
+            emitLvalue(ve.val);
+            of << StringView(" != ");
+            emitLvalue(ve.val);
+            of << StringView(") ? ");
+            emitTarget();
+            of << StringView("0 : (");
+            emitLvalue(ve.val);
+            of << StringView(" >= 0x1p") << bits - 1 << StringView(") ? ");
+            emitTarget();
+            of << maximum << StringView("ULL : (");
+            emitLvalue(ve.val);
+            of << StringView(" >= -0x1p") << bits - 1 << StringView(") ? ");
+            emitTarget();
+            emitLvalue(ve.val);
+            of << StringView(" : ");
+            emitTarget();
+            of << StringView("(-") << maximum << StringView("LL - 1)");
+        } else {
+            const u64 maximum = bits == 64 ? ~u64(0) : (u64(1) << bits) - 1;
+            of << StringView("(");
+            emitLvalue(ve.val);
+            of << StringView(" >= 0x1p") << bits << StringView(") ? ");
+            emitTarget();
+            of << maximum << StringView("ULL : (");
+            emitLvalue(ve.val);
+            of << StringView(" > -1.0) ? ");
+            emitTarget();
+            emitLvalue(ve.val);
+            of << StringView(" : ");
+            emitTarget();
+            of << StringView("0");
+        }
+        return;
+    }
+
     emitLvalue(dst);
     of << StringView(" = ");
     of << StringView("(");
