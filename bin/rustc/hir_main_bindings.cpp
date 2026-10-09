@@ -2173,6 +2173,9 @@ auto HirDeserialiser::deserialiseFunctionMarkings() -> HIRFunction::Markings {
     rv.unstableFeature = in.readIstring();
     rv.isRustcIntrinsic = in.readBool();
     rv.isRustcPromotable = in.readBool();
+    for (size_t i = 0, n = in.readCount(); i < n; i++) {
+        rv.targetFeatures.pushBack(in.readIstring());
+    }
     rv.mustUse = in.readBool();
     rv.alignment = in.readCount();
     rv.inlineType = static_cast<HIRFunction::Markings::Inline>(in.readTag());
@@ -4794,6 +4797,10 @@ auto HirSerialiser::serialise(const HIRFunction::Markings& m) -> void {
     out.writeString(m.unstableFeature);
     out.writeBool(m.isRustcIntrinsic);
     out.writeBool(m.isRustcPromotable);
+    out.writeCount(m.targetFeatures.length());
+    for (const auto& feature : m.targetFeatures) {
+        out.writeString(feature);
+    }
     out.writeBool(m.mustUse);
     out.writeCount(m.alignment);
     out.writeTag(static_cast<unsigned int>(m.inlineType));

@@ -347,6 +347,7 @@ namespace {
         OutState& out;
         const char* newTypeSuffix;
         bool isAsyncDropIntrinsic;
+        const Vector<RcString>* parentTargetFeatures = nullptr;
 
         struct ActiveNode {
             const void* node;
@@ -3985,6 +3986,11 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         for (auto& m : ti.second.methods) {
             m.second.data.markings.trackCaller = node.trackCaller;
             m.second.data.markings.inlineType = node.inlineType;
+            if (parentTargetFeatures && node.inlineType != HIRFunction::Markings::Inline::Always) {
+                for (const auto& feature : *parentTargetFeatures) {
+                    m.second.data.markings.targetFeatures.pushBack(feature);
+                }
+            }
             if (!m.second.data.code.state) {
                 m.second.data.code.state = exprPtr.state.clone(pool);
             }
@@ -3995,6 +4001,11 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         for (auto& m : ti->methods) {
             m.second.data.markings.trackCaller = node.trackCaller;
             m.second.data.markings.inlineType = node.inlineType;
+            if (parentTargetFeatures && node.inlineType != HIRFunction::Markings::Inline::Always) {
+                for (const auto& feature : *parentTargetFeatures) {
+                    m.second.data.markings.targetFeatures.pushBack(feature);
+                }
+            }
             if (!m.second.data.code.state) {
                 m.second.data.code.state = exprPtr.state.clone(pool);
             }
@@ -4945,6 +4956,7 @@ auto ClosureOuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> voi
         {
             const bool isAsyncDropIntrinsic = !p.getTopIp().ty && p.getSimplePath() == resolve_.hirCrate().getLangItemPathOpt("async_drop_in_place");
             ClosureExprVisitorExtract ev(resolve_, selfType, item.code.bindings, item.code, out, p.name, isAsyncDropIntrinsic);
+            ev.parentTargetFeatures = &item.markings.targetFeatures;
             ev.visitRoot(*item.code);
         }
 

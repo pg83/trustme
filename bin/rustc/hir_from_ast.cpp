@@ -2800,6 +2800,25 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     if (attrs.get("track_caller")) {
         markings.trackCaller = true;
     }
+    for (const auto& attr : attrs.items) {
+        if (!(attr.name() == "target_feature")) {
+            continue;
+        }
+        const auto enabled = attr.parseParenKeyString("enable");
+        StringView rest(enabled.c_str());
+        while (!rest.empty()) {
+            StringView feature;
+            StringView after;
+            if (!rest.split(',', feature, after)) {
+                feature = rest;
+                after = StringView();
+            }
+            if (!feature.empty()) {
+                markings.targetFeatures.pushBack(RcString::newInterned(reinterpret_cast<const char*>(feature.data()), feature.length()));
+            }
+            rest = after;
+        }
+    }
     if (const auto* unstable = attrs.get("unstable")) {
         markings.unstableFeature = unstable->parseParenKeyString("feature");
     }

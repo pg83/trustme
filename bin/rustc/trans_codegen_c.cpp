@@ -32,6 +32,34 @@
 using namespace stl;
 
 namespace {
+    StringView clangTargetFeature(StringView feature) {
+        if (feature == StringView("pclmulqdq")) {
+            return StringView("pclmul");
+        }
+        if (feature == StringView("rdrand")) {
+            return StringView("rdrnd");
+        }
+        if (feature == StringView("bmi1")) {
+            return StringView("bmi");
+        }
+        if (feature == StringView("cmpxchg16b")) {
+            return StringView("cx16");
+        }
+        if (feature == StringView("lahfsahf")) {
+            return StringView("sahf");
+        }
+        if (feature == StringView("avx10.1")) {
+            return StringView("avx10.1-512");
+        }
+        if (feature == StringView("avx10.2")) {
+            return StringView("avx10.2-512");
+        }
+        if (feature == StringView("apxf") || feature == StringView("ermsb") || feature == StringView("soft-float")) {
+            return StringView();
+        }
+        return feature;
+    }
+
     struct FmtShell {
         const std::string& s;
 
@@ -2878,6 +2906,12 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\treturn lo | ((u64)hi << 32);\n");
         } else if (item.linkage.name == "llvm.x86.sse2.pause") {
             of << StringView("\t__asm__ __volatile__ (\"pause\");\n");
+        } else if (item.linkage.name == "llvm.x86.sse.sfence") {
+            of << StringView("\t__asm__ __volatile__ (\"sfence\" ::: \"memory\");\n");
+        } else if (item.linkage.name == "llvm.x86.sse2.lfence") {
+            of << StringView("\t__asm__ __volatile__ (\"lfence\" ::: \"memory\");\n");
+        } else if (item.linkage.name == "llvm.x86.sse2.mfence") {
+            of << StringView("\t__asm__ __volatile__ (\"mfence\" ::: \"memory\");\n");
 
             of << StringView("\treturn ;\n");
         } else if (item.linkage.name == "llvm.x86.avx2.psrlv.d" || item.linkage.name == "llvm.x86.avx2.psrlv.d.256" || item.linkage.name == "llvm.x86.avx2.psllv.d" || item.linkage.name == "llvm.x86.avx2.psllv.d.256" || item.linkage.name == "llvm.x86.avx2.psrav.d" || item.linkage.name == "llvm.x86.avx2.psrav.d.256" || item.linkage.name == "llvm.x86.avx2.psrlv.q" || item.linkage.name == "llvm.x86.avx2.psrlv.q.256" || item.linkage.name == "llvm.x86.avx2.psllv.q" || item.linkage.name == "llvm.x86.avx2.psllv.q.256") {
@@ -6017,6 +6051,28 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             argMappings.pushBack(UINT_MAX);
         }
         bool blockOpen = false;
+        Vector<size_t> explicitVector;
+        explicitVector.zero(asmParams.size());
+        const auto explicitVectorSize = [&](const MIRAsmParam::Data_Reg& reg) -> size_t {
+            const auto* regnameP = reg.spec.opt_Explicit();
+            if (!regnameP) {
+                return 0;
+            }
+            const StringView regname(regnameP->c_str());
+            if (!regname.startsWith(StringView("xmm")) && !regname.startsWith(StringView("ymm")) && !regname.startsWith(StringView("zmm"))) {
+                return 0;
+            }
+            const HIRType* tmp;
+            const auto* opTy = reg.input ? mirRes->getParamType(*reg.input) : mirRes->getLvalueType(*reg.output);
+            if (opTy->is_Primitive() || opTy->is_Pointer() || opTy->is_Borrow()) {
+                return 0;
+            }
+            size_t opSize = 0;
+            if (!TargetGetSizeOf(sp, resolve_, opTy, opSize)) {
+                return 0;
+            }
+            return opSize;
+        };
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (!pe->input && !pe->output) {
@@ -6025,6 +6081,22 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     if (!blockOpen) {
                         blockOpen = true;
                         of << indent << StringView("{\n");
+                    }
+                    if (const auto opSize = explicitVectorSize(*pe); opSize != 0) {
+                        explicitVector.mut(i) = opSize;
+                        of << indent << StringView("typedef long long asm_vec_ty_") << i << StringView(" __attribute__((vector_size(") << opSize << StringView(")));\n");
+                        of << indent << StringView("asm_vec_ty_") << i << StringView(" asm_vec_") << i << StringView(";\n");
+                        if (pe->input) {
+                            of << indent << StringView("memcpy(&asm_vec_") << i << StringView(", &");
+                            emitParam(*pe->input);
+                            of << StringView(", ") << opSize << StringView(");\n");
+                        }
+                        of << indent << StringView("register asm_vec_ty_") << i << StringView(" asm_") << *regnameP << StringView(" asm(\"") << *regnameP << StringView("\")");
+                        if (pe->input) {
+                            of << StringView(" = asm_vec_") << i;
+                        }
+                        of << StringView(";\n");
+                        continue;
                     }
                     of << indent << StringView("register uintptr_t asm_") << *regnameP << StringView(" asm(\"") << *regnameP << StringView("\")");
                     if (pe->input) {
@@ -6301,7 +6373,12 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     break;
                 }
                 case AsmRegisterSpec::TAG_Explicit: {
-                    of << StringView("r");
+                    const auto explicitIdx = paramIndexOf(&p);
+                    if (explicitIdx == asmParams.size() || explicitVector[explicitIdx] == 0) {
+                        of << StringView("r");
+                    } else {
+                        of << (StringView(p.spec.as_Explicit().c_str()).startsWith(StringView("zmm")) ? StringView("v") : StringView("x"));
+                    }
                     break;
                 }
             }
@@ -6368,7 +6445,12 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                                 break;
                             }
                             case AsmRegisterSpec::TAG_Explicit: {
-                                of << StringView("r");
+                                const auto explicitIdx = paramIndexOf(&r);
+                                if (explicitIdx == asmParams.size() || explicitVector[explicitIdx] == 0) {
+                                    of << StringView("r");
+                                } else {
+                                    of << (StringView(r.spec.as_Explicit().c_str()).startsWith(StringView("zmm")) ? StringView("v") : StringView("x"));
+                                }
                                 break;
                             }
                         }
@@ -6434,7 +6516,12 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (const auto* regnameP = pe->spec.opt_Explicit()) {
-                    if (pe->output) {
+                    if (pe->output && explicitVector[i] != 0) {
+                        of << indent << StringView("asm_vec_") << i << StringView(" = asm_") << *regnameP << StringView(";\n");
+                        of << indent << StringView("memcpy(&");
+                        emitLvalue(*pe->output);
+                        of << StringView(", &asm_vec_") << i << StringView(", ") << explicitVector[i] << StringView(");\n");
+                    } else if (pe->output) {
                         of << indent;
                         emitLvalue(*pe->output);
                         of << StringView(" = ");
@@ -6671,6 +6758,21 @@ auto CodeGeneratorC::emitFunctionHeader(const HIRPath& p, const HIRFunction& ite
     }
     if (item.markings.alignment != 0) {
         of << StringView("__attribute__((aligned(") << item.markings.alignment << StringView("))) ");
+    }
+    const auto& arch = TargetGetCurSpec(wb_).arch.name;
+    if (arch == "x86_64" || arch == "x86") {
+        bool opened = false;
+        for (const auto& feature : item.markings.targetFeatures) {
+            const auto name = clangTargetFeature(StringView(feature.c_str()));
+            if (name.empty()) {
+                continue;
+            }
+            of << (opened ? StringView(",") : StringView("__attribute__((target(\"")) << name;
+            opened = true;
+        }
+        if (opened) {
+            of << StringView("\"))) ");
+        }
     }
     auto cb = [&](ZeroCopyOutput& ss) {
         ss << StringView(" ") << compilerAbiAttribute(item.abi) << TransMangleValue(p) << nameSuffix << StringView("(");

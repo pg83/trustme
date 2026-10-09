@@ -213,6 +213,8 @@ public:
         bool isRustcIntrinsic = false;
         bool isRustcPromotable = false;
 
+        stl::Vector<RcString> targetFeatures;
+
         enum Inline {
             Auto,
             Never,
