@@ -371,12 +371,14 @@ public:
 
     void movedLvalue(const Span& sp, const MIRLValue& lv);
 
-    bool enterLoopHead(const Span& sp, const MIRLValue& var, VarState& head);
+    bool enterLoopHead(const Span& sp, const MIRLValue& var, bool moved, VarState& head);
 
     void writeLoopHead(const Span& sp, const MIRLValue& var, const VarState& head);
 
 private:
     void loopHeadTemplate(const Span& sp, VarState& state);
+
+    VarState loopHeadWhole(const Span& sp, const MIRLValue& lv, const VarState& entry);
 
     void writeLoopHeadState(const Span& sp, const MIRLValue& lv, const VarState& head, const VarState& cur);
 

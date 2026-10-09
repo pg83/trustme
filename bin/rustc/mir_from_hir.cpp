@@ -65,6 +65,7 @@ namespace {
     struct LoopAssignedVariables: public HIRExprVisitorDef {
         Vector<unsigned int> assigned;
         Vector<unsigned int> bound;
+        Vector<unsigned int> moved;
 
         explicit LoopAssignedVariables(HIRTypeInterner& types)
             : HIRExprVisitorDef(types)
@@ -88,6 +89,13 @@ namespace {
                         assigned.pushBack(var->slot);
                     }
                 }
+            }
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeVariable& node) override {
+            if (node.usage == HIRValueUsage::Move && std::find(moved.begin(), moved.end(), node.slot) == moved.end()) {
+                moved.pushBack(node.slot);
             }
             HIRExprVisitorDef::visit(node);
         }
@@ -7569,17 +7577,88 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
     }
 }
 
-bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, VarState& head) {
+bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, bool moved, VarState& head) {
     const auto type = var.root.is_Argument() ? SlotType::Argument : SlotType::Local;
     const auto idx = var.root.is_Argument() ? var.root.as_Argument() : var.root.as_Local();
     const auto& entry = getSlotState(sp, idx, type);
-    if (entry.is_Valid()) {
+    const bool needsDrop = resolve_.typeNeedsDropGlue(sp, valType(sp, var));
+    if (entry.is_Valid() && !(needsDrop && moved)) {
         return false;
     }
-    head = entry.clone();
-    loopHeadTemplate(sp, head);
+    if (needsDrop && (entry.is_Valid() || entry.is_Invalid() || entry.is_Optional())) {
+        head = loopHeadWhole(sp, var, entry);
+    } else {
+        head = entry.clone();
+        loopHeadTemplate(sp, head);
+    }
     getSlotStateMut(sp, idx, type) = head.clone();
     return true;
+}
+
+VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const VarState& entry) {
+    const auto entryFlag = [&]() {
+        if (const auto* flag = entry.opt_Optional()) {
+            const auto rv = newDropFlag(false);
+            pushStmtSetDropflagOther(sp, rv, *flag);
+            return rv;
+        }
+        const bool valid = entry.is_Valid();
+        const auto rv = newDropFlag(valid);
+        pushStmtSetDropflagVal(sp, rv, valid);
+        return rv;
+    };
+    const auto* ty = valType(sp, lv);
+    if (!resolve_.typeNeedsDropGlue(sp, ty)) {
+        return VarState::make_Optional(entryFlag());
+    }
+    const auto fieldsOf = [&](const MIRLValue& base, size_t fieldCount) {
+        auto rv = VarState::make_Partial({{}, ~0u});
+        auto& fields = rv.as_Partial().innerStates;
+        fields.reserve(fieldCount);
+        for (size_t j = 0; j < fieldCount; j++) {
+            fields.push_back(loopHeadWhole(sp, MIRLValue::newField(base.clone(), static_cast<unsigned int>(j)), entry));
+        }
+        return rv;
+    };
+    const auto structFieldCount = [](const HIRStruct* str) -> size_t {
+        if (!str) {
+            return 0;
+        }
+        if (const auto* fields = str->data.opt_Tuple()) {
+            return fields->size();
+        }
+        if (const auto* fields = str->data.opt_Named()) {
+            return fields->size();
+        }
+        return 0;
+    };
+    if (const auto* tuple = ty->opt_Tuple(); tuple && tuple->length() > 0) {
+        return fieldsOf(lv, tuple->length());
+    }
+    const auto* path = ty->opt_Path();
+    const auto* markings = path ? path->binding.getTraitMarkings() : nullptr;
+    if (!path || (markings && markings->hasDropImpl)) {
+        return VarState::make_Optional(entryFlag());
+    }
+    if (path->binding.is_Struct()) {
+        const auto fieldCount = structFieldCount(path->binding.as_Struct());
+        return fieldCount > 0 ? fieldsOf(lv, fieldCount) : VarState::make_Optional(entryFlag());
+    }
+    if (!path->binding.is_Enum()) {
+        return VarState::make_Optional(entryFlag());
+    }
+    const auto variantCount = path->binding.as_Enum()->numVariants();
+    auto rv = VarState::make_Partial({{}, ~0u});
+    auto& variants = rv.as_Partial().innerStates;
+    variants.reserve(variantCount);
+    for (size_t i = 0; i < variantCount; i++) {
+        const auto variantLv = MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i));
+        const auto* variantPath = valType(sp, variantLv)->opt_Path();
+        const auto fieldCount = structFieldCount(variantPath && variantPath->binding.is_Struct() ? variantPath->binding.as_Struct() : nullptr);
+        variants.push_back(fieldCount > 0 ? fieldsOf(variantLv, fieldCount) : VarState::make_Optional(entryFlag()));
+    }
+    rv.as_Partial().outerFlag = entryFlag();
+    return rv;
 }
 
 void MirBuilder::loopHeadTemplate(const Span& sp, VarState& state) {
@@ -7746,20 +7825,20 @@ void MirBuilder::writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigne
                 const auto sameState = [](const VarState& left, const VarState& right) {
                     return left.tag() == right.tag() && (left.is_Valid() || left.is_Invalid() || left.is_Optional());
                 };
-                const VarState* common = nullptr;
+                size_t common = ce.innerStates.size();
                 bool uniform = ce.outerFlag == ~0u;
                 for (size_t i = 0; i < ce.innerStates.size() && uniform; i++) {
                     if (!resolve_.typeNeedsDropGlue(sp, valType(sp, MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i))))) {
                         continue;
                     }
-                    if (!common) {
-                        common = &ce.innerStates[i];
+                    if (common == ce.innerStates.size()) {
+                        common = i;
                     } else {
-                        uniform = sameState(ce.innerStates[i], *common);
+                        uniform = sameState(ce.innerStates[i], ce.innerStates[common]);
                     }
                 }
-                ASSERT_BUG(sp, uniform && common, StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
-                writeLoopHeadWhole(sp, lv, flag, *common);
+                ASSERT_BUG(sp, uniform && common < ce.innerStates.size(), StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
+                writeLoopHeadWhole(sp, MIRLValue::newField(lv.clone(), static_cast<unsigned int>(common)), flag, ce.innerStates[common]);
                 break;
             }
             if (ce.outerFlag == ~0u) {
@@ -9517,7 +9596,8 @@ auto ExprVisitorConv::enterLoopHeads(const Span& sp, HIRExprNode& body) -> LoopH
         }
         auto var = builder.getVariable(sp, slot);
         auto head = VarState::make_Valid({});
-        if (builder.enterLoopHead(sp, var, head)) {
+        const bool moved = std::find(scan.moved.begin(), scan.moved.end(), slot) != scan.moved.end();
+        if (builder.enterLoopHead(sp, var, moved, head)) {
             heads = loopHeadPool->make<LoopHead>(LoopHead{heads, mv$(var), mv$(head)});
         }
     }
