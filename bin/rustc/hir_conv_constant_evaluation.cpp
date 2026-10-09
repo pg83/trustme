@@ -4966,8 +4966,11 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MI
     }
 
     if (const auto* pe = p.data.opt_UfcsKnown()) {
+        if (pe->item == rootResolve.board().ctfe->vtableName()) {
+            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
+        }
         if (const auto* tyDyn = pe->type->opt_TraitObject()) {
-            if (pe->item != "vtable#" && tyDyn->trait.traitPtr && tyDyn->trait.traitPtr->getVtableValueIndex(rootResolve.crate.types, state.sp, tyDyn->trait.path.params, pe->trait, pe->item) > 0) {
+            if (tyDyn->trait.traitPtr && tyDyn->trait.traitPtr->getVtableValueIndex(rootResolve.crate.types, state.sp, tyDyn->trait.path.params, pe->trait, pe->item) > 0) {
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
             }
         }
