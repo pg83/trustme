@@ -36,6 +36,7 @@ namespace {
         HIRSimplePath fnPtrTrait_;
         HIRSimplePath tupleTrait_;
         HIRSimplePath transmuteTrait_;
+        HIRSimplePath trivialCloneTrait_;
 
         explicit LangItemsImpl(const HIRCrate& crate);
 
@@ -93,6 +94,8 @@ namespace {
         const HIRSimplePath& tupleTrait() const override;
 
         const HIRSimplePath& transmuteTrait() const override;
+
+        const HIRSimplePath& trivialCloneTrait() const override;
     };
 }
 
@@ -129,6 +132,7 @@ LangItemsImpl::LangItemsImpl(const HIRCrate& crate)
     , fnPtrTrait_(crate.getLangItemPathOpt("fn_ptr_trait"))
     , tupleTrait_(crate.getLangItemPathOpt("tuple_trait"))
     , transmuteTrait_(crate.getLangItemPathOpt("transmute_trait"))
+    , trivialCloneTrait_(crate.getLangItemPathOpt("trivial_clone"))
 {
 }
 
@@ -242,4 +246,8 @@ auto LangItemsImpl::tupleTrait() const -> const HIRSimplePath& {
 
 auto LangItemsImpl::transmuteTrait() const -> const HIRSimplePath& {
     return transmuteTrait_;
+}
+
+auto LangItemsImpl::trivialCloneTrait() const -> const HIRSimplePath& {
+    return trivialCloneTrait_;
 }

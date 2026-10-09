@@ -3646,7 +3646,8 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         }
     }
 
-    if (!langClone().components().empty() && trait == langClone()) {
+    const auto& langTrivialClone = this->langTrivialCloneTrait();
+    if ((!langClone().components().empty() && trait == langClone()) || (!langTrivialClone.components().empty() && trait == langTrivialClone)) {
         switch ((*type).tag()) {
             case HIRType::TAG_Tuple:
             case HIRType::TAG_NamedFunction:
@@ -11977,7 +11978,8 @@ auto NextTraitGoalEvaluator::candidateIsTrivialBuiltin(const Candidate& candidat
     if (!resolve_.langSized().components().empty() && trait == resolve_.langSized()) {
         return primitiveIsTrivial() || type->is_Diverge() || type->is_Borrow() || type->is_Pointer() || type->is_Array() || type->is_NamedFunction() || type->is_Function() || type->is_NodeType();
     }
-    if ((!resolve_.langCopy().components().empty() && trait == resolve_.langCopy()) || (!resolve_.langClone().components().empty() && trait == resolve_.langClone())) {
+    const auto& langTrivialClone = resolve_.langTrivialCloneTrait();
+    if ((!resolve_.langCopy().components().empty() && trait == resolve_.langCopy()) || (!resolve_.langClone().components().empty() && trait == resolve_.langClone()) || (!langTrivialClone.components().empty() && trait == langTrivialClone)) {
         return primitiveIsTrivial() || type->is_Diverge() || type->is_Pointer() || type->is_NamedFunction() || type->is_Function()
             || (type->is_Borrow() && type->as_Borrow().type == HIRBorrowType::Shared);
     }
@@ -14425,7 +14427,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
 
     const bool sizedBuiltin = !resolve_.langSized().components().empty() && trait == resolve_.langSized();
     const bool copyBuiltin = !resolve_.langCopy().components().empty() && trait == resolve_.langCopy();
-    const bool cloneBuiltin = !resolve_.langClone().components().empty() && trait == resolve_.langClone();
+    const bool cloneBuiltin = (!resolve_.langClone().components().empty() && trait == resolve_.langClone()) || (!resolve_.langTrivialCloneTrait().components().empty() && trait == resolve_.langTrivialCloneTrait());
     if (candidate->source == CandidateSource::Builtin && (sizedBuiltin || copyBuiltin || cloneBuiltin)) {
         const auto builtin = sizedBuiltin ? StructuralTrait::Sized : copyBuiltin ? StructuralTrait::Copy : StructuralTrait::Clone;
         const auto structural = evaluateBuiltinSizedCopyClone(candidate, builtin, trait, candidate->impl.traitArgs, candidate->impl.type);

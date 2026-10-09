@@ -239,6 +239,8 @@ namespace {
 
         ASTGenericParams getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, Vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const;
 
+        ASTImpl trivialCloneImpl(const Span& sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, bool isUnion) const;
+
         Vector<ASTType*> getFieldBounds(const ASTStruct& str) const;
 
         Vector<ASTType*> getFieldBounds(const ASTEnum& enm) const;
@@ -1461,6 +1463,19 @@ namespace {
                     }
                 }
                 mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", mv$(derivedImpl), {});
+                if (std::strcmp(dp->traitName(), "Clone") == 0 && !(wb.settings->rustcVersion < RustcVersion{1, 93, 0})) {
+                    constexpr bool isUnion = std::is_same_v<T, ASTUnion>;
+                    const bool simple = isUnion || (opts.derivesCopy && std::none_of(item.params().params.begin(), item.params().params.end(), [](const auto& param) {
+                        return param.is_Type();
+                    }));
+                    if (simple) {
+                        auto trivialImpl = dp->trivialCloneImpl(sp, opts.coreName, item.params(), type, isUnion);
+                        if (isConstDerive) {
+                            trivialImpl.def().setIsConst();
+                        }
+                        mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", mv$(trivialImpl), {});
+                    }
+                }
                 continue;
             }
 
@@ -2765,6 +2780,23 @@ auto Deriver::getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGeneri
     }
 
     return params;
+}
+
+auto Deriver::trivialCloneImpl(const Span& sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, bool isUnion) const -> ASTImpl {
+    const auto trivialPath = getPath(coreName, "clone", "TrivialClone");
+    auto params = getParamsWithBounds(*type->pool, sp, p, trivialPath, {});
+    if (isUnion) {
+        unsigned int i = 0;
+        for (const auto& arg : p.params) {
+            if (const auto* e = arg.opt_Type()) {
+                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, e->name(), i), {}, getPath(coreName, "marker", "Copy")}));
+                i++;
+            }
+        }
+    }
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, trivialPath), type->clone()));
+    rv.def().setIsUnsafe();
+    return rv;
 }
 
 auto Deriver::getFieldBounds(const ASTStruct& str) const -> Vector<ASTType*> {

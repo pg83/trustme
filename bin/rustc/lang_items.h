@@ -37,6 +37,7 @@ public:
     virtual const HIRSimplePath& fnPtrTrait() const = 0;
     virtual const HIRSimplePath& tupleTrait() const = 0;
     virtual const HIRSimplePath& transmuteTrait() const = 0;
+    virtual const HIRSimplePath& trivialCloneTrait() const = 0;
 
     static LangItems* create(stl::ObjPool& pool, const HIRCrate& crate);
 };

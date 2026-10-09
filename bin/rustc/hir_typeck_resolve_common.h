@@ -160,6 +160,10 @@ struct TraitResolveCommon {
         return wb.langItems->transmuteTrait();
     }
 
+    const HIRSimplePath& langTrivialCloneTrait() const {
+        return wb.langItems->trivialCloneTrait();
+    }
+
     const HIRGenericParams* implGenericsPtr() const {
         return implGenerics_;
     }
