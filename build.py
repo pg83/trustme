@@ -6032,6 +6032,21 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_unrecognized_option_driver",
+    inputs=["$(S)/tst/unit/test_unrecognized_option.py", *TESTS_LIB],
+    outputs=["$(B)/tst/unit/unrecognized_option_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_unrecognized_option.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/unrecognized_option_driver.stamp",
+    ],
+    deps=[rustc],
+    env={**TOOLCHAIN_ENV, "RUSTC_OVERRIDE_VERSION_STRING": "1.92.0"},
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_print_cfg_driver",
     inputs=["$(S)/tst/unit/test_print_cfg.py", *TESTS_LIB],
     outputs=["$(B)/tst/unit/print_cfg_driver.stamp"],

@@ -1379,7 +1379,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         this->verbose = true;
                         break;
                     default:
-                        sysE << StringView("Unknown option: '-") << *arg << StringView("'") << endL;
+                        sysE << StringView("error: Unrecognized option: '") << *arg << StringView("'\n") << endL;
                         exit(1);
                 }
             }
@@ -1626,7 +1626,13 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     exit(1);
                 }
             } else {
-                sysE << StringView("Unknown option '") << arg << StringView("'") << endL;
+                StringView name(arg + 2);
+                StringView beforeValue;
+                StringView value;
+                if (name.split('=', beforeValue, value)) {
+                    name = beforeValue;
+                }
+                sysE << StringView("error: Unrecognized option: '") << name << StringView("'\n") << endL;
                 exit(1);
             }
         }
