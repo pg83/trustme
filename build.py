@@ -517,7 +517,7 @@ def add_libstd(version):
     )
 
 
-LIBSTDS = {version: add_libstd(version) for version in ("1.90.0", "1.92.0")}
+LIBSTDS = {version: add_libstd(version) for version in ("1.90.0", "1.92.0", "1.93.0")}
 
 rust_test_helpers = command(
     name="rust_test_helpers",
@@ -6079,6 +6079,7 @@ unit_aux = build.glob("$(S)/tst/unit/aux/**/*.rs") + build.glob("$(S)/tst/unit/s
 for _release, _dir, _prefix in (
     ("1.90.0", "tst/unit", "unit_"),
     ("1.92.0", "tst/unit/rust_1_92", "unit_rust_1_92_"),
+    ("1.93.0", "tst/unit/rust_1_93", "unit_rust_1_93_"),
 ):
     for _src in build.glob(f"$(S)/{_dir}/test_*.rs"):
         _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
