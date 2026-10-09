@@ -1507,7 +1507,7 @@ namespace {
         }
 
         // TODO: What about `union!` as a macro? Needs to be handled below
-        if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.nextTok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON)) {
+        if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.nextTok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_RWORD_CRATE || lex.next() == TOK_DOUBLE_COLON)) {
             if (!consumePath(lex)) {
                 return false;
             }
