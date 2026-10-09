@@ -17205,6 +17205,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 for (size_t rank = 0; rank < related[i].candidate->coercionRanks.size(); rank++) {
                     const auto left = related[j].candidate->coercionRanks[rank];
                     const auto right = related[i].candidate->coercionRanks[rank];
+                    if (left == 0 || right == 0) {
+                        continue;
+                    }
                     jBetter |= left > right;
                     iBetter |= left < right;
                 }
