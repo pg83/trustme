@@ -4847,6 +4847,1294 @@ rand_distr_0_6_0 = add_project_test(
     lockfile="$(S)/tst/projects/rand_distr_0_6_0/Cargo.lock",
 )
 
+backtrace_ext_0_2_1 = add_project_test(
+    name="backtrace_ext_0_2_1",
+    rust="1.93.0",
+    url="https://github.com/gankra/backtrace-ext.git",
+    rev="043c95350875a36be6cd755dcef21a44a52ec2cc",
+    lockfile="$(S)/tst/projects/backtrace_ext_0_2_1/Cargo.lock",
+)
+
+bcder_0_7_7 = add_project_test(
+    name="bcder_0_7_7",
+    rust="1.93.0",
+    url="https://github.com/nlnetlabs/bcder.git",
+    rev="f9ce2c7d76d9d6d1cee0d91cf5e9d1eee62bffbb",
+    lockfile="$(S)/tst/projects/bcder_0_7_7/Cargo.lock",
+)
+
+termwiz_0_23_3 = add_project_test(
+    name="termwiz_0_23_3",
+    rust="1.93.0",
+    url="https://github.com/wezterm/wezterm.git",
+    rev="a87358516004a652ad840bc1661bdf65ffc89b43",
+    manifest="termwiz",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/termwiz_0_23_3/Cargo.lock",
+)
+
+charset_0_1_5 = add_project_test(
+    name="charset_0_1_5",
+    rust="1.93.0",
+    url="https://github.com/hsivonen/charset.git",
+    rev="8c533d8c26cfc5411a786e9861e7c4e5cd7d8bd2",
+    lockfile="$(S)/tst/projects/charset_0_1_5/Cargo.lock",
+)
+
+lab_0_11_0 = add_project_test(
+    name="lab_0_11_0",
+    rust="1.93.0",
+    url="https://github.com/toomanybees/lab.git",
+    rev="8a73a7cbdd44340f18422c50912676811675a360",
+    lockfile="$(S)/tst/projects/lab_0_11_0/Cargo.lock",
+)
+
+alloy_sol_macro_1_7_3 = add_project_test(
+    name="alloy_sol_macro_1_7_3",
+    rust="1.93.0",
+    url="https://github.com/alloy-rs/core.git",
+    rev="87080853083c909b34f8c8cff3622570c114985d",
+    manifest="crates/sol-macro",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/alloy_sol_macro_1_7_3/Cargo.lock",
+)
+
+jsonrpsee_core_0_26_1 = add_project_test(
+    name="jsonrpsee_core_0_26_1",
+    rust="1.93.0",
+    url="https://github.com/paritytech/jsonrpsee.git",
+    rev="bcc84901f3c882f4233f293e5acf018643cbd412",
+    manifest="core",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/jsonrpsee_core_0_26_1/Cargo.lock",
+)
+
+crypto_secretbox_0_1_1 = add_project_test(
+    name="crypto_secretbox_0_1_1",
+    rust="1.93.0",
+    url="https://github.com/rustcrypto/nacl-compat.git",
+    rev="0324a1ed7ef3fdf5d53f35b6cae6f7ff2429e27a",
+    manifest="crypto_secretbox",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/crypto_secretbox_0_1_1/Cargo.lock",
+)
+
+cron_0_17_0 = add_project_test(
+    name="cron_0_17_0",
+    rust="1.93.0",
+    url="https://github.com/zslayton/cron.git",
+    rev="3d0447f9b2aacdbbafe551c7237df8afbc4c5308",
+    lockfile="$(S)/tst/projects/cron_0_17_0/Cargo.lock",
+)
+
+sval_nested_2_22_0 = add_project_test(
+    name="sval_nested_2_22_0",
+    rust="1.93.0",
+    url="https://github.com/sval-rs/sval.git",
+    rev="02395d2e20b5f703ca3ac35ae13efa5ad5248258",
+    manifest="nested",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/sval_nested_2_22_0/Cargo.lock",
+)
+
+egui_0_35_0 = add_project_test(
+    name="egui_0_35_0",
+    rust="1.93.0",
+    url="https://github.com/emilk/egui.git",
+    rev="6f15dc0e16b26edce1fc2a05212eaf7e749c1d05",
+    manifest="crates/egui",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/egui_0_35_0/Cargo.lock",
+)
+
+robust_1_2_0 = add_project_test(
+    name="robust_1_2_0",
+    rust="1.93.0",
+    url="https://github.com/georust/robust.git",
+    rev="654f34cb8cdb3ae21bf59ef3472f92652942cd74",
+    lockfile="$(S)/tst/projects/robust_1_2_0/Cargo.lock",
+)
+
+gpu_alloc_types_0_3_1 = add_project_test(
+    name="gpu_alloc_types_0_3_1",
+    rust="1.93.0",
+    url="https://github.com/zakarumych/gpu-alloc.git",
+    rev="7ddd1fe576fcfc503347eb97e476a47581479f22",
+    manifest="types",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/gpu_alloc_types_0_3_1/Cargo.lock",
+)
+
+gix_dir_0_31_0 = add_project_test(
+    name="gix_dir_0_31_0",
+    rust="1.93.0",
+    url="https://github.com/gitoxidelabs/gitoxide.git",
+    rev="0115e902fd0334b8f370766993eb17babed3157f",
+    manifest="gix-dir",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/gix_dir_0_31_0/Cargo.lock",
+)
+
+sha2_asm_0_6_4 = add_project_test(
+    name="sha2_asm_0_6_4",
+    rust="1.93.0",
+    url="https://github.com/rustcrypto/asm-hashes.git",
+    rev="8e805227e0ccee2de96c35809d9e5b2f1cb5f5f6",
+    manifest="sha2",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/sha2_asm_0_6_4/Cargo.lock",
+)
+
+fastbloom_0_17_0 = add_project_test(
+    name="fastbloom_0_17_0",
+    rust="1.93.0",
+    url="https://github.com/tomtomwombat/fastbloom.git",
+    rev="5bbfc14f98b4fc4cd5a124626174fdf54e0b0c3d",
+    lockfile="$(S)/tst/projects/fastbloom_0_17_0/Cargo.lock",
+)
+
+unicode_vo_0_1_0 = add_project_test(
+    name="unicode_vo_0_1_0",
+    rust="1.93.0",
+    url="https://github.com/razrfalcon/unicode-vo.git",
+    rev="f163f6cc40436cf793742607048273fbb8834fbd",
+    lockfile="$(S)/tst/projects/unicode_vo_0_1_0/Cargo.lock",
+)
+
+treediff_5_0_0 = add_project_test(
+    name="treediff_5_0_0",
+    rust="1.93.0",
+    url="https://github.com/byron/treediff-rs.git",
+    rev="9c260be9518e20239f5aedf5c1fae1a550889c94",
+    lockfile="$(S)/tst/projects/treediff_5_0_0/Cargo.lock",
+)
+
+archery_1_2_3 = add_project_test(
+    name="archery_1_2_3",
+    rust="1.93.0",
+    url="https://github.com/orium/archery.git",
+    rev="75965178f52c6aa8e4103b81be9684d21eab6632",
+    lockfile="$(S)/tst/projects/archery_1_2_3/Cargo.lock",
+)
+
+smol_2_0_2 = add_project_test(
+    name="smol_2_0_2",
+    rust="1.93.0",
+    url="https://github.com/smol-rs/smol.git",
+    rev="a1e642196803fc5dff56f1e04e867bfc024966bd",
+    lockfile="$(S)/tst/projects/smol_2_0_2/Cargo.lock",
+)
+
+caps_0_5_6 = add_project_test(
+    name="caps_0_5_6",
+    rust="1.93.0",
+    url="https://github.com/lucab/caps-rs.git",
+    rev="d5dcf952ada01445b8eacb25fc5a2e37f9941da6",
+    lockfile="$(S)/tst/projects/caps_0_5_6/Cargo.lock",
+)
+
+deltae_0_3_2 = add_project_test(
+    name="deltae_0_3_2",
+    rust="1.93.0",
+    url="https://gitlab.com/ryanobeirne/deltae.git",
+    rev="3caea55fe378157802187cf66d07169aa5f1c06e",
+    lockfile="$(S)/tst/projects/deltae_0_3_2/Cargo.lock",
+)
+
+protoc_bin_vendored_macos_aarch_64_3_3_0 = add_project_test(
+    name="protoc_bin_vendored_macos_aarch_64_3_3_0",
+    rust="1.93.0",
+    url="https://github.com/stepancheg/rust-protoc-bin-vendored.git",
+    rev="d7cc7356ead5b0efd14c415103406b2221a3f8fb",
+    manifest="protoc-bin-vendored-macos-aarch_64",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/protoc_bin_vendored_macos_aarch_64_3_3_0/Cargo.lock",
+)
+
+rlimit_0_11_0 = add_project_test(
+    name="rlimit_0_11_0",
+    rust="1.93.0",
+    url="https://github.com/nugine/rlimit.git",
+    rev="839f34767dff1de4197b140c214ea839c1410fbc",
+    lockfile="$(S)/tst/projects/rlimit_0_11_0/Cargo.lock",
+)
+
+nanoid_0_5_0 = add_project_test(
+    name="nanoid_0_5_0",
+    rust="1.93.0",
+    url="https://github.com/mrdimidium/nanoid.git",
+    rev="359c02d6f87260bd431e19374ccfca2890fdab1e",
+    lockfile="$(S)/tst/projects/nanoid_0_5_0/Cargo.lock",
+)
+
+x509_certificate_0_25_0 = add_project_test(
+    name="x509_certificate_0_25_0",
+    rust="1.93.0",
+    url="https://github.com/indygreg/cryptography-rs.git",
+    rev="169016d01b831991dbc0bf5b9386c9491de4fadc",
+    manifest="x509-certificate",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/x509_certificate_0_25_0/Cargo.lock",
+)
+
+spdx_0_13_6 = add_project_test(
+    name="spdx_0_13_6",
+    rust="1.93.0",
+    url="https://github.com/embarkstudios/spdx.git",
+    rev="0ca398c29698ee46c9d2497569817aebde53feaf",
+    lockfile="$(S)/tst/projects/spdx_0_13_6/Cargo.lock",
+)
+
+coset_0_4_2 = add_project_test(
+    name="coset_0_4_2",
+    rust="1.93.0",
+    url="https://github.com/google/coset.git",
+    rev="dd458359623a459086aa296e34a3d8902e034223",
+    lockfile="$(S)/tst/projects/coset_0_4_2/Cargo.lock",
+)
+
+flexi_logger_0_31_10 = add_project_test(
+    name="flexi_logger_0_31_10",
+    rust="1.93.0",
+    url="https://github.com/emabee/flexi_logger.git",
+    rev="37e41a47e62613c6806b62a009162af9527eb016",
+    lockfile="$(S)/tst/projects/flexi_logger_0_31_10/Cargo.lock",
+)
+
+pyo3_async_runtimes_0_29_0 = add_project_test(
+    name="pyo3_async_runtimes_0_29_0",
+    rust="1.93.0",
+    url="https://github.com/pyo3/pyo3-async-runtimes.git",
+    rev="58d42b7a3eb239719175c5587b2b7debd9ee134b",
+    lockfile="$(S)/tst/projects/pyo3_async_runtimes_0_29_0/Cargo.lock",
+)
+
+serde_yml_0_0_13 = add_project_test(
+    name="serde_yml_0_0_13",
+    rust="1.93.0",
+    url="https://github.com/sebastienrousseau/serde_yml.git",
+    rev="2bdacd595e59e69832df963bd3b411a6854dfb64",
+    lockfile="$(S)/tst/projects/serde_yml_0_0_13/Cargo.lock",
+)
+
+sigchld_0_2_5 = add_project_test(
+    name="sigchld_0_2_5",
+    rust="1.93.0",
+    url="https://github.com/oconnor663/sigchld.rs.git",
+    rev="0f279e73cefdac2cc66f19357df30a2682fb1570",
+    lockfile="$(S)/tst/projects/sigchld_0_2_5/Cargo.lock",
+)
+
+btoi_0_5_0 = add_project_test(
+    name="btoi_0_5_0",
+    rust="1.93.0",
+    url="https://github.com/niklasf/rust-btoi.git",
+    rev="b8cb1769b8cd9c4c4c90836384fa730a50365ec3",
+    lockfile="$(S)/tst/projects/btoi_0_5_0/Cargo.lock",
+)
+
+slice_group_by_0_3_1 = add_project_test(
+    name="slice_group_by_0_3_1",
+    rust="1.93.0",
+    url="https://github.com/kerollmops/slice-group-by.git",
+    rev="668ee8146c494b26f4c0d279bfc8b7999a0f19b3",
+    lockfile="$(S)/tst/projects/slice_group_by_0_3_1/Cargo.lock",
+)
+
+xml5ever_0_40_0 = add_project_test(
+    name="xml5ever_0_40_0",
+    rust="1.93.0",
+    url="https://github.com/servo/html5ever.git",
+    rev="a193ea7f2492d1e51eb32955a09c241345348dba",
+    manifest="xml5ever",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/xml5ever_0_40_0/Cargo.lock",
+)
+
+ratatui_core_0_1_2 = add_project_test(
+    name="ratatui_core_0_1_2",
+    rust="1.93.0",
+    url="https://github.com/ratatui/ratatui.git",
+    rev="e665c36cb14752a61cd777fbd06dbef8474f2add",
+    manifest="ratatui-core",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/ratatui_core_0_1_2/Cargo.lock",
+)
+
+names_0_14_0 = add_project_test(
+    name="names_0_14_0",
+    rust="1.93.0",
+    url="https://github.com/fnichol/names.git",
+    rev="8f09d5bf9860582c485b5856cbb325642d3e82c2",
+    lockfile="$(S)/tst/projects/names_0_14_0/Cargo.lock",
+)
+
+replace_with_0_1_8 = add_project_test(
+    name="replace_with_0_1_8",
+    rust="1.93.0",
+    url="https://github.com/alecmocatta/replace_with.git",
+    rev="0682a489f4ee3faa26f50d99351ab2d913214b92",
+    lockfile="$(S)/tst/projects/replace_with_0_1_8/Cargo.lock",
+)
+
+kasuari_0_4_12 = add_project_test(
+    name="kasuari_0_4_12",
+    rust="1.93.0",
+    url="https://github.com/ratatui/kasuari.git",
+    rev="168ae0c8a47274a8490783dd78effb474b53a74e",
+    lockfile="$(S)/tst/projects/kasuari_0_4_12/Cargo.lock",
+)
+
+cap_std_4_0_3 = add_project_test(
+    name="cap_std_4_0_3",
+    rust="1.93.0",
+    url="https://github.com/bytecodealliance/cap-std.git",
+    rev="b7acf8e8807fe3fab991884d2208b7e03d35a409",
+    manifest="cap-std",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/cap_std_4_0_3/Cargo.lock",
+)
+
+hmac_sha512_1_1_13 = add_project_test(
+    name="hmac_sha512_1_1_13",
+    rust="1.93.0",
+    url="https://github.com/jedisct1/rust-hmac-sha512.git",
+    rev="b01757cc2ff26487b403f587262fd0db402a5a52",
+    lockfile="$(S)/tst/projects/hmac_sha512_1_1_13/Cargo.lock",
+)
+
+indent_write_2_2_0 = add_project_test(
+    name="indent_write_2_2_0",
+    rust="1.93.0",
+    url="https://github.com/lucretiel/indent-write.git",
+    rev="a020a90843a2a58dc782a5df9762fcb863db7009",
+    lockfile="$(S)/tst/projects/indent_write_2_2_0/Cargo.lock",
+)
+
+owning_ref_0_4_1 = add_project_test(
+    name="owning_ref_0_4_1",
+    rust="1.93.0",
+    url="https://github.com/kimundi/owning-ref-rs.git",
+    rev="677c5bbe33210e65ababfd46eeb2b7aaab41f94d",
+    lockfile="$(S)/tst/projects/owning_ref_0_4_1/Cargo.lock",
+)
+
+utoipa_swagger_ui_10_0_1 = add_project_test(
+    name="utoipa_swagger_ui_10_0_1",
+    rust="1.93.0",
+    url="https://github.com/juhaku/utoipa.git",
+    rev="4225d2ebefa86696affc69fdd5b38a8c38cb3eca",
+    manifest="utoipa-swagger-ui",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/utoipa_swagger_ui_10_0_1/Cargo.lock",
+)
+
+migrations_internals_2_3_0 = add_project_test(
+    name="migrations_internals_2_3_0",
+    rust="1.93.0",
+    url="https://github.com/diesel-rs/diesel.git",
+    rev="5aa6c654fe2a4a8ee454e164e5b8478173aca112",
+    manifest="diesel_migrations/migrations_internals",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/migrations_internals_2_3_0/Cargo.lock",
+)
+
+sse_stream_0_3_0 = add_project_test(
+    name="sse_stream_0_3_0",
+    rust="1.93.0",
+    url="https://github.com/4t145/sse-stream.git",
+    rev="121c2ecc0472e3f3a75346a05fa2ec5d5b372e59",
+    lockfile="$(S)/tst/projects/sse_stream_0_3_0/Cargo.lock",
+)
+
+libyml_0_0_6 = add_project_test(
+    name="libyml_0_0_6",
+    rust="1.93.0",
+    url="https://github.com/sebastienrousseau/libyml.git",
+    rev="764472125a3619113eedb0ff3dd7bac9252b931c",
+    lockfile="$(S)/tst/projects/libyml_0_0_6/Cargo.lock",
+)
+
+syn_derive_0_2_0 = add_project_test(
+    name="syn_derive_0_2_0",
+    rust="1.93.0",
+    url="https://github.com/kyuuhachi/syn_derive.git",
+    rev="5e4779d66a16eb2de1745fb5d1a3cb09594dfe62",
+    lockfile="$(S)/tst/projects/syn_derive_0_2_0/Cargo.lock",
+)
+
+bollard_buildkit_proto_0_9_1 = add_project_test(
+    name="bollard_buildkit_proto_0_9_1",
+    rust="1.93.0",
+    url="https://github.com/fussybeaver/bollard.git",
+    rev="7429547f4881e97575fa344eb0409c5e222357a5",
+    manifest="codegen/proto",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/bollard_buildkit_proto_0_9_1/Cargo.lock",
+)
+
+solana_sdk_macro_3_0_1 = add_project_test(
+    name="solana_sdk_macro_3_0_1",
+    rust="1.93.0",
+    url="https://github.com/anza-xyz/solana-sdk.git",
+    rev="444d56c9badaece3de86586216e6f5f7b750b938",
+    manifest="sdk-macro",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/solana_sdk_macro_3_0_1/Cargo.lock",
+)
+
+log4rs_1_4_0 = add_project_test(
+    name="log4rs_1_4_0",
+    rust="1.93.0",
+    url="https://github.com/estk/log4rs.git",
+    rev="2220d705a7ed19b43f0ccfe2772e86ef72151bd4",
+    lockfile="$(S)/tst/projects/log4rs_1_4_0/Cargo.lock",
+)
+
+xdg_3_0_0 = add_project_test(
+    name="xdg_3_0_0",
+    rust="1.93.0",
+    url="https://github.com/whitequark/rust-xdg.git",
+    rev="c0f6bc329b0fd92b015a55bcbbee72b2864fae4b",
+    lockfile="$(S)/tst/projects/xdg_3_0_0/Cargo.lock",
+)
+
+unscanny_0_1_0 = add_project_test(
+    name="unscanny_0_1_0",
+    rust="1.93.0",
+    url="https://github.com/typst/unscanny.git",
+    rev="168fa7a05fe2931f86a788e26d7bfb67185767b5",
+    lockfile="$(S)/tst/projects/unscanny_0_1_0/Cargo.lock",
+)
+
+ark_bls12_381_0_6_0 = add_project_test(
+    name="ark_bls12_381_0_6_0",
+    rust="1.93.0",
+    url="https://github.com/arkworks-rs/algebra.git",
+    rev="bffa52711f225e888c1a91e1ec9fc59f2d9d5c94",
+    manifest="curves/bls12_381",
+    vendor_manifest="curves",
+    lockfile="$(S)/tst/projects/ark_bls12_381_0_6_0/Cargo.lock",
+)
+
+blake2s_simd_1_0_5 = add_project_test(
+    name="blake2s_simd_1_0_5",
+    rust="1.93.0",
+    url="https://github.com/oconnor663/blake2_simd.git",
+    rev="47714dc3c424e82213d7f2eb4a833e3843017be5",
+    manifest="blake2s",
+    vendor_manifest="blake2s",
+    lockfile="$(S)/tst/projects/blake2s_simd_1_0_5/Cargo.lock",
+)
+
+fast_float2_0_2_4 = add_project_test(
+    name="fast_float2_0_2_4",
+    rust="1.93.0",
+    url="https://github.com/alexhuszagh/fast-float-rust.git",
+    rev="dece2b139e3321995256c667c4fc429f6f66d50b",
+    lockfile="$(S)/tst/projects/fast_float2_0_2_4/Cargo.lock",
+)
+
+pretty_0_12_5 = add_project_test(
+    name="pretty_0_12_5",
+    rust="1.93.0",
+    url="https://github.com/marwes/pretty.rs.git",
+    rev="709bc0b91b9711f98c0830f555bf6db76271182d",
+    lockfile="$(S)/tst/projects/pretty_0_12_5/Cargo.lock",
+)
+
+line_clipping_0_3_8 = add_project_test(
+    name="line_clipping_0_3_8",
+    rust="1.93.0",
+    url="https://github.com/ratatui/line-clipping.git",
+    rev="365a9ec8e488ed691fadae5e64e32f6c75c22b52",
+    lockfile="$(S)/tst/projects/line_clipping_0_3_8/Cargo.lock",
+)
+
+serde_html_form_0_4_1 = add_project_test(
+    name="serde_html_form_0_4_1",
+    rust="1.93.0",
+    url="https://codeberg.org/jplatte/serde_html_form.git",
+    rev="e34eef213422f108fef26e8a1c59b72b873f0b01",
+    lockfile="$(S)/tst/projects/serde_html_form_0_4_1/Cargo.lock",
+)
+
+alloy_rlp_derive_0_3_16 = add_project_test(
+    name="alloy_rlp_derive_0_3_16",
+    rust="1.93.0",
+    url="https://github.com/alloy-rs/rlp.git",
+    rev="87cd1b72eddd24410b0cf782436ad3ea94262d05",
+    manifest="crates/rlp-derive",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/alloy_rlp_derive_0_3_16/Cargo.lock",
+)
+
+measure_time_0_9_0 = add_project_test(
+    name="measure_time_0_9_0",
+    rust="1.93.0",
+    url="https://github.com/pseitz/rust_measure_time.git",
+    rev="a8981215f46635c0ffcb8f461e6a15bc6d2f0277",
+    lockfile="$(S)/tst/projects/measure_time_0_9_0/Cargo.lock",
+)
+
+prefix_trie_0_10_1 = add_project_test(
+    name="prefix_trie_0_10_1",
+    rust="1.93.0",
+    url="https://github.com/tiborschneider/prefix-trie.git",
+    rev="875d3d79ee4e89bee0f7e508383be7057e7e621e",
+    lockfile="$(S)/tst/projects/prefix_trie_0_10_1/Cargo.lock",
+)
+
+actix_tls_3_6_1 = add_project_test(
+    name="actix_tls_3_6_1",
+    rust="1.93.0",
+    url="https://github.com/actix/actix-net.git",
+    rev="95524f35f4ec8aa791d340366dbf335f77ff1bf5",
+    manifest="actix-tls",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/actix_tls_3_6_1/Cargo.lock",
+)
+
+rust_argon2_3_0_0 = add_project_test(
+    name="rust_argon2_3_0_0",
+    rust="1.93.0",
+    url="https://github.com/sru-systems/rust-argon2.git",
+    rev="ed81866f163f0c7026aa6fd8388adf37242eb32a",
+    lockfile="$(S)/tst/projects/rust_argon2_3_0_0/Cargo.lock",
+)
+
+serde_transcode_1_1_1 = add_project_test(
+    name="serde_transcode_1_1_1",
+    rust="1.93.0",
+    url="https://github.com/sfackler/serde-transcode.git",
+    rev="7c8dae5816dae317b0132ee02a35bb5d59b163a7",
+    lockfile="$(S)/tst/projects/serde_transcode_1_1_1/Cargo.lock",
+)
+
+xmltree_0_12_0 = add_project_test(
+    name="xmltree_0_12_0",
+    rust="1.93.0",
+    url="https://github.com/eminence/xmltree-rs.git",
+    rev="a4b85b4b9e4ce7afbbe6cea7c3d56840d8bc963d",
+    lockfile="$(S)/tst/projects/xmltree_0_12_0/Cargo.lock",
+)
+
+rust_decimal_macros_1_40_0 = add_project_test(
+    name="rust_decimal_macros_1_40_0",
+    rust="1.93.0",
+    url="https://github.com/paupino/rust-decimal.git",
+    rev="96933153ea066ea8b96c7cbfb8e83a308c02e04f",
+    manifest="macros",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/rust_decimal_macros_1_40_0/Cargo.lock",
+)
+
+slog_stdlog_4_1_1 = add_project_test(
+    name="slog_stdlog_4_1_1",
+    rust="1.93.0",
+    url="https://github.com/slog-rs/stdlog.git",
+    rev="c6eba10a72443d7bf0f4024fa2a2db75cd63fbdd",
+    lockfile="$(S)/tst/projects/slog_stdlog_4_1_1/Cargo.lock",
+)
+
+fail_0_5_1 = add_project_test(
+    name="fail_0_5_1",
+    rust="1.93.0",
+    url="https://github.com/tikv/fail-rs.git",
+    rev="5bc95a14850e386dc07670c4a711b698e7e5b0bb",
+    lockfile="$(S)/tst/projects/fail_0_5_1/Cargo.lock",
+)
+
+memo_map_0_3_4 = add_project_test(
+    name="memo_map_0_3_4",
+    rust="1.93.0",
+    url="https://github.com/mitsuhiko/memo-map.git",
+    rev="8e6cdcf927de8a2154b2559622a818c854ff735b",
+    lockfile="$(S)/tst/projects/memo_map_0_3_4/Cargo.lock",
+)
+
+sysctl_0_7_1 = add_project_test(
+    name="sysctl_0_7_1",
+    rust="1.93.0",
+    url="https://github.com/johalun/sysctl-rs.git",
+    rev="ee85dc0d9fb67f82dac24c4b31cde6646fef416b",
+    lockfile="$(S)/tst/projects/sysctl_0_7_1/Cargo.lock",
+)
+
+murmurhash32_0_4_0 = add_project_test(
+    name="murmurhash32_0_4_0",
+    rust="1.93.0",
+    url="https://github.com/quickwit-inc/murmurhash32.git",
+    rev="23fff70ddd628a1f47db5616f01e3bb3a9e8b1e7",
+    lockfile="$(S)/tst/projects/murmurhash32_0_4_0/Cargo.lock",
+)
+
+google_cloud_storage_1_20_0 = add_project_test(
+    name="google_cloud_storage_1_20_0",
+    rust="1.93.0",
+    url="https://github.com/googleapis/google-cloud-rust.git",
+    rev="2a03d923a0d56114e15cc7404de33992111c854b",
+    manifest="src/storage",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/google_cloud_storage_1_20_0/Cargo.lock",
+)
+
+trackable_derive_1_0_0 = add_project_test(
+    name="trackable_derive_1_0_0",
+    rust="1.93.0",
+    url="https://github.com/sile/trackable_derive.git",
+    rev="2e4444d904ce2650bd0a346912017a9e90f6e318",
+    lockfile="$(S)/tst/projects/trackable_derive_1_0_0/Cargo.lock",
+)
+
+census_0_4_2 = add_project_test(
+    name="census_0_4_2",
+    rust="1.93.0",
+    url="https://github.com/quickwit-inc/census.git",
+    rev="ca2f3735c6305536b15444ced6ee5da5d86ffea9",
+    lockfile="$(S)/tst/projects/census_0_4_2/Cargo.lock",
+)
+
+simd_json_0_18_1 = add_project_test(
+    name="simd_json_0_18_1",
+    rust="1.93.0",
+    url="https://github.com/simd-lite/simd-json.git",
+    rev="61d649d13fae83ac6d9f587863696be2741f5b8b",
+    lockfile="$(S)/tst/projects/simd_json_0_18_1/Cargo.lock",
+)
+
+uritemplate_next_0_2_0 = add_project_test(
+    name="uritemplate_next_0_2_0",
+    rust="1.93.0",
+    url="https://github.com/judemille/rust-uritemplate.git",
+    rev="8c0c9ed48d40f7352e5ffccf787546045ad8a464",
+    lockfile="$(S)/tst/projects/uritemplate_next_0_2_0/Cargo.lock",
+)
+
+fastdivide_0_4_2 = add_project_test(
+    name="fastdivide_0_4_2",
+    rust="1.93.0",
+    url="https://github.com/fulmicoton/fastdivide.git",
+    rev="1ed33f15429320d1bc928786083e088531200717",
+    lockfile="$(S)/tst/projects/fastdivide_0_4_2/Cargo.lock",
+)
+
+tz_rs_0_7_3 = add_project_test(
+    name="tz_rs_0_7_3",
+    rust="1.93.0",
+    url="https://github.com/x-hgg-x/tz-rs.git",
+    rev="9f26398ae57cf638c6a9b1ae3e925e476ac9b991",
+    lockfile="$(S)/tst/projects/tz_rs_0_7_3/Cargo.lock",
+)
+
+tantivy_fst_0_5_0 = add_project_test(
+    name="tantivy_fst_0_5_0",
+    rust="1.93.0",
+    url="https://github.com/quickwit-inc/fst.git",
+    rev="29e16b3ec1b62fa21bcf4ba65d28088e67a5663f",
+    lockfile="$(S)/tst/projects/tantivy_fst_0_5_0/Cargo.lock",
+)
+
+text_size_1_1_1 = add_project_test(
+    name="text_size_1_1_1",
+    rust="1.93.0",
+    url="https://github.com/rust-analyzer/text-size.git",
+    rev="5f22fbe12550a2c70caff9a8c5347d6722370469",
+    lockfile="$(S)/tst/projects/text_size_1_1_1/Cargo.lock",
+)
+
+alloy_eips_2_1_1 = add_project_test(
+    name="alloy_eips_2_1_1",
+    rust="1.93.0",
+    url="https://github.com/alloy-rs/alloy.git",
+    rev="7ac706c5fb3510ab648518e16dba0e29d5b7aeb7",
+    manifest="crates/eips",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/alloy_eips_2_1_1/Cargo.lock",
+)
+
+ratelimit_2_0_0 = add_project_test(
+    name="ratelimit_2_0_0",
+    rust="1.93.0",
+    url="https://github.com/iopsystems/ratelimit.git",
+    rev="dbf47e66db5919a32e3a3ea3f8f49bf6169c4be9",
+    lockfile="$(S)/tst/projects/ratelimit_2_0_0/Cargo.lock",
+)
+
+wildmatch_2_6_1 = add_project_test(
+    name="wildmatch_2_6_1",
+    rust="1.93.0",
+    url="https://github.com/becheran/wildmatch.git",
+    rev="ca6568be7e9cf5b4487bae0ca5c8068bf27e6c38",
+    lockfile="$(S)/tst/projects/wildmatch_2_6_1/Cargo.lock",
+)
+
+intrusive_collections_0_10_3 = add_project_test(
+    name="intrusive_collections_0_10_3",
+    rust="1.93.0",
+    url="https://github.com/amanieu/intrusive-rs.git",
+    rev="0a895642801c9a75521f93f6605c7cc707e61f73",
+    lockfile="$(S)/tst/projects/intrusive_collections_0_10_3/Cargo.lock",
+)
+
+envy_0_4_2 = add_project_test(
+    name="envy_0_4_2",
+    rust="1.93.0",
+    url="https://github.com/softprops/envy.git",
+    rev="007a41eb27a73e2ed12e78d153027a25a61b6109",
+    lockfile="$(S)/tst/projects/envy_0_4_2/Cargo.lock",
+)
+
+halfbrown_0_4_0 = add_project_test(
+    name="halfbrown_0_4_0",
+    rust="1.93.0",
+    url="https://github.com/licenser/halfbrown.git",
+    rev="9747ebbf39a0780ab6f97cd310cb0a3940ee71dd",
+    lockfile="$(S)/tst/projects/halfbrown_0_4_0/Cargo.lock",
+)
+
+qrcode_0_14_1 = add_project_test(
+    name="qrcode_0_14_1",
+    rust="1.93.0",
+    url="https://github.com/kennytm/qrcode-rust.git",
+    rev="0695f037c5b43999a6cdf08984974b8d0388ad78",
+    lockfile="$(S)/tst/projects/qrcode_0_14_1/Cargo.lock",
+)
+
+ct_codecs_1_1_8 = add_project_test(
+    name="ct_codecs_1_1_8",
+    rust="1.93.0",
+    url="https://github.com/jedisct1/rust-ct-codecs.git",
+    rev="7d2f0659ef24ca849eba0ac1a718310fd73e6e4a",
+    lockfile="$(S)/tst/projects/ct_codecs_1_1_8/Cargo.lock",
+)
+
+inquire_0_9_4 = add_project_test(
+    name="inquire_0_9_4",
+    rust="1.93.0",
+    url="https://github.com/mikaelmello/inquire.git",
+    rev="3d5b65422a247acc773d767558e34fcb69ab04bf",
+    manifest="inquire",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/inquire_0_9_4/Cargo.lock",
+)
+
+actix_cors_0_7_2 = add_project_test(
+    name="actix_cors_0_7_2",
+    rust="1.93.0",
+    url="https://github.com/actix/actix-extras.git",
+    rev="ef0dcbcc6aeebbda222cab544374db749202d286",
+    manifest="actix-cors",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/actix_cors_0_7_2/Cargo.lock",
+)
+
+async_graphql_axum_7_2_1 = add_project_test(
+    name="async_graphql_axum_7_2_1",
+    rust="1.93.0",
+    url="https://github.com/async-graphql/async-graphql.git",
+    rev="86a19327ec14e20b702de79b5a761fb735ac2428",
+    manifest="integrations/axum",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/async_graphql_axum_7_2_1/Cargo.lock",
+)
+
+macro_string_0_3_0 = add_project_test(
+    name="macro_string_0_3_0",
+    rust="1.93.0",
+    url="https://github.com/dtolnay/macro-string.git",
+    rev="5c4896a520828b929f1f59a80a7c625e92a8da22",
+    lockfile="$(S)/tst/projects/macro_string_0_3_0/Cargo.lock",
+)
+
+clocksource_1_0_1 = add_project_test(
+    name="clocksource_1_0_1",
+    rust="1.93.0",
+    url="https://github.com/iopsystems/clocksource.git",
+    rev="c14ddc2de2b22af0741e4c67dafb19f00fc83eee",
+    lockfile="$(S)/tst/projects/clocksource_1_0_1/Cargo.lock",
+)
+
+value_trait_0_12_2 = add_project_test(
+    name="value_trait_0_12_2",
+    rust="1.93.0",
+    url="https://github.com/simd-lite/value-trait.git",
+    rev="619632c5400dd6b14fc02b5511797b82675ccd79",
+    lockfile="$(S)/tst/projects/value_trait_0_12_2/Cargo.lock",
+)
+
+qstring_0_7_2 = add_project_test(
+    name="qstring_0_7_2",
+    rust="1.93.0",
+    url="https://github.com/algesten/qstring.git",
+    rev="c46cf6526e5108e499f66ff948fa58f5a60a7611",
+    lockfile="$(S)/tst/projects/qstring_0_7_2/Cargo.lock",
+)
+
+addr_0_15_6 = add_project_test(
+    name="addr_0_15_6",
+    rust="1.93.0",
+    url="https://github.com/addr-rs/addr.git",
+    rev="700d7969abdb38c533012d98dff541f5313b6c7e",
+    lockfile="$(S)/tst/projects/addr_0_15_6/Cargo.lock",
+)
+
+oci_spec_0_10_0 = add_project_test(
+    name="oci_spec_0_10_0",
+    rust="1.93.0",
+    url="https://github.com/youki-dev/oci-spec-rs.git",
+    rev="1cc1afb0e9a68403d8fb5bde1a3d05db968f41d3",
+    lockfile="$(S)/tst/projects/oci_spec_0_10_0/Cargo.lock",
+)
+
+kuchikiki_0_8_2 = add_project_test(
+    name="kuchikiki_0_8_2",
+    rust="1.93.0",
+    url="https://github.com/brave/kuchikiki.git",
+    rev="afd62e8ef79df1c82861b96523c96d35394afe70",
+    lockfile="$(S)/tst/projects/kuchikiki_0_8_2/Cargo.lock",
+)
+
+parse_size_1_1_0 = add_project_test(
+    name="parse_size_1_1_0",
+    rust="1.93.0",
+    url="https://github.com/kennytm/parse-size.git",
+    rev="8f2bc5a8635abc3db760f0eb857b77fd78b3d08c",
+    lockfile="$(S)/tst/projects/parse_size_1_1_0/Cargo.lock",
+)
+
+minicov_0_3_9 = add_project_test(
+    name="minicov_0_3_9",
+    rust="1.93.0",
+    url="https://github.com/amanieu/minicov.git",
+    rev="03886b886ce16b9309ddd38e4824970e70fc0588",
+    manifest="minicov",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/minicov_0_3_9/Cargo.lock",
+)
+
+aquamarine_0_6_0 = add_project_test(
+    name="aquamarine_0_6_0",
+    rust="1.93.0",
+    url="https://github.com/mersinvald/aquamarine.git",
+    rev="42d1267c53da9039e48009005e958eb1dce7d58b",
+    lockfile="$(S)/tst/projects/aquamarine_0_6_0/Cargo.lock",
+)
+
+xshell_macros_0_2_7 = add_project_test(
+    name="xshell_macros_0_2_7",
+    rust="1.93.0",
+    url="https://github.com/matklad/xshell.git",
+    rev="9a405946ecbbfe50fe4a7229bd764194154e4ce6",
+    manifest="xshell-macros",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/xshell_macros_0_2_7/Cargo.lock",
+)
+
+glutin_winit_0_5_0 = add_project_test(
+    name="glutin_winit_0_5_0",
+    rust="1.93.0",
+    url="https://github.com/rust-windowing/glutin.git",
+    rev="0811b6c753334f1681c7db8a48e407596cfa9366",
+    manifest="glutin-winit",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/glutin_winit_0_5_0/Cargo.lock",
+)
+
+build_const_0_2_2 = add_project_test(
+    name="build_const_0_2_2",
+    rust="1.93.0",
+    url="https://github.com/vitiral/build_const.git",
+    rev="0133284bfd772517fbc72a584bf23994c4c78ff3",
+    lockfile="$(S)/tst/projects/build_const_0_2_2/Cargo.lock",
+)
+
+route_recognizer_0_3_1 = add_project_test(
+    name="route_recognizer_0_3_1",
+    rust="1.93.0",
+    url="https://github.com/rustasync/route-recognizer.git",
+    rev="14b94114a83a4e0d4398bce2e77dc501f0f7ab1a",
+    lockfile="$(S)/tst/projects/route_recognizer_0_3_1/Cargo.lock",
+)
+
+multiversion_0_9_0 = add_project_test(
+    name="multiversion_0_9_0",
+    rust="1.93.0",
+    url="https://github.com/calebzulawski/multiversion.git",
+    rev="357638046dd3834815b34df80403d1050c30e1c7",
+    manifest="multiversion",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/multiversion_0_9_0/Cargo.lock",
+)
+
+path_dedot_4_0_1 = add_project_test(
+    name="path_dedot_4_0_1",
+    rust="1.93.0",
+    url="https://github.com/magiclen/path-dedot.git",
+    rev="d808a929403c7bb9db74b913860ab08adc513088",
+    lockfile="$(S)/tst/projects/path_dedot_4_0_1/Cargo.lock",
+)
+
+tiny_bip39_2_0_0 = add_project_test(
+    name="tiny_bip39_2_0_0",
+    rust="1.93.0",
+    url="https://github.com/maciejhirsz/tiny-bip39.git",
+    rev="9288d319805009bae1d841af068e97d585c1f124",
+    lockfile="$(S)/tst/projects/tiny_bip39_2_0_0/Cargo.lock",
+)
+
+typewit_1_15_2 = add_project_test(
+    name="typewit_1_15_2",
+    rust="1.93.0",
+    url="https://github.com/rodrimati1992/typewit.git",
+    rev="234645454b33dd6360a3454ed826d5976a44db50",
+    lockfile="$(S)/tst/projects/typewit_1_15_2/Cargo.lock",
+)
+
+ppmd_rust_1_5_0 = add_project_test(
+    name="ppmd_rust_1_5_0",
+    rust="1.93.0",
+    url="https://github.com/hasenbanck/ppmd-rust.git",
+    rev="9bde016dfe76e8382463f917308cb57fdeee5045",
+    lockfile="$(S)/tst/projects/ppmd_rust_1_5_0/Cargo.lock",
+)
+
+assert_fs_1_1_4 = add_project_test(
+    name="assert_fs_1_1_4",
+    rust="1.93.0",
+    url="https://github.com/assert-rs/assert_fs.git",
+    rev="e943103fcd8f613578ca87e3ebaf68f88aee152b",
+    lockfile="$(S)/tst/projects/assert_fs_1_1_4/Cargo.lock",
+)
+
+multistream_select_0_14_0 = add_project_test(
+    name="multistream_select_0_14_0",
+    rust="1.93.0",
+    url="https://github.com/libp2p/rust-libp2p.git",
+    rev="7171dce2f90c05ba7892d4ba926abb1881db27c7",
+    manifest="misc/multistream-select",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/multistream_select_0_14_0/Cargo.lock",
+)
+
+temp_env_0_3_6 = add_project_test(
+    name="temp_env_0_3_6",
+    rust="1.93.0",
+    url="https://github.com/vmx/temp-env.git",
+    rev="0a73ae3c26353c062c709c9e7ef18754ad17645a",
+    lockfile="$(S)/tst/projects/temp_env_0_3_6/Cargo.lock",
+)
+
+accesskit_consumer_0_39_1 = add_project_test(
+    name="accesskit_consumer_0_39_1",
+    rust="1.93.0",
+    url="https://github.com/accesskit/accesskit.git",
+    rev="ce8164ba92995cfa86005b6259115e08c8244253",
+    manifest="accesskit_consumer",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/accesskit_consumer_0_39_1/Cargo.lock",
+)
+
+geographiclib_rs_0_2_7 = add_project_test(
+    name="geographiclib_rs_0_2_7",
+    rust="1.93.0",
+    url="https://github.com/georust/geographiclib-rs.git",
+    rev="e25e5b99b9450f4595d27ae5bbe2d9e037d1ceab",
+    lockfile="$(S)/tst/projects/geographiclib_rs_0_2_7/Cargo.lock",
+)
+
+saturating_0_1_0 = add_project_test(
+    name="saturating_0_1_0",
+    rust="1.93.0",
+    url="https://github.com/breeswish/saturating-rs.git",
+    rev="dd94843754b2f42e21a53513c86a2fe8c823d5ab",
+    lockfile="$(S)/tst/projects/saturating_0_1_0/Cargo.lock",
+)
+
+iban_validate_5_0_1 = add_project_test(
+    name="iban_validate_5_0_1",
+    rust="1.93.0",
+    url="https://github.com/thomasdenh/iban_check.git",
+    rev="a3a8ae4ca72c71d1371a59aaf5ef64c0d94dadfe",
+    manifest="iban_validate",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/iban_validate_5_0_1/Cargo.lock",
+)
+
+retry_2_2_0 = add_project_test(
+    name="retry_2_2_0",
+    rust="1.93.0",
+    url="https://github.com/jimmycuadra/retry.git",
+    rev="f3c92f309a4155b71b5b2a4b8be159911deeb265",
+    lockfile="$(S)/tst/projects/retry_2_2_0/Cargo.lock",
+)
+
+pathfinder_simd_0_5_6 = add_project_test(
+    name="pathfinder_simd_0_5_6",
+    rust="1.93.0",
+    url="https://github.com/servo/pathfinder.git",
+    rev="6c3c0466f451c5bd2007087728cd168798cd64e8",
+    manifest="simd",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/pathfinder_simd_0_5_6/Cargo.lock",
+)
+
+spade_2_15_1 = add_project_test(
+    name="spade_2_15_1",
+    rust="1.93.0",
+    url="https://github.com/stoeoef/spade.git",
+    rev="c8befc96bbbc1898a89cb19f9f3104a848936374",
+    lockfile="$(S)/tst/projects/spade_2_15_1/Cargo.lock",
+)
+
+stats_alloc_0_1_10 = add_project_test(
+    name="stats_alloc_0_1_10",
+    rust="1.93.0",
+    url="https://github.com/neoeinstein/stats_alloc.git",
+    rev="be31f749696faab326bf18b5dd75eaf93010693d",
+    lockfile="$(S)/tst/projects/stats_alloc_0_1_10/Cargo.lock",
+)
+
+ringbuf_0_5_3 = add_project_test(
+    name="ringbuf_0_5_3",
+    rust="1.93.0",
+    url="https://github.com/agerasev/ringbuf.git",
+    rev="0e8b660b96b0f214475523d0e03b7b57ac1e0bda",
+    lockfile="$(S)/tst/projects/ringbuf_0_5_3/Cargo.lock",
+)
+
+state_0_6_0 = add_project_test(
+    name="state_0_6_0",
+    rust="1.93.0",
+    url="https://github.com/sergiobenitez/state.git",
+    rev="dc6ab620f19e5dae3e731353cbddc6d55a2b126e",
+    lockfile="$(S)/tst/projects/state_0_6_0/Cargo.lock",
+)
+
+bcrypt_0_19_3 = add_project_test(
+    name="bcrypt_0_19_3",
+    rust="1.93.0",
+    url="https://github.com/keats/rust-bcrypt.git",
+    rev="d8c4bb38823d8c79198323f69e7283255a1dbcbc",
+    lockfile="$(S)/tst/projects/bcrypt_0_19_3/Cargo.lock",
+)
+
+visibility_0_1_1 = add_project_test(
+    name="visibility_0_1_1",
+    rust="1.93.0",
+    url="https://github.com/danielhenrymantilla/visibility.rs.git",
+    rev="1caddb977e2e8e03c9f6f9672287e148498095ff",
+    lockfile="$(S)/tst/projects/visibility_0_1_1/Cargo.lock",
+)
+
+rustyxml_0_3_0 = add_project_test(
+    name="rustyxml_0_3_0",
+    rust="1.93.0",
+    url="https://github.com/florob/rustyxml.git",
+    rev="043b2b49d66963320a539b186a5c16850a29497e",
+    lockfile="$(S)/tst/projects/rustyxml_0_3_0/Cargo.lock",
+)
+
+bytes_varint_1_1_0 = add_project_test(
+    name="bytes_varint_1_1_0",
+    rust="1.93.0",
+    url="https://github.com/arnohaase/bytes-varint.git",
+    rev="dd7a0152163eb98986309207ccb24379da19f0c5",
+    lockfile="$(S)/tst/projects/bytes_varint_1_1_0/Cargo.lock",
+)
+
+vsdb_17_0_9 = add_project_test(
+    name="vsdb_17_0_9",
+    rust="1.93.0",
+    url="https://github.com/rust-util-collections/vsdb.git",
+    rev="9c0d5dbab2617a104c92787aa5a94cbd68439fa9",
+    manifest="strata",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/vsdb_17_0_9/Cargo.lock",
+)
+
+drain_filter_polyfill_0_1_3 = add_project_test(
+    name="drain_filter_polyfill_0_1_3",
+    rust="1.93.0",
+    url="https://github.com/whentze/drain_filter_polyfill.git",
+    rev="9dc585f3eec048bfc3faf8656e07c4a19273c38f",
+    lockfile="$(S)/tst/projects/drain_filter_polyfill_0_1_3/Cargo.lock",
+)
+
+clap_verbosity_flag_3_0_4 = add_project_test(
+    name="clap_verbosity_flag_3_0_4",
+    rust="1.93.0",
+    url="https://github.com/clap-rs/clap-verbosity-flag.git",
+    rev="5e051e6c9649352234c5500de6d80118ca56be91",
+    lockfile="$(S)/tst/projects/clap_verbosity_flag_3_0_4/Cargo.lock",
+)
+
+tiktoken_rs_0_12_1 = add_project_test(
+    name="tiktoken_rs_0_12_1",
+    rust="1.93.0",
+    url="https://github.com/zurawiki/tiktoken-rs.git",
+    rev="72a5a800651a1cea1ad609292446ba02c80e3bcd",
+    manifest="tiktoken-rs",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/tiktoken_rs_0_12_1/Cargo.lock",
+)
+
+portpicker_0_1_1 = add_project_test(
+    name="portpicker_0_1_1",
+    rust="1.93.0",
+    url="https://github.com/dentosal/portpicker-rs.git",
+    rev="47842740f9a42423701b8b041de2e4a219cb6684",
+    lockfile="$(S)/tst/projects/portpicker_0_1_1/Cargo.lock",
+)
+
+validator_types_0_16_0 = add_project_test(
+    name="validator_types_0_16_0",
+    rust="1.93.0",
+    url="https://github.com/keats/validator.git",
+    rev="44cc91749c675985468e59e126d76465fc675fb5",
+    manifest="validator_types",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/validator_types_0_16_0/Cargo.lock",
+)
+
+http_range_0_1_5 = add_project_test(
+    name="http_range_0_1_5",
+    rust="1.93.0",
+    url="https://github.com/bancek/rust-http-range.git",
+    rev="a5d770ae585891a02f4be4cfee9175cdaaffa454",
+    lockfile="$(S)/tst/projects/http_range_0_1_5/Cargo.lock",
+)
+
+atomicwrites_0_4_4 = add_project_test(
+    name="atomicwrites_0_4_4",
+    rust="1.93.0",
+    url="https://github.com/untitaker/rust-atomicwrites.git",
+    rev="bfad85d09eabce6414285024fcdcb4d01830726b",
+    lockfile="$(S)/tst/projects/atomicwrites_0_4_4/Cargo.lock",
+)
+
+subprocess_1_2_1 = add_project_test(
+    name="subprocess_1_2_1",
+    rust="1.93.0",
+    url="https://github.com/hniksic/rust-subprocess.git",
+    rev="e8cd8d0c930a790ce29373a8c3ee080dd746b9eb",
+    lockfile="$(S)/tst/projects/subprocess_1_2_1/Cargo.lock",
+)
+
+protoc_gen_prost_0_5_0 = add_project_test(
+    name="protoc_gen_prost_0_5_0",
+    rust="1.93.0",
+    url="https://github.com/neoeinstein/protoc-gen-prost.git",
+    rev="6915e08b082a15feb260062fe82d049edc0eadd6",
+    manifest="protoc-gen-prost",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/protoc_gen_prost_0_5_0/Cargo.lock",
+)
+
+alloy_eip7702_0_6_3 = add_project_test(
+    name="alloy_eip7702_0_6_3",
+    rust="1.93.0",
+    url="https://github.com/alloy-rs/eips.git",
+    rev="6e469eff444ae73b07dc7c93536db0948f480cfe",
+    manifest="crates/eip7702",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/alloy_eip7702_0_6_3/Cargo.lock",
+)
+
+manyhow_0_14_0 = add_project_test(
+    name="manyhow_0_14_0",
+    rust="1.93.0",
+    url="https://github.com/modprog/manyhow.git",
+    rev="eaa6e75880b8e17501e2ff20233ae505348f8a25",
+    lockfile="$(S)/tst/projects/manyhow_0_14_0/Cargo.lock",
+)
+
+region_4_0_1 = add_project_test(
+    name="region_4_0_1",
+    rust="1.93.0",
+    url="https://github.com/darfink/region-rs.git",
+    rev="2eb824240da7fa7f8eb3d296833ecf965d399a10",
+    lockfile="$(S)/tst/projects/region_4_0_1/Cargo.lock",
+)
+
+tracing_opentelemetry_instrumentation_sdk_0_42_1 = add_project_test(
+    name="tracing_opentelemetry_instrumentation_sdk_0_42_1",
+    rust="1.93.0",
+    url="https://github.com/davidb/tracing-opentelemetry-instrumentation-sdk.git",
+    rev="7efdaf5cb7b42265f9142595f731c7969bba9f98",
+    manifest="tracing-opentelemetry-instrumentation-sdk",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/tracing_opentelemetry_instrumentation_sdk_0_42_1/Cargo.lock",
+)
+
+dyn_stack_0_13_2 = add_project_test(
+    name="dyn_stack_0_13_2",
+    rust="1.93.0",
+    url="https://codeberg.org/sarah-quinones/dyn-stack.git",
+    rev="e6b946658df54173dca852a54723115aab7a4a92",
+    lockfile="$(S)/tst/projects/dyn_stack_0_13_2/Cargo.lock",
+)
+
+range_alloc_0_1_5 = add_project_test(
+    name="range_alloc_0_1_5",
+    rust="1.93.0",
+    url="https://github.com/gfx-rs/range-alloc.git",
+    rev="34a5b93f04850e25315f87841d2555f2c0e0ed80",
+    lockfile="$(S)/tst/projects/range_alloc_0_1_5/Cargo.lock",
+)
+
+presser_0_3_1 = add_project_test(
+    name="presser_0_3_1",
+    rust="1.93.0",
+    url="https://github.com/embarkstudios/presser.git",
+    rev="eea263995892b761aae6307b0c2952cc7170a6bb",
+    lockfile="$(S)/tst/projects/presser_0_3_1/Cargo.lock",
+)
+
+constcat_0_6_1 = add_project_test(
+    name="constcat_0_6_1",
+    rust="1.93.0",
+    url="https://github.com/rossmacarthur/constcat.git",
+    rev="e3c05e6965eea8cc2b0315e53ed715488e435d78",
+    lockfile="$(S)/tst/projects/constcat_0_6_1/Cargo.lock",
+)
+
+debug_helper_0_3_14 = add_project_test(
+    name="debug_helper_0_3_14",
+    rust="1.93.0",
+    url="https://github.com/magiclen/debug-helper.git",
+    rev="d5347e876c954cc6226aa1790bac67c56ed3890e",
+    lockfile="$(S)/tst/projects/debug_helper_0_3_14/Cargo.lock",
+)
+
+pgvector_0_4_2 = add_project_test(
+    name="pgvector_0_4_2",
+    rust="1.93.0",
+    url="https://github.com/pgvector/pgvector-rust.git",
+    rev="71506c34dfe22577f4b28750bd1dcbf12ba6e0e8",
+    lockfile="$(S)/tst/projects/pgvector_0_4_2/Cargo.lock",
+)
+
+lambda_runtime_1_4_0 = add_project_test(
+    name="lambda_runtime_1_4_0",
+    rust="1.93.0",
+    url="https://github.com/aws/aws-lambda-rust-runtime.git",
+    rev="831d4817db282a0e2f396c910bc1a1261898c947",
+    manifest="lambda-runtime",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/lambda_runtime_1_4_0/Cargo.lock",
+)
+
+actix_0_13_5 = add_project_test(
+    name="actix_0_13_5",
+    rust="1.93.0",
+    url="https://github.com/actix/actix.git",
+    rev="3815025cfdf6437bda98d35c46aa272e07b821d5",
+    manifest="actix",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/actix_0_13_5/Cargo.lock",
+)
+
 
 # Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
