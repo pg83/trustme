@@ -237,12 +237,18 @@ namespace {
         U128 recvV128uU128();
     };
 
-    struct BlockItemMarkers final: PprustBlockItems {
+    struct ReprintMarkers final: PprustMarkers {
         Vector<const ASTNamed<ASTItem>*> items;
+        Vector<RcString> crates;
 
-        RcString marker(const ASTModule& module, size_t index) override {
+        RcString blockItem(const ASTModule& module, size_t index) override {
             items.pushBack(module.items[index].get());
             return RcString::newInterned(FMT(StringView("__trustme_block_item_") << (items.length() - 1)));
+        }
+
+        RcString dollarCrate(const RcString& crateName) override {
+            crates.pushBack(crateName);
+            return RcString::newInterned(FMT(StringView("__trustme_dollar_crate_") << (crates.length() - 1)));
         }
     };
 
@@ -290,9 +296,9 @@ namespace {
 
         void visitNode(const ASTExprNode& e);
 
-        void parseString(const std::string& s, const BlockItemMarkers* markers = nullptr);
+        void parseString(const std::string& s, const ReprintMarkers* markers = nullptr);
 
-        void parseText(const StringBuilder& text, const BlockItemMarkers* markers = nullptr);
+        void parseText(const StringBuilder& text, const ReprintMarkers* markers = nullptr);
 
         void visitTopAttrs(slice<const ASTAttribute>& attrs);
 
@@ -2586,18 +2592,18 @@ auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
 
     StringBuilder ss;
-    BlockItemMarkers markers;
+    ReprintMarkers markers;
     pprustExprToString(ss, e, &markers);
     ss << StringView(" ");
     parseText(ss, &markers);
 }
 
-auto ProcMacroVisitor::parseText(const StringBuilder& text, const BlockItemMarkers* markers) -> void {
+auto ProcMacroVisitor::parseText(const StringBuilder& text, const ReprintMarkers* markers) -> void {
     DEBUG(StringView("STRING: ") << StringView(text));
     parseString(std::string(static_cast<const char*>(text.data()), text.length()), markers);
 }
 
-auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers* markers) -> void {
+auto ProcMacroVisitor::parseString(const std::string& s, const ReprintMarkers* markers) -> void {
     std::istringstream iss{s};
     Lexer l{wb.id, *wb.pool, iss, ASTEdition::Rust2021, {}};
     for (;;) {
@@ -2612,15 +2618,24 @@ auto ProcMacroVisitor::parseString(const std::string& s, const BlockItemMarkers*
         // TODO: If this is an ident, then get the comment after it that specifies the hygine info
         if (t == TOK_IDENT) {
             const StringView name(reinterpret_cast<const u8*>(t.ident().name.c_str()), t.ident().name.size());
-            const StringView markerPrefix("__trustme_block_item_");
-            if (markers && name.startsWith(markerPrefix)) {
-                size_t index = 0;
-                for (size_t i = markerPrefix.length(); i < name.length(); i++) {
+            size_t index = 0;
+            const auto isMarker = [&](StringView prefix) {
+                if (!markers || !name.startsWith(prefix)) {
+                    return false;
+                }
+                for (size_t i = prefix.length(); i < name.length(); i++) {
                     index = index * 10 + (name[i] - '0');
                 }
+                return true;
+            };
+            if (isMarker(StringView("__trustme_block_item_"))) {
                 const auto& item = *markers->items[index];
                 this->visitAttrs(item.attrs);
                 this->visitItem(item.name, item.vis, item.data);
+                continue;
+            }
+            if (isMarker(StringView("__trustme_dollar_crate_"))) {
+                pmi.sendDollarCrate(Ident::Hygiene(), sp, markers->crates[index]);
                 continue;
             }
             pmi.sendIdent(t.ident().name.c_str());

@@ -310,7 +310,7 @@ namespace {
     struct State: Printer {
         using Printer::Printer;
 
-        PprustBlockItems* blockItems = nullptr;
+        PprustMarkers* markers = nullptr;
 
         void printTts(const TokenTree& tts);
         void printExpr(PExpr e, Fixup fixup);
@@ -325,6 +325,7 @@ namespace {
         void printFlat(const Vector<FlatTok>& flat, size_t begin, size_t end);
 
         void printIdent(const RcString& name);
+        void printDollarCrate(const RcString& crateName);
         void printLifetimeName(const RcString& name);
         void printLabel(const Ident& label);
         void printMutability(bool isMut, bool printConst);
@@ -1527,6 +1528,15 @@ void State::printIdent(const RcString& name) {
     this->word(StringView(reinterpret_cast<const u8*>(name.c_str()), name.size()));
 }
 
+void State::printDollarCrate(const RcString& crateName) {
+    if (!this->markers) {
+        this->word(StringView("$crate"));
+        return;
+    }
+    const auto marker = this->markers->dollarCrate(crateName);
+    this->word(StringView(reinterpret_cast<const u8*>(marker.c_str()), marker.size()));
+}
+
 void State::printLifetimeName(const RcString& name) {
     this->word(StringView("'"));
     this->word(StringView(reinterpret_cast<const u8*>(name.c_str()), name.size()));
@@ -1598,7 +1608,7 @@ void State::printPath(const ASTPath& path, bool colonsBeforeParams) {
                 this->word(StringView("::"));
                 this->word(StringView(crate + 1));
             } else {
-                this->word(StringView("$crate"));
+                this->printDollarCrate(e.crate);
             }
             for (const auto& node : e.nodes) {
                 this->word(StringView("::"));
@@ -2622,13 +2632,13 @@ void State::printBlock(const ASTExprNodeBlock& block, bool hasCb) {
     this->word(StringView("{"));
     this->end();
     bool printedItem = false;
-    if (this->blockItems && block.localMod) {
+    if (this->markers && block.localMod) {
         for (size_t i = 0; i < block.localMod->items.size(); i++) {
             if (block.localMod->items[i]->data.is_None()) {
                 continue;
             }
             this->spaceIfNotBol();
-            const auto marker = this->blockItems->marker(*block.localMod, i);
+            const auto marker = this->markers->blockItem(*block.localMod, i);
             this->word(StringView(reinterpret_cast<const u8*>(marker.c_str()), marker.size()));
             printedItem = true;
         }
@@ -2745,7 +2755,8 @@ void State::printAttribute(const ASTAttribute& attr, bool isInline) {
     this->word(StringView("#["));
     const auto& name = attr.name();
     if (name.crate != RcString()) {
-        this->word(StringView("$crate::"));
+        this->printDollarCrate(name.crate);
+        this->word(StringView("::"));
     } else if (name.hasLeading) {
         this->word(StringView("::"));
     }
@@ -3218,9 +3229,9 @@ void pprustTtsToString(ZeroCopyOutput& out, const TokenTree& tts) {
     state.eof();
 }
 
-void pprustExprToString(ZeroCopyOutput& out, const ASTExprNode& expr, PprustBlockItems* blockItems) {
+void pprustExprToString(ZeroCopyOutput& out, const ASTExprNode& expr, PprustMarkers* markers) {
     State state(out);
-    state.blockItems = blockItems;
+    state.markers = markers;
     state.printExpr(nodeExpr(&expr), Fixup());
     state.eof();
 }
