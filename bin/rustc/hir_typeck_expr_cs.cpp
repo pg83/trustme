@@ -35,6 +35,7 @@ namespace {
 
     const HIRType* coerceCallArgument(Context& context, const Span& sp, const HIRType* formal, const HIRType* expectedInput, HIRExprNodeP& argument, bool argumentSite, bool argumentVisited = false);
     bool expectedInputIsUnsizedHint(Context& context, const Span& sp, const HIRType* type);
+    const HIRType* borrowPointeeOf(Context& context, const HIRType* expected);
     const HIRType* borrowOperandExpectationOf(Context& context, const Span& sp, const HIRExprNode& operand, const HIRType* expected);
     /* The binding an argument makes to its parameter (see the argument-bindings phase
        of the pass): the parameter itself when it is an open variable, else its open
@@ -1067,17 +1068,28 @@ struct OrderPlace {
            right before visiting that one node, and the node reads it on entry. */
         const HIRExprNode* expectationNode = nullptr;
         const HIRType* expectationType = nullptr;
+        bool expectationRvalueUnsized = false;
 
         const HIRType* expectationFor(const HIRExprNode& node) const {
+            return expectationNode == &node && !expectationRvalueUnsized ? expectationType : nullptr;
+        }
+
+        const HIRType* expectationToOption(const HIRExprNode& node) const {
             return expectationNode == &node ? expectationType : nullptr;
         }
 
-        void visitExpecting(HIRExprNodeP& nodePtr, const HIRType* expected) {
+        bool expectationIsRvalueUnsized(const HIRExprNode& node) const {
+            return expectationNode == &node && expectationRvalueUnsized;
+        }
+
+        void visitExpecting(HIRExprNodeP& nodePtr, const HIRType* expected, bool rvalueUnsized = false) {
             expectationNode = nodePtr.get();
             expectationType = expected;
+            expectationRvalueUnsized = expected && rvalueUnsized;
             this->visitChild(*nodePtr);
             expectationNode = nullptr;
             expectationType = nullptr;
+            expectationRvalueUnsized = false;
         }
 
         /* Upstream `check_argument_types`: the argument is coerced into the input the
@@ -1099,6 +1111,8 @@ struct OrderPlace {
         }
 
         const HIRType* borrowOperandExpectation(const HIRExprNode& node, const HIRExprNode& operand);
+
+        void visitBorrowOperand(const HIRExprNode& node, HIRExprNodeP& operand);
 
         Vector<bool> innerCoerceEnabledStack;
 
@@ -1827,17 +1841,22 @@ struct OrderPlace {
        as `rvalue_hint` for anything else, so an unsized pointee (`dyn Trait`, `[T]`,
        `str`) is no expectation at all for an rvalue: `&1` against `&dyn Foo` types the
        literal as an integer and unsizes the reference. */
-    const HIRType* borrowOperandExpectationOf(Context& context, const Span& sp, const HIRExprNode& operand, const HIRType* expected) {
+    const HIRType* borrowPointeeOf(Context& context, const HIRType* expected) {
         if (!expected) {
             return nullptr;
         }
         const auto* resolved = context.getType(expected);
-        const HIRType* pointee = nullptr;
         if (const auto* borrow = resolved->opt_Borrow()) {
-            pointee = borrow->inner;
-        } else if (const auto* pointer = resolved->opt_Pointer()) {
-            pointee = pointer->inner;
+            return borrow->inner;
         }
+        if (const auto* pointer = resolved->opt_Pointer()) {
+            return pointer->inner;
+        }
+        return nullptr;
+    }
+
+    const HIRType* borrowOperandExpectationOf(Context& context, const Span& sp, const HIRExprNode& operand, const HIRType* expected) {
+        const auto* pointee = borrowPointeeOf(context, expected);
         if (!pointee) {
             return nullptr;
         }
@@ -11526,7 +11545,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
     TRACE_FUNCTION_FR(static_cast<const void*>(&node) << StringView(" { ... }"), static_cast<const void*>(&node) << StringView(" ") << this->context.getType(node.resType));
     this->context.resolve.addOpaqueAliasScope(node.localMod);
     /* Upstream `check_block_with_expected`: the block's expectation is its tail's. */
-    const auto* expected = this->expectationFor(node);
+    const auto* expected = this->expectationToOption(node);
+    const bool expectedRvalueUnsized = this->expectationIsRvalueUnsized(node);
 
     bool diverges = false;
     node.diverges = false;
@@ -11557,7 +11577,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
         snp->resType = this->context.addIvars(snp->resType);
         this->context.equateTypes(snp->span(), node.resType, snp->resType);
         this->context.requireSized(snp->span(), snp->resType);
-        this->visitExpecting(snp, expected);
+        this->visitExpecting(snp, expected, expectedRvalueUnsized);
         node.diverges = diverges || this->nodeDiverges(*snp);
     } else if (node.nodes.size() > 0) {
         const auto& snp = node.nodes.back();
@@ -11853,6 +11873,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
     /* Upstream `check_expr_match`: the match's expectation is each arm's
        (`adjust_for_branches`). */
     const auto* expected = this->expectationFor(node);
+    const auto* armExpected = this->expectationToOption(node);
+    const bool armExpectedRvalueUnsized = this->expectationIsRvalueUnsized(node);
     if (expected) {
         const auto* target = this->context.getType(this->context.expandAssociatedTypes(node.span(), this->context.getType(expected)));
         const auto* targetPath = target->opt_Path();
@@ -11909,7 +11931,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeMatch& node) -> void {
         arm.code->resType = this->context.addIvars(arm.code->resType);
 
         this->context.equateTypesCoerce(node.span(), armResultType, arm.code);
-        this->visitExpecting(arm.code, expected);
+        this->visitExpecting(arm.code, armExpected, armExpectedRvalueUnsized);
     }
 
     if (node.arms.empty()) {
@@ -12170,7 +12192,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
 
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" ") << HIRExprNodeUniOp::opname(node.op) << StringView("..."));
     node.value->resType = this->context.addIvars(node.value->resType);
-    this->visitExpecting(node.value, this->expectationFor(node));
+    this->visitExpecting(node.value, this->expectationToOption(node), this->expectationIsRvalueUnsized(node));
     this->inheritDivergence(node, *node.value);
 
     const char* itemName = nullptr;
@@ -12216,13 +12238,21 @@ const HIRType* ExprVisitorEnum::borrowOperandExpectation(const HIRExprNode& node
     return borrowOperandExpectationOf(this->context, node.span(), operand, this->expectationFor(node));
 }
 
+auto ExprVisitorEnum::visitBorrowOperand(const HIRExprNode& node, HIRExprNodeP& operand) -> void {
+    if (const auto* hasType = this->borrowOperandExpectation(node, *operand)) {
+        this->visitExpecting(operand, hasType);
+    } else {
+        this->visitExpecting(operand, borrowPointeeOf(this->context, this->expectationFor(node)), true);
+    }
+}
+
 auto ExprVisitorEnum::visit(HIRExprNodeBorrow& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" &_ ..."));
     node.value->resType = this->context.addIvars(node.value->resType);
 
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.borrow(node.type, node.value->resType));
 
-    this->visitExpecting(node.value, this->borrowOperandExpectation(node, *node.value));
+    this->visitBorrowOperand(node, node.value);
     this->inheritDivergence(node, *node.value);
 }
 
@@ -12232,7 +12262,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeRawBorrow& node) -> void {
 
     this->context.equateTypes(node.span(), node.resType, this->context.crate.types.pointer(node.type, node.value->resType));
 
-    this->visitExpecting(node.value, this->borrowOperandExpectation(node, *node.value));
+    this->visitBorrowOperand(node, node.value);
     this->inheritDivergence(node, *node.value);
 }
 
@@ -12964,7 +12994,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeArrayList& node) -> void {
        closure its fn pointer.  A fresh variable instead let the closure bind `F`
        before that expectation reached it. */
     const HIRType* expectedElement = nullptr;
-    if (const auto* expected = this->expectationFor(node)) {
+    if (const auto* expected = this->expectationToOption(node)) {
         const auto* expectedType = this->context.getType(expected);
         if (const auto* array = expectedType->opt_Array()) {
             expectedElement = array->inner;
