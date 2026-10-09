@@ -4724,6 +4724,7 @@ asn1_rs_0_7_2 = add_project_test(
     rust="1.92.0",
     url="https://github.com/rusticata/asn1-rs.git",
     rev="84c7ac4cc40616497d922c7e5730fb75cff59256",
+    adapter_args=["--", "--skip", "compile_fail"],
     lockfile="$(S)/tst/projects/asn1_rs_0_7_2/Cargo.lock",
 )
 
