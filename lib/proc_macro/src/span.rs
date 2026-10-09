@@ -1,9 +1,16 @@
 //! 
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy)]
 pub struct Span(::std::num::NonZeroU32);
 impl !Send for Span {}
 impl !Sync for Span {}
+
+impl ::std::fmt::Debug for Span {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        let v = self.real();
+        write!(f, "{}:{}:{}: {}:{} (#{})", v.file.0.display(), v.lines.start, v.ofs.start + 1, v.lines.end, v.ofs.end + 1, v.context)
+    }
+}
 
 static mut SPANS: Vec<Option<RealSpan>> = Vec::new();
 static mut SPANS_COMPLETE: bool = false;
