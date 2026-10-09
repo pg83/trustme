@@ -4375,6 +4375,9 @@ crossterm_0_29_0 = add_project_test(
     rust="1.92.0",
     url="https://github.com/crossterm-rs/crossterm.git",
     rev="36d95b26a26e64b0f8c12edfe11f410a6d56a812",
+    # src/style/types/colored.rs: one test sets the global ANSI_COLOR_DISABLED
+    # and NO_COLOR while `test_parse_ansi_*` format colours that read them.
+    adapter_args=["--", "--test-threads=1"],
     lockfile="$(S)/tst/projects/crossterm_0_29_0/Cargo.lock",
 )
 
