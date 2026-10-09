@@ -1426,12 +1426,24 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             return false;
         }
 
+        HIRPathParams withDefaults(const Span& sp, const HIRPathParams& given, const HIRGenericParams& definition) {
+            HIRPathParamsBuilder params(given);
+            while (params.types.size() < definition.types.size()) {
+                const auto* fallback = definition.types[params.types.size()].defaultValue;
+                const HIRPathParams known(params);
+                MonomorphStatePtr ms(ctx.crate->types, ctx.crate->types.self(), &known, nullptr);
+                params.types.push_back(fallback->is_Infer() ? fallback : ms.monomorphType(sp, fallback, /*allow_infer=*/true));
+            }
+            return HIRPathParams(mv$(params));
+        }
+
         HIRGenericPath findSourceTraitHir(const Span& sp, const HIRGenericPath& path, const HIRTrait& trait, const RcString& name, Namespace ns, const Monomorphiser& ms) {
             if (hasItem(trait, name, ns)) {
                 return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
             auto selfTy = ctx.crate->types.self();
-            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &path.params, nullptr);
+            const auto params = withDefaults(sp, path.params, trait.params);
+            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &params, nullptr);
             for (const auto& st : trait.allParentTraits) {
                 const auto& t = ctx.crate->getTraitByPath(sp, st.path.path);
 
@@ -1449,7 +1461,8 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             }
 
             auto selfTy = ctx.crate->types.self();
-            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &path.params, nullptr);
+            const auto params = withDefaults(sp, path.params, ctx.LowerHIRGenericParams(trait.params(), nullptr));
+            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &params, nullptr);
             for (const auto& st : trait.supertraits()) {
                 auto b = ctx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
                 ASSERT_BUG(sp, st.ent.path->bindings.type.binding.is_Trait(), StringView("Not a trait: ") << *st.ent.path);
