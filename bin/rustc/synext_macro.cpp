@@ -961,6 +961,147 @@ namespace {
         toks.push_back(mv$(t4));
     }
 
+    void pushU16(Vector<u8>& bytes, size_t value) {
+        bytes.pushBack(static_cast<u8>(value & 0xFF));
+        bytes.pushBack(static_cast<u8>((value >> 8) & 0xFF));
+    }
+
+    StringView charsView(const char* data, size_t length) {
+        return StringView(reinterpret_cast<const u8*>(data), length);
+    }
+
+    template <typename Tokens, typename Fragments>
+    void formatArgsTemplate(Tokens& toks, const ASTCrate& crate, const Fragments& fragments, StringView tail) {
+        Vector<u8> bytecode;
+        Vector<size_t> argIndexes;
+        Vector<const char*> argTraits;
+        const auto argSlot = [&](size_t argIndex, const char* traitName) -> size_t {
+            for (size_t k = 0; k < argIndexes.length(); k++) {
+                if (argIndexes[k] == argIndex && std::strcmp(argTraits[k], traitName) == 0) {
+                    return k;
+                }
+            }
+            argIndexes.pushBack(argIndex);
+            argTraits.pushBack(traitName);
+            return argIndexes.length() - 1;
+        };
+        const auto pushLiteral = [&](StringView text) {
+            size_t offset = 0;
+            while (offset < text.length()) {
+                size_t len = text.length() - offset;
+                if (len > 0xFFFF) {
+                    len = 0xFFFF;
+                    while (len > 0 && (static_cast<u8>(text[offset + len]) & 0xC0) == 0x80) {
+                        len--;
+                    }
+                }
+                if (len < 0x80) {
+                    bytecode.pushBack(static_cast<u8>(len));
+                } else {
+                    bytecode.pushBack(0x80);
+                    pushU16(bytecode, len);
+                }
+                bytecode.append(reinterpret_cast<const u8*>(text.data()) + offset, len);
+                offset += len;
+            }
+        };
+
+        size_t implicitArgIndex = 0;
+        for (const auto& frag : fragments) {
+            pushLiteral(charsView(frag.leadingText.data(), frag.leadingText.size()));
+            const size_t start = bytecode.length();
+            bytecode.pushBack(0xC0);
+            const size_t position = argSlot(frag.argIndex, frag.traitName);
+
+            const auto& o = frag.args;
+            u32 align = 3;
+            switch (o.align) {
+                case FmtArgs::Align::Unspec:
+                    break;
+                case FmtArgs::Align::Left:
+                    align = 0;
+                    break;
+                case FmtArgs::Align::Right:
+                    align = 1;
+                    break;
+                case FmtArgs::Align::Center:
+                    align = 2;
+                    break;
+            }
+            const bool widthSet = o.widthIsArg || o.width != 0;
+            const u32 flags = o.alignChar
+                | static_cast<u32>(o.sign == FmtArgs::Sign::Plus) << 21
+                | static_cast<u32>(o.sign == FmtArgs::Sign::Minus) << 22
+                | static_cast<u32>(o.alternate) << 23
+                | static_cast<u32>(o.zeroPad) << 24
+                | static_cast<u32>(o.debugTy == FmtArgs::Debug::LowerHex) << 25
+                | static_cast<u32>(o.debugTy == FmtArgs::Debug::UpperHex) << 26
+                | static_cast<u32>(widthSet) << 27
+                | static_cast<u32>(o.precSet) << 28
+                | align << 29;
+            if (flags != 0x60000020) {
+                bytecode.mut(start) |= 1;
+                for (unsigned shift = 0; shift < 32; shift += 8) {
+                    bytecode.pushBack(static_cast<u8>((flags >> shift) & 0xFF));
+                }
+                if (widthSet) {
+                    const size_t value = o.widthIsArg ? argSlot(o.width, "usize") : o.width;
+                    if (o.widthIsArg || value != 0) {
+                        bytecode.mut(start) |= static_cast<u8>(1 << 1 | (o.widthIsArg ? 1 << 4 : 0));
+                        pushU16(bytecode, value);
+                    }
+                }
+                if (o.precSet) {
+                    const size_t value = o.precIsArg ? argSlot(o.prec, "usize") : o.prec;
+                    if (o.precIsArg || value != 0) {
+                        bytecode.mut(start) |= static_cast<u8>(1 << 2 | (o.precIsArg ? 1 << 5 : 0));
+                        pushU16(bytecode, value);
+                    }
+                }
+            }
+            if (implicitArgIndex != position) {
+                bytecode.mut(start) |= 1 << 3;
+                pushU16(bytecode, position);
+            }
+            implicitArgIndex = position + 1;
+        }
+        pushLiteral(tail);
+        bytecode.pushBack(0);
+
+        toks.push_back(TokenTree(TOK_RWORD_UNSAFE));
+        toks.push_back(TokenTree(TOK_BRACE_OPEN));
+        pushPath(toks, crate, {"fmt", "Arguments", "new"});
+        toks.push_back(TokenTree(TOK_PAREN_OPEN));
+        toks.push_back(Token(TOK_BYTESTRING, {reinterpret_cast<const char*>(bytecode.data()), bytecode.length()}, Ident::Hygiene()));
+        toks.push_back(TokenTree(TOK_COMMA));
+        toks.push_back(TokenTree(TOK_AMP));
+        toks.push_back(TokenTree(TOK_SQUARE_OPEN));
+        for (size_t k = 0; k < argIndexes.length(); k++) {
+            if (std::strcmp(argTraits[k], "usize") == 0) {
+                pushPath(toks, crate, {"fmt", "rt", "Argument", "from_usize"});
+            } else {
+                StringBuilder newFnSs;
+                newFnSs << StringView("new");
+                for (const char* c = argTraits[k]; *c; c++) {
+                    if (isupper(*c)) {
+                        newFnSs << StringView("_") << char(tolower(*c));
+                    } else {
+                        newFnSs << *c;
+                    }
+                }
+                const RcString newFn = RcString::newInterned(reinterpret_cast<const char*>(newFnSs.data()), newFnSs.length());
+                pushPath(toks, crate, {"fmt", "rt", "Argument", newFn.c_str()});
+            }
+            toks.push_back(Token(TOK_PAREN_OPEN));
+            toks.push_back(ident(FMT(StringView("a") << argIndexes[k]).c_str()));
+            toks.push_back(Token(TOK_PAREN_CLOSE));
+            toks.push_back(TokenTree(TOK_COMMA));
+        }
+        toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
+        toks.push_back(TokenTree(TOK_PAREN_CLOSE));
+        toks.push_back(TokenTree(TOK_BRACE_CLOSE));
+    }
+
     std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const WireBoard& wb, const ASTCrate& crate, TTStream& lex, bool addNewline) {
         Token tok;
 
@@ -1084,6 +1225,20 @@ namespace {
         toks.push_back(TokenTree(TOK_PAREN_CLOSE));
         toks.push_back(TokenTree(TOK_FATARROW));
         toks.push_back(TokenTree(TOK_BRACE_OPEN));
+
+        if (!(lex.parseState().wb->settings->rustcVersion < RustcVersion{1, 93, 0})) {
+            if (fragments.empty()) {
+                pushPath(toks, crate, {"fmt", "Arguments", freeArgs.empty() && namedArgs.empty() ? "from_str" : "from_str_nonconst"});
+                toks.push_back(TokenTree(TOK_PAREN_OPEN));
+                toks.push_back(Token(TOK_STRING, tail, h));
+                toks.push_back(TokenTree(TOK_PAREN_CLOSE));
+            } else {
+                formatArgsTemplate(toks, crate, fragments, charsView(tail.data(), tail.size()));
+            }
+            toks.push_back(TokenTree(TOK_BRACE_CLOSE));
+            toks.push_back(TokenTree(TOK_BRACE_CLOSE));
+            return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
+        }
 
         {
             toks.push_back(TokenTree(TOK_RWORD_STATIC));
