@@ -9418,10 +9418,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
         }
 
+        const HIRFunction* function = nullptr;
+        if (!traitContainsMethodInner(*traitRef.second, methodName, function)) {
+            continue;
+        }
         auto proofTrait = HIRGenericPath(*traitRef.first, paramsForInScopeTrait(traitRef.second->params));
-        forEachTraitMethodDeclaration(proofTrait, *traitRef.second, crate.types.self(), [&](const HIRFunction& function, HIRGenericPath declaringTrait) {
-            inScopeAmbiguous |= assembleTraitCandidate(function, proofTrait.clone(), std::move(declaringTrait), nullptr) == Certainty::Ambiguous;
-        });
+        inScopeAmbiguous |= assembleTraitCandidate(*function, proofTrait.clone(), proofTrait.clone(), nullptr) == Certainty::Ambiguous;
     }
     if (inScopeAmbiguous) {
         /* The one in-scope candidate, its trait obligation proven and only its bounds
