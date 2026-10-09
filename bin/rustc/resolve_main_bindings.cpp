@@ -4480,7 +4480,7 @@ namespace {
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
-    ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, const ASTModule* currentMod, std::span<const ASTModule* const> parentModules) {
+    ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, const ASTModule* currentMod, std::span<const ASTModule* const> parentModules, bool softFail = false) {
         switch (path.cls.tag()) {
             case ASTPathClass::TAG_Invalid: {
                 BUG(span, StringView("Invalid path class encountered"));
@@ -4575,6 +4575,9 @@ namespace {
                             break;
                         }
                         if (parentMods.empty()) {
+                            if (softFail) {
+                                return ASTPath();
+                            }
                             ERROR(span, E0000, StringView("Unable to find ") << e.nodes.front().name());
                         }
                         curMod = parentMods.back();
@@ -4672,13 +4675,13 @@ namespace {
             const Span& span = useStmtData.sp;
             for (auto& useEnt : useStmtData.entries) {
                 TRACE_FUNCTION_F(useEnt);
+                ActiveUseResolution activeUse(resolveContext, useEnt.path);
                 useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path, &mod, parentModules);
                 if (!useEnt.path.cls.is_Absolute()) {
                     BUG(span, StringView("Use path is not absolute after absolutisation"));
                 }
 
                 // TODO: Have Resolve_Use_GetBinding return the actual path
-                ActiveUseResolution activeUse(resolveContext, useEnt.path);
                 useEnt.path.bindings = ResolveUseGetBinding(resolveContext, span, settings, crate, mod.path(), useEnt.path, parentModules);
                 if (!useEnt.path.bindings.hasBinding()) {
                     ERROR(span, E0000, StringView("Unable to resolve `use` target ") << useEnt.path);
@@ -5129,7 +5132,10 @@ namespace {
                         auto& resolveStackPtrs = resolveContext.wildcardUses;
                         if (std::find(resolveStackPtrs.begin(), resolveStackPtrs.end(), &impData) == resolveStackPtrs.end()) {
                             resolveStackPtrs.pushBack(&impData);
-                            bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules), parentModules, /*type_only=*/true, /*soft_fail=*/true);
+                            const auto globPath = ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules, /*softFail=*/true);
+                            if (globPath.isValid()) {
+                                bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), globPath, parentModules, /*type_only=*/true, /*soft_fail=*/true);
+                            }
                             if (bindings_.type.is_Unbound()) {
                                 DEBUG(StringView("Recursion detected, skipping ") << impE.path);
                                 resolveStackPtrs.popBack();
