@@ -4691,6 +4691,10 @@ namespace {
 
                 // TODO: Have Resolve_Use_GetBinding return the actual path
                 useEnt.path.bindings = ResolveUseGetBinding(resolveContext, span, settings, crate, mod.path(), useEnt.path, parentModules);
+                if (useEnt.isSelf) {
+                    useEnt.path.bindings.value = {};
+                    useEnt.path.bindings.macro = {};
+                }
                 if (!useEnt.path.bindings.hasBinding()) {
                     ERROR(span, E0000, StringView("Unable to resolve `use` target ") << useEnt.path);
                 }
@@ -5097,7 +5101,12 @@ namespace {
                         DEBUG(StringView(" > Needs resolve p=") << static_cast<const void*>(&impE.path));
                         if (!isUseResolutionActive(resolveContext, impE.path)) {
                             ActiveUseResolution activeUse(resolveContext, impE.path);
-                            rv.mergeFrom(ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules), parentModules));
+                            auto imported = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules), parentModules);
+                            if (impE.isSelf) {
+                                imported.value = {};
+                                imported.macro = {};
+                            }
+                            rv.mergeFrom(mv$(imported));
                         } else {
                             DEBUG(StringView("Recursion on path ") << static_cast<const void*>(&impE.path) << StringView(" ") << impE.path);
                         }

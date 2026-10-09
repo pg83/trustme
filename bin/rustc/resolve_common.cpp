@@ -771,7 +771,7 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                 continue;
             }
             for (const auto& e : useStmt->entries) {
-                if (e.name == name) {
+                if (e.name == name && (!e.isSelf || ns == ResolveNamespace::Namespace)) {
                     DEBUG(StringView("Use ") << e.name << StringView(" := ") << e.path);
                     if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().crate == CRATE_BUILTINS) {
                         const auto& pe = e.path.cls.as_Absolute();

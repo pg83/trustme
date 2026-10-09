@@ -1631,7 +1631,7 @@ namespace {
                 case ASTItem::TAG_Use: {
                     auto& e = dat.as_Use();
                     for (const auto& ue : e.entries) {
-                        if (ue.name != "" && ue.path.nodes().size() >= 1) {
+                        if (ue.name != "" && !ue.isSelf && ue.path.nodes().size() >= 1) {
                             DEBUG(StringView("Use ") << ue.path);
                             ASTAbsolutePath refPath;
                             auto m = ResolveLookupMacro(ue.sp, *es.wb.settings, es.crate, mod.path(), ue.path, /*out_path=*/&refPath);
