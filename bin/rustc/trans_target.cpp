@@ -2702,6 +2702,16 @@ size_t TypeRepr::VariantMode::Data_Linear::tagValue(unsigned varIdx) const {
     return static_cast<size_t>(((U128(static_cast<u64>(this->offset)) + U128(static_cast<u64>(varIdx - start))) & nicheMask(this->field.size)).truncateU64());
 }
 
+size_t TypeReprVariantValues::decodeTag(U128 tag) const {
+    const U128 mask = this->field.size >= 16 ? U128::max() : (U128(1) << static_cast<unsigned>(this->field.size * 8)) - U128(1);
+    for (size_t i = 0; i < this->values.length(); i++) {
+        if ((this->values[i] & mask) == tag) {
+            return i;
+        }
+    }
+    return this->values.length();
+}
+
 unsigned TypeRepr::VariantMode::Data_Linear::decodeTag(U128 tag) const {
     if (!this->usesNiche()) {
         return (tag - U128(this->offset)).truncateU64();
@@ -2740,12 +2750,8 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         case TypeReprVariantMode::TAG_Values: {
             auto& ve = this->variants.as_Values();
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
-            const U128 mask = ve.field.size >= 16 ? U128::max() : (U128(1) << static_cast<unsigned>(ve.field.size * 8)) - U128(1);
-            auto it = std::find_if(ve.values.begin(), ve.values.end(), [&](const U128& candidate) {
-                return (candidate & mask) == v;
-            });
-            ASSERT_BUG(sp, it != ve.values.end(), StringView("Invalid enum tag: ") << v);
-            varIdx = it - ve.values.begin();
+            varIdx = ve.decodeTag(v);
+            ASSERT_BUG(sp, varIdx < ve.values.length(), StringView("Invalid enum tag: ") << v);
             DEBUG(StringView("VariantMode::Values - #") << varIdx);
             break;
         }

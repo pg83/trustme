@@ -117,6 +117,8 @@ struct TypeReprVariantValues {
     bool isTag(unsigned varIdx) const {
         return varIdx == field.index;
     }
+
+    size_t decodeTag(U128 tag) const;
 };
 
 #include "trans_target_tu.h"

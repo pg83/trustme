@@ -4761,10 +4761,9 @@ auto MIREvalCallStackEntry::readEnumVariant(const HIRType* ty, MIREvalValueRef v
         }
         case TypeReprVariantMode::TAG_Values: {
             auto& ve = repr->variants.as_Values();
-            auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size).truncateU64();
-            auto it = std::find(ve.values.begin(), ve.values.end(), tag);
-            MIR_ASSERT(state, it != ve.values.end(), StringView("Invalid enum tag ") << tag << StringView(" for ") << ty);
-            variant = it - ve.values.begin();
+            auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size);
+            variant = ve.decodeTag(tag);
+            MIR_ASSERT(state, variant < ve.values.length(), StringView("Invalid enum tag ") << tag << StringView(" for ") << ty);
             break;
         }
         case TypeReprVariantMode::TAG_NonZero: {
