@@ -834,7 +834,7 @@ struct OrderPlace {
         if (!pendingCuts) {
             return false;
         }
-        const auto place = rule.assignmentSite ? bindingPlace(rule) : coercionPlace(rule);
+        const auto place = rule.coercesAfterItsValue ? bindingPlace(rule) : coercionPlace(rule);
         ivars.clear();
         coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
         coercionIndex.collectIvars(context.getType(rule.sourceType()), ivars);
@@ -854,18 +854,20 @@ struct OrderPlace {
 
     bool coercionPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Coercion& rule) {
         const auto count = coercionIndex.count;
-        const auto place = rule.assignmentSite ? bindingPlace(rule) : coercionPlace(rule);
+        const auto place = rule.coercesAfterItsValue ? bindingPlace(rule) : coercionPlace(rule);
         ivars.clear();
-        coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
         coercionIndex.collectIvars(context.getType(rule.sourceType()), ivars);
+        const auto sourceIvars = ivars.length();
+        coercionIndex.collectIvars(context.getType(rule.leftTy), ivars);
         const auto& pendingCuts = coercionIndex.pendingNodeCut;
-        for (const auto index : ivars) {
+        for (size_t i = 0; i < ivars.length(); i++) {
+            const auto index = ivars[i];
             if (index >= count) {
                 continue;
             }
             const auto component = coercionIndex.componentOf(index);
             if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])
-                && (rule.assignmentSite || !rule.rightNodePtr || !(place.start <= cuts[component].start && place.end >= cuts[component].end)
+                && (rule.coercesAfterItsValue || !rule.rightNodePtr || !(place.start <= cuts[component].start && place.end >= cuts[component].end)
                     || !cutInsideClosureOf(context.crate.types, **rule.rightNodePtr, cuts[component]))) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the binding at ") << cuts[component].end);
                 return true;
@@ -882,7 +884,7 @@ struct OrderPlace {
                 return true;
             }
             const auto* obligationCuts = coercionIndex.pendingObligationCut;
-            if (rule.assignmentSite && obligationCuts && !obligationCuts[component].isNone() && place.after(obligationCuts[component])) {
+            if (rule.coercesAfterItsValue && i < sourceIvars && obligationCuts && !obligationCuts[component].isNone() && place.after(obligationCuts[component])) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the obligation at ") << obligationCuts[component].end);
                 context.pendingCutHolds++;
                 return true;
@@ -7048,8 +7050,8 @@ bool anyOrderCut(const Context& context) {
             return true;
         }
     }
-    const bool anyAssignment = std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [](const auto& rule) { return rule->assignmentSite; });
-    if (anyAssignment && !context.pendingCutsLifted) {
+    const bool anyAfterValue = std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [](const auto& rule) { return rule->coercesAfterItsValue; });
+    if (anyAfterValue && !context.pendingCutsLifted) {
         for (const auto& rule : context.linkAssoc) {
             if (rule.order != 0 && std::any_of(rule.stalledOn.begin(), rule.stalledOn.end(), [&](const auto& dependency) { return context.ivars.getType(dependency.index) != dependency.resolved; })) {
                 return true;
@@ -11931,6 +11933,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAssign& node) -> void {
     if (node.op == HIRExprNodeAssign::Op::None) {
         this->context.equateTypesCoerce(node.span(), node.slot->resType, node.value);
         this->context.linkCoerce.back()->assignmentSite = true;
+        this->context.linkCoerce.back()->coercesAfterItsValue = true;
     } else {
         const char* langItem = nullptr;
         auto operatorKind = TypeckPrimitiveOperator::None;
@@ -12632,6 +12635,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
             desTy = &desTyCache;
         }
         this->context.equateTypesCoerce(node.span(), *desTy, val.second);
+        this->context.linkCoerce.back()->coercesAfterItsValue = true;
         fieldTypes.pushBack(*desTy);
     }
 
