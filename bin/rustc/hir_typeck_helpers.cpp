@@ -8341,7 +8341,16 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (coercion.effects.certainty == Certainty::NoSolution) {
             return Certainty::NoSolution;
         }
+        const auto coercionSnapshot = resolve_.ivars.snapshot();
         const auto result = applyResponse(coercion.effects);
+        if (result == Certainty::Proven && sourceInput != ~0u && fixesArgumentVariable(argumentVariables)) {
+            DEBUG(StringView("method argument ") << sourceInput << StringView(" keeps its own variables for the coercion"));
+            resolve_.ivars.rollbackTo(coercionSnapshot);
+            appendCoercion();
+            earlierArgumentWaits = true;
+            return Certainty::Proven;
+        }
+        resolve_.ivars.commit(coercionSnapshot);
         if (result != Certainty::NoSolution) {
             appendCoercion();
             appendResponse(effects, std::move(coercion.effects));
