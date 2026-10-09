@@ -3502,7 +3502,9 @@ auto CExpandExpr::visit(ASTExprNodeUniOp& node) -> void {
 
             std::vector<ASTExprNodeMatchArm> arms;
             arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, makeNode<ASTExprNodeNamedValue>(ASTPath(rcstringV))));
-            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))), {}, makeNode<ASTExprNodeFlow>((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), makeNode<ASTExprNodeCallPath>(ASTPath(pathFromResidualFromResidual), ::makeVec1(makeNode<ASTExprNodeNamedValue>(ASTPath(rcstringR)))))));
+            const bool intoTryType = !tryStack.empty() && !(parentExpandState.wb.settings->rustcVersion < RustcVersion{1, 93, 0});
+            auto pathResidual = intoTryType ? getPath(coreCrate, "ops", "try_trait", "residual_into_try_type") : mv$(pathFromResidualFromResidual);
+            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))), {}, makeNode<ASTExprNodeFlow>((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), makeNode<ASTExprNodeCallPath>(mv$(pathResidual), ::makeVec1(makeNode<ASTExprNodeNamedValue>(ASTPath(rcstringR)))))));
 
             replacement = makeNode<ASTExprNodeMatch>(makeNode<ASTExprNodeCallPath>(mv$(pathTryBranch), ::makeVec1(mv$(node.value))), mv$(arms));
         }
