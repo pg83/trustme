@@ -1601,6 +1601,20 @@ auto BindVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
     selfType = crate.types.self();
     HIRVisitor::visitTrait(p, item);
     selfType = oldSelfType;
+
+    for (const auto& value : item.values) {
+        const auto* method = value.second.opt_Function();
+        if (!method) {
+            continue;
+        }
+        for (size_t index = 0;; index++) {
+            const auto erased = item.types.find(RcString::newInterned(FMT(ATY_PREFIX_ERASED << value.first << StringView("_") << index)));
+            if (erased == item.types.end()) {
+                break;
+            }
+            erased->second.generics = method->params.clone();
+        }
+    }
 }
 
 auto BindVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
