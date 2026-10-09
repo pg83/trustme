@@ -122,6 +122,7 @@ namespace {
         StaticTraitResolve resolve;
         TransList rv;
         const TransList* origList;
+        const TransList* collected = nullptr;
 
         std::deque<TransListFunction*> fcnQueue;
         Vector<TransListFunction*> fcnsToTypeVisit;
@@ -1138,7 +1139,7 @@ static void TransEnumerateTypes(EnumState& state) {
 #include "trans_ent_ptr_tu.h"
 
 static bool pathAlreadyEnumerated(const EnumState& state, const HIRPath& path) {
-    return state.rv.functions.count(path) || state.rv.statics.count(path) || state.rv.constants.count(path) || state.rv.vtables.count(path);
+    return state.rv.functions.count(path) || state.rv.statics.count(path) || state.rv.constants.count(path) || state.rv.vtables.count(path) || (state.collected && transListContainsPath(*state.collected, path));
 }
 
 static void evaluateTranslationParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* defs, HIRPathParams& params) {
@@ -3205,6 +3206,7 @@ void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const 
     }
 
     EnumState state{wb};
+    state.collected = &list;
     for (const auto& path : paths) {
         TransEnumerateFillFromPathMono(state, path.clone());
     }
@@ -3213,6 +3215,7 @@ void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const 
 
 bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal) {
     EnumState state{wb};
+    state.collected = &list;
     for (const auto& relocation : literal.relocations) {
         if (relocation.p && !transListContainsPath(list, *relocation.p)) {
             ASSERT_BUG(Span(), !monomorphisePathNeeded(*relocation.p), StringView("Generated literal contains a generic translation path: ") << *relocation.p);
@@ -3224,6 +3227,7 @@ bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const 
 
 bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const Vector<const TransListFunction*>& functions) {
     EnumState state{wb};
+    state.collected = &list;
     for (const auto* function : functions) {
         const MIRFunction* mir;
         const HIRType* returnType;

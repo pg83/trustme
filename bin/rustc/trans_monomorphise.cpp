@@ -264,9 +264,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         generated.reserve(nvs.added.size() - insertedStatics);
         while (insertedStatics < nvs.added.size()) {
             auto& value = nvs.added[insertedStatics++];
-            auto* out = list.addStatic(crate.types, HIRPath(value.first));
-            ASSERT_BUG(Span(), out, StringView("Generated static ") << value.first << StringView(" already in TransList?"));
-            out->ptr = value.second;
+            ASSERT_BUG(Span(), !list.statics.count(HIRPath(value.first)), StringView("Generated static ") << value.first << StringView(" already in TransList?"));
             generated.push_back(HIRPath(value.first));
         }
 
