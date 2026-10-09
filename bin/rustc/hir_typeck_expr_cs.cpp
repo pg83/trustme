@@ -492,6 +492,10 @@ struct OrderPlace {
     }
 };
 
+OrderPlace associatedPlace(const Context::Associated& rule) {
+    return OrderPlace{rule.orderEnd ? rule.orderEnd : rule.order, rule.order};
+}
+
 
     struct IvarCoercionIndex {
         const Context& context;
@@ -1505,8 +1509,23 @@ struct OrderPlace {
         context.applySolverResponse(sp, effects);
     }
 
+    struct OpenStepOfRule final: SolverOpenStepCallback {
+        const Context& context;
+        const Context::Coercion* rule;
+
+        OpenStepOfRule(const Context& context, const Context::Coercion* rule)
+            : context(context)
+            , rule(rule)
+        {
+        }
+
+        bool awaitsProducer(const HIRType* step) override {
+            return rule && openPointeeAwaitsItsProducer(context, *rule, step);
+        }
+    };
+
     // TODO: Add a (two?) callback(s) that handle type equalities (and possible equalities) so this function doesn't have to mutate the context
-    CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr) {
+    CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr, const Context::Coercion* rule = nullptr) {
         const auto& dst = context.ivars.getType(dstRaw);
         const auto& src = context.ivars.getType(srcRaw);
 
@@ -1519,7 +1538,8 @@ struct OrderPlace {
             return CoerceResult::Equality;
         }
 
-        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Unsizing, nodePtrPtr != nullptr);
+        OpenStepOfRule openStep(context, rule);
+        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Unsizing, nodePtrPtr != nullptr, false, rule ? &openStep : nullptr);
         if (nodePtrPtr && solverResponse.reachedAutoderefLimit) {
             ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
         }
@@ -1554,14 +1574,15 @@ struct OrderPlace {
         return CoerceResult::Equality;
     }
 
-    CoerceResult checkCoerceTys(const Context& context, const Span& sp, const HIRType* dst, const HIRType* srcR, Context* contextMut = nullptr, HIRExprNodeP* nodePtrPtr = nullptr) {
+    CoerceResult checkCoerceTys(const Context& context, const Span& sp, const HIRType* dst, const HIRType* srcR, Context* contextMut = nullptr, HIRExprNodeP* nodePtrPtr = nullptr, const Context::Coercion* rule = nullptr) {
         auto src = srcR;
         TRACE_FUNCTION_F(dst << StringView(" := ") << src);
         if (context.ivars.typesEqual(dst, src)) {
             return CoerceResult::Equality;
         }
 
-        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Coercion);
+        OpenStepOfRule openStep(context, rule);
+        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Coercion, false, false, rule ? &openStep : nullptr);
         if (nodePtrPtr && solverResponse.reachedAutoderefLimit) {
             ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
         }
@@ -2005,8 +2026,8 @@ struct OrderPlace {
             const auto* tySrc = context.getType(v.sourceType());
             TRACE_FUNCTION_F(v << StringView(" - ") << context.ivars.fmtType(tyDst) << StringView(" := ") << context.ivars.fmtType(tySrc));
             const auto result = v.op == SolverCoercionOp::Coercion
-                ? checkCoerceTys(context, sp, tyDst, tySrc, &context)
-                : checkUnsizeTys(context, sp, tyDst, tySrc, &context);
+                ? checkCoerceTys(context, sp, tyDst, tySrc, &context, nullptr, &v)
+                : checkUnsizeTys(context, sp, tyDst, tySrc, &context, nullptr, &v);
             switch (result) {
                 case CoerceResult::Fail:
                 case CoerceResult::Unknown:
@@ -2110,7 +2131,7 @@ struct OrderPlace {
             return false;
         }
 
-        const auto coercionResult = checkCoerceTys(context, sp, tyDst, tySrc, &context, &nodePtr);
+        const auto coercionResult = checkCoerceTys(context, sp, tyDst, tySrc, &context, &nodePtr, &v);
         switch (coercionResult) {
             case CoerceResult::Fail:
                 return false;
@@ -2219,8 +2240,11 @@ struct OrderPlace {
             return true;
         }
         const auto place = bindingPlace(rule);
-        return std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& other) {
-            return other.get() != &rule && other->rightNodePtr && other->op == SolverCoercionOp::Coercion && !other->assignmentSite
+        const bool projectionPending = std::any_of(context.linkAssoc.begin(), context.linkAssoc.end(), [&](const Context::Associated& assoc) {
+            return assoc.name != "" && assoc.order != 0 && context.getType(assoc.leftTy) == resolved && place.after(associatedPlace(assoc));
+        });
+        return projectionPending || std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& other) {
+            return other && other.get() != &rule && other->rightNodePtr && other->op == SolverCoercionOp::Coercion && !other->assignmentSite
                 && context.getType(other->leftTy) == resolved && place.after(bindingPlace(*other));
         });
     }
@@ -6929,10 +6953,6 @@ Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercio
         cutAt(component, coercionPlace(*rule));
     }
     return cuts;
-}
-
-OrderPlace associatedPlace(const Context::Associated& rule) {
-    return OrderPlace{rule.orderEnd ? rule.orderEnd : rule.order, rule.order};
 }
 
 bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& coercionIndex, const Vector<OrderPlace>& cuts, Vector<unsigned>& ivars, const Context::Associated& rule) {

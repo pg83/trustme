@@ -6045,7 +6045,7 @@ SolverCertainty TraitResolution::typeIsClone(const Span& sp, const HIRType* ty) 
     return solveTraitGoalCertainty(sp, langClone(), type);
 }
 
-SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef, bool unknownTargetIsFresh) const {
+SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef, bool unknownTargetIsFresh, SolverOpenStepCallback* openStep) const {
     SolverCoercionResponse result;
     TRACE_FUNCTION_FR(
         StringView("dst=") << destination << StringView(", src=") << source << StringView(", op=") << static_cast<unsigned>(op),
@@ -6093,6 +6093,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
         allowSourceAutoderef,
     };
     constraint.unknownTargetIsFresh = unknownTargetIsFresh;
+    constraint.openStep = openStep;
     const auto coercionCertainty = evaluateCoercionConstraint(
         sp,
         constraint,
@@ -7035,6 +7036,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                         current = step.target;
                         sourceAutoderef.push_back(current);
                         break;
+                }
+                if (const auto* open = resolveKnown(current)->opt_Infer(); open && !open->isLit() && constraint.openStep && constraint.openStep->awaitsProducer(current)) {
+                    return SolverCertainty::Ambiguous;
                 }
                 const auto dereferenced = relateEquality(destinationBorrow->inner, current);
                 const auto dereferencedRelation = SolverCoercionRelation::Equality;
