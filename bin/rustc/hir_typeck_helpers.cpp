@@ -9003,11 +9003,11 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     const auto* erased = inherentReceiver->opt_ErasedType();
     const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
     const bool opaqueCanReveal = !erased || (alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
-    const bool inherentSourceAmbiguous = inherentInfer != nullptr;
+    const bool inherentSourceAmbiguous = inherentInfer != nullptr && !traitRoutesAreComplete;
     /* Upstream (`ProbeScope::Single`): the call a delegation body lowers to has one
        candidate, the named trait's declaration; the inherent, where-clause and object
        routes are not assembled for it. */
-    if (!singleTraitScope && !inherentSourceAmbiguous && opaqueCanReveal) {
+    if (!singleTraitScope && !inherentInfer && opaqueCanReveal) {
         auto inherentCertainty = Certainty::NoSolution;
         resolve_.wb.inherentMethods->find(callSpan, methodName, receiver, resolve_.ivars.callbackResolveInfer(), [&](const HIRType* roughSelfType, const HIRTypeImpl& impl) {
             const auto& method = impl.methods.at(methodName);
@@ -9278,7 +9278,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         });
     }
     if (foundBound && foundNonGlobalBound) {
-        return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
+        return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
     }
     if (!foundBound && !inherentSourceAmbiguous && possibilities.size() == firstPossibility && ambiguousBoundTraits.size() == 1 && boundsAmbiguousCandidates.size() == 1 && boundsAmbiguousSignatureProven[0]) {
         DEBUG(StringView("where-clause method candidate with ambiguous bounds is the one pick"));
@@ -9370,7 +9370,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             if (restoreUncoveredBoundAmbiguities()) {
                 return emitAmbiguous();
             }
-            return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
+            return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
         }
     }
 
@@ -9420,9 +9420,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     }
 
     if (possibilities.size() > firstPossibility) {
-        return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : finishProven();
+        return inherentSourceAmbiguous ? emitAmbiguous() : finishProven();
     }
-    return inherentSourceAmbiguous && !traitRoutesAreComplete ? emitAmbiguous() : Certainty::NoSolution;
+    return inherentSourceAmbiguous ? emitAmbiguous() : Certainty::NoSolution;
 }
 
 SolverCertainty TraitResolution::findMethod(
