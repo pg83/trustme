@@ -1555,6 +1555,13 @@ namespace {
         } else if (name == "i128_shro") {
         } else if (name == "u128_shr") {
         } else if (name == "u128_shro") {
+        } else if (name == "offset_of") {
+        } else if (name == "compiler_move") {
+        } else if (name == "compiler_copy") {
+        } else if (name == "into_try_type") {
+        } else if (name == "mem_size_const") {
+        } else if (name == "mem_align_const") {
+        } else if (name == "trivial_clone") {
         } else {
             ERROR(sp, E0000, StringView("Unknown language item '") << name << StringView("'"));
         }
