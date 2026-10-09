@@ -131,7 +131,9 @@ void ASTCrate::loadExterns(Settings& settings) {
     } else if (noStd) {
         this->markExternCrateUsed(this->loadExternCrate(settings, Span(), "core"));
     } else {
-        this->markExternCrateUsed(this->loadExternCrate(settings, Span(), "std"));
+        const auto stdName = this->loadExternCrate(settings, Span(), "std");
+        this->markExternCrateUsed(stdName);
+        settings.implicitCrates.insert(std::make_pair(RcString::newInterned("std"), stdName));
     }
 
     DEBUG(StringView("Load from --extern"));

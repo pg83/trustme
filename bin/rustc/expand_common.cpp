@@ -2283,7 +2283,8 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         ASTAttributeName name;
         name.elems.pushBack(RcString::newInterned("macro_use"));
         attrs.push_back(ASTAttribute(Span(), mv$(name), {}));
-        crate.rootModule_.items.push_back(box$(ASTNamed<ASTItem>(Span(), mv$(attrs), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, ASTAbsolutePath()), stdCrateShortname, ASTItem::make_Crate({stdCrateName}))));
+        const auto itemName = crate.edition >= ASTEdition::Rust2018 ? Ident(Ident::Hygiene::newScopeChained(wb.id, *wb.pool, Ident::Hygiene(), 0, true), stdCrateShortname).hygienicName() : stdCrateShortname;
+        crate.rootModule_.items.push_back(box$(ASTNamed<ASTItem>(Span(), mv$(attrs), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, ASTAbsolutePath()), itemName, ASTItem::make_Crate({stdCrateName}))));
         auto& i = *crate.rootModule_.items.back();
         ExpandAttrs(es, i.attrs, AttrStage::Post, ASTAbsolutePath(), crate.rootModule_, 0, i.vis, i.data);
     }
