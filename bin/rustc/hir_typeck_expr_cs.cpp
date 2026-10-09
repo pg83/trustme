@@ -1710,16 +1710,19 @@ struct OrderPlace {
         if (source->is_Diverge()) {
             return {};
         }
-        if (const auto* sourceInfer = source->opt_Infer()) {
-            if (sourceInfer->isLit() || sourceInfer->index == ~0u || destination->is_Infer() || destination->is_Diverge()) {
-                return {};
-            }
-            return {source, destination, true};
-        }
         const auto isOpen = [&](const HIRType* type) {
             const auto* infer = context.getType(type)->opt_Infer();
             return infer && !infer->isLit() && infer->index != ~0u;
         };
+        const auto* destinationPathType = destination->opt_Path();
+        const auto* destinationProjection = destinationPathType ? destinationPathType->path.data.opt_UfcsKnown() : nullptr;
+        const bool destinationIsOpenProjection = destinationProjection && isOpen(destinationProjection->type);
+        if (const auto* sourceInfer = source->opt_Infer()) {
+            if (sourceInfer->isLit() || sourceInfer->index == ~0u || destination->is_Infer() || destination->is_Diverge() || destinationIsOpenProjection) {
+                return {};
+            }
+            return {source, destination, true};
+        }
         /* Only a binding that says something is ready: the argument's own variable
            handed back as the parameter (`f(&mut *orig)` with `F: FnOnce(&mut T)`) binds
            nothing, and a cut waiting on it would never lift. */
