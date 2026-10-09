@@ -3911,6 +3911,11 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
         definingOpaqueAliasCount_ = expr.state ? expr.state->defineOpaque.size() : 0;
         ExprVisitor v{*this};
         (*expr).visit(v);
+        if (v.replacement) {
+            v.replacement->resType = expr->resType;
+            auto replaced = expr.takeNode();
+            expr.reset(v.replacement.release());
+        }
         definingOpaqueAliases_ = savedDefiningOpaqueAliases;
         definingOpaqueAliasCount_ = savedDefiningOpaqueAliasCount;
         inExpr = savedInExpr;
