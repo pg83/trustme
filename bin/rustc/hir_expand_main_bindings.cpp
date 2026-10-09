@@ -5354,6 +5354,79 @@ auto StaticBorrowExprVisitorMark::visitNodePtr(HIRExprNodeP& node) -> void {
     isConstant = false;
 }
 
+namespace {
+    bool promotedValueHasMutInterior(const StaticTraitResolve& resolve, const HIRExprNode& node, unsigned depth) {
+        if (resolve.typeIsInteriorMutable(node.span(), node.resType) == InteriorMutability::No) {
+            return false;
+        }
+        if (depth > 64) {
+            return true;
+        }
+        const auto operandsHaveMutInterior = [&](const auto& operands) {
+            for (const auto& operand : operands) {
+                if (promotedValueHasMutInterior(resolve, *operand, depth + 1)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto isUnsafeCell = [&]() {
+            const auto* path = node.resType->opt_Path();
+            return path && path->path.data.is_Generic() && path->path.data.as_Generic().path == resolve.hirCrate().getLangItemPathOpt("unsafe_cell");
+        };
+        if (const auto* e = cast<const HIRExprNodeStructLiteral>(&node)) {
+            if (isUnsafeCell() || node.resType->as_Path().binding.is_Union()) {
+                return true;
+            }
+            for (const auto& value : e->values) {
+                if (promotedValueHasMutInterior(resolve, *value.second, depth + 1)) {
+                    return true;
+                }
+            }
+            return e->baseValue && promotedValueHasMutInterior(resolve, *e->baseValue, depth + 1);
+        }
+        if (const auto* e = cast<const HIRExprNodeTupleVariant>(&node)) {
+            return isUnsafeCell() || operandsHaveMutInterior(e->args);
+        }
+        if (cast<const HIRExprNodeUnitVariant>(&node) || cast<const HIRExprNodeLiteral>(&node)) {
+            return false;
+        }
+        if (const auto* e = cast<const HIRExprNodeTuple>(&node)) {
+            return operandsHaveMutInterior(e->vals);
+        }
+        if (const auto* e = cast<const HIRExprNodeField>(&node)) {
+            return promotedValueHasMutInterior(resolve, *e->value, depth + 1);
+        }
+        if (const auto* e = cast<const HIRExprNodeArrayList>(&node)) {
+            return operandsHaveMutInterior(e->vals);
+        }
+        if (const auto* e = cast<const HIRExprNodeArraySized>(&node)) {
+            return promotedValueHasMutInterior(resolve, *e->val, depth + 1);
+        }
+        if (const auto* e = cast<const HIRExprNodeBlock>(&node)) {
+            if (e->nodes.empty() && e->valueNode) {
+                return promotedValueHasMutInterior(resolve, *e->valueNode, depth + 1);
+            }
+        }
+        if (const auto* e = cast<const HIRExprNodePathValue>(&node)) {
+            if (!monomorphisePathNeeded(e->path) && !e->path.data.is_UfcsKnown() && !e->path.data.is_UfcsUnknown()) {
+                MonomorphState ms(resolve.hirCrate().types);
+                auto value = resolve.getValue(node.span(), e->path, ms, /*signature_only*/ true);
+                if (const auto* constant = value.opt_Constant()) {
+                    const auto& body = (*constant)->value;
+                    const bool typed = body && body->resType && !visitTyWith(body->resType, [](const HIRType* t) {
+                        return t->is_Infer();
+                    });
+                    if (typed) {
+                        return promotedValueHasMutInterior(resolve, *body, depth + 1);
+                    }
+                }
+            }
+        }
+        return true;
+    }
+}
+
 auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
     auto savedAllConstant = allConstant_;
     allConstant_ = true;
@@ -5626,7 +5699,7 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodePathValue& node) -> void {
     auto v = resolve_.getValue(node.span(), node.path, ms, /*signature_only*/ true);
     switch (v.tag()) {
         case StaticTraitResolve::ValuePtr::TAG_Constant:
-            isConstant = !isMaybeInteriorMut(node);
+            isConstant = !promotedValueHasMutInterior(resolve_, node, 0);
             DEBUG(node.path << StringView(" m_is_constant=") << isConstant);
             break;
         case StaticTraitResolve::ValuePtr::TAG_Function:
