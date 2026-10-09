@@ -2601,6 +2601,7 @@ void State::printStmt(const ASTExprNode* node, bool hasSemicolon) {
     if (kindOf(e) == Kind::MacCall) {
         const auto* mac = cast<const ASTExprNodeMacro>(node);
         this->spaceIfNotBol();
+        this->printOuterAttributes(mac->attrs(), false);
         this->printMac(mac->path, mac->ident, mac->isBraced, mac->isBracketed, mac->tokens);
         if (hasSemicolon) {
             this->word(StringView(";"));
