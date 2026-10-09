@@ -791,6 +791,8 @@ namespace {
     struct CTestHandler: public ExpandDecorator {
         AttrStage stage() const override;
 
+        bool wantsAllAttrs() const override;
+
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
@@ -4947,11 +4949,54 @@ auto DecoratorPreludeImport::handle(const Span& sp, const ASTAttribute& mi, cons
     }
 }
 
+namespace {
+    void readShouldPanic(const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, ASTModule& mod, ASTTestDesc& td) {
+        const auto& sp = attr.span();
+        if (attr.data().size() == 0) {
+            td.panicType = ASTTestDesc::ShouldPanic::Yes;
+            return;
+        }
+        td.panicType = ASTTestDesc::ShouldPanic::YesWithMessage;
+
+        TTStream lex(sp, ParseState(), attr.data());
+        lex.parseState().wb = &wb;
+        auto parseMessage = [&]() {
+            auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+            if (auto* v = cast<ASTExprNodeString>(&*n)) {
+                td.expectedPanicMessage = v->value;
+            } else {
+                parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n)), TOK_STRING);
+            }
+        };
+        if (lex.getTokenIf(TOK_EQUAL)) {
+            parseMessage();
+            return;
+        }
+        bool gotMessage = false;
+        if (lex.getTokenIf(TOK_PAREN_OPEN) && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_EQUAL) {
+            auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
+            lex.getTokenCheck(TOK_EQUAL);
+            if (n == "expected" && lex.lookahead(0) == TOK_STRING) {
+                parseMessage();
+                gotMessage = lex.lookahead(0) == TOK_PAREN_CLOSE;
+            }
+        }
+        if (!gotMessage) {
+            td.panicType = ASTTestDesc::ShouldPanic::Yes;
+            td.expectedPanicMessage = "";
+        }
+    }
+}
+
 auto CTestHandler::stage() const -> AttrStage {
     return AttrStage::Pre;
 }
 
-auto CTestHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+auto CTestHandler::wantsAllAttrs() const -> bool {
+    return true;
+}
+
+auto CTestHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
         ERROR(sp, E0000, StringView("#[test] can only be put on functions - found on ") << i.tagStr());
     }
@@ -4966,6 +5011,13 @@ auto CTestHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             td.name += node.c_str();
         }
         td.path = path;
+        for (const auto& attr : attrs) {
+            if (attr.name() == "should_panic") {
+                readShouldPanic(attr, wb, crate, mod, td);
+            } else if (attr.name() == "ignore") {
+                td.ignore = true;
+            }
+        }
 
         crate.tests.push_back(mv$(td));
     } else {
@@ -4981,50 +5033,6 @@ auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBo
     if (!i.is_Function()) {
         ERROR(sp, E0000, StringView("#[should_panic] can only be put on functions - found on ") << i.tagStr());
     }
-
-    if (crate.testHarness) {
-        // TODO: If this test doesn't yet exist, create it (but as disabled)?
-        for (auto& td : crate.tests) {
-            if (td.path != path) {
-                continue;
-            }
-
-            if (mi.data().size() != 0) {
-                td.panicType = ASTTestDesc::ShouldPanic::YesWithMessage;
-
-                TTStream lex(sp, ParseState(), mi.data());
-                lex.parseState().wb = &wb;
-                auto parseMessage = [&]() {
-                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                    if (auto* v = cast<ASTExprNodeString>(&*n)) {
-                        td.expectedPanicMessage = v->value;
-                    } else {
-                        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n)), TOK_STRING);
-                    }
-                };
-                if (lex.getTokenIf(TOK_EQUAL)) {
-                    parseMessage();
-                } else {
-                    bool gotMessage = false;
-                    if (lex.getTokenIf(TOK_PAREN_OPEN) && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_EQUAL) {
-                        auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
-                        lex.getTokenCheck(TOK_EQUAL);
-                        if (n == "expected" && lex.lookahead(0) == TOK_STRING) {
-                            parseMessage();
-                            gotMessage = lex.lookahead(0) == TOK_PAREN_CLOSE;
-                        }
-                    }
-                    if (!gotMessage) {
-                        td.panicType = ASTTestDesc::ShouldPanic::Yes;
-                        td.expectedPanicMessage = "";
-                    }
-                }
-            } else {
-                td.panicType = ASTTestDesc::ShouldPanic::Yes;
-            }
-            return;
-        }
-    }
 }
 
 auto CTestHandlerIgnore::stage() const -> AttrStage {
@@ -5034,16 +5042,5 @@ auto CTestHandlerIgnore::stage() const -> AttrStage {
 auto CTestHandlerIgnore::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
         ERROR(sp, E0000, StringView("#[ignore] can only be put on functions - found on ") << i.tagStr());
-    }
-
-    if (crate.testHarness) {
-        for (auto& td : crate.tests) {
-            if (td.path != path) {
-                continue;
-            }
-
-            td.ignore = true;
-            return;
-        }
     }
 }
