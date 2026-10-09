@@ -11,6 +11,10 @@
 #include "resolve_main_bindings.h"
 
 #include <std/alg/defer.h>
+#include <std/alg/minmax.h>
+#include <std/sym/i_map.h>
+#include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
 
 #include <span>
 
@@ -24,6 +28,19 @@ namespace {
 
         typedef std::pair<const ASTModule*, RcString> antirecurseStackEntT;
         std::vector<antirecurseStackEntT> antirecurseStack;
+
+        struct SearchedName {
+            const ASTModule* mod;
+            RcString name;
+            ResolveNamespace ns;
+            size_t dependsOn;
+            bool live;
+            SearchedName* next;
+        };
+        ObjPool::Ref searchPool = ObjPool::fromMemory();
+        IntMap<SearchedName*> searched{searchPool.mutPtr()};
+        Vector<SearchedName*> unsettled;
+        size_t lowlink = SIZE_MAX;
 
         ResolveState(const Span& span, const Settings& settings, const ASTCrate& crate);
 
@@ -40,6 +57,14 @@ namespace {
         static bool matchingNamespace(const ASTItem& i, ResolveNamespace ns);
 
         ResolveItemRef findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr);
+
+        ResolveItemRef searchItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath, bool visitUse);
+
+        SearchedName* findSearched(const ASTModule& mod, const RcString& name, ResolveNamespace ns, bool live) const;
+
+        void settleSearch(const ASTModule& mod, const RcString& name, ResolveNamespace ns, size_t depth, size_t unsettledMark);
+
+        void discardSearches(size_t unsettledMark);
 
         ResolveItemRef findItemHir(const HIRModule& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const HIRSimplePath* visPathP = nullptr);
     };
@@ -566,24 +591,101 @@ auto ResolveState::matchingNamespace(const ASTItem& i, ResolveNamespace ns) -> b
     UNREACHABLE();
 }
 
+namespace {
+    u64 searchKey(const ASTModule& mod, const RcString& name, ResolveNamespace ns) {
+        return reinterpret_cast<uintptr_t>(&mod) ^ (u64(name.rawId()) << 32) ^ u64(ns);
+    }
+}
+
+auto ResolveState::findSearched(const ASTModule& mod, const RcString& name, ResolveNamespace ns, bool live) const -> SearchedName* {
+    auto* head = searched.find(searchKey(mod, name, ns));
+    if (!head) {
+        return nullptr;
+    }
+    for (auto* node = *head; node; node = node->next) {
+        if (node->mod == &mod && node->name == name && node->ns == ns && (node->live || !live)) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+auto ResolveState::settleSearch(const ASTModule& mod, const RcString& name, ResolveNamespace ns, size_t depth, size_t unsettledMark) -> void {
+    const auto dependsOn = lowlink < depth ? lowlink : SIZE_MAX;
+    for (size_t i = unsettledMark; i < unsettled.length(); i++) {
+        unsettled.mut(i)->dependsOn = dependsOn;
+    }
+    if (dependsOn == SIZE_MAX) {
+        while (unsettled.length() > unsettledMark) {
+            unsettled.popBack();
+        }
+    }
+    auto* node = findSearched(mod, name, ns, false);
+    if (!node) {
+        const auto key = searchKey(mod, name, ns);
+        auto* head = searched.find(key);
+        node = searchPool->make<SearchedName>(SearchedName{&mod, name, ns, dependsOn, true, head ? *head : nullptr});
+        if (head) {
+            *head = node;
+        } else {
+            searched.insert(key, node);
+        }
+    }
+    node->dependsOn = dependsOn;
+    node->live = true;
+    if (dependsOn != SIZE_MAX) {
+        unsettled.pushBack(node);
+    }
+}
+
+auto ResolveState::discardSearches(size_t unsettledMark) -> void {
+    while (unsettled.length() > unsettledMark) {
+        unsettled.popBack()->live = false;
+    }
+}
+
 auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath) -> ResolveItemRef {
     TRACE_FUNCTION_F(StringView("Looking for ") << name << StringView(" in ") << mod.path() << StringView(" (ns=") << ns << StringView(")"));
     if (mod.indexPopulated) {
         TODO(sp, StringView("Look up in index"));
     }
 
+    if (const auto* done = findSearched(mod, name, ns, true)) {
+        DEBUG(StringView("Already searched without a result"));
+        lowlink = min(lowlink, done->dependsOn);
+        return ResolveItemRef::make_None({});
+    }
+
+    const auto depth = antirecurseStack.size();
+    const auto outerLowlink = lowlink;
+    const auto unsettledMark = unsettled.length();
+    lowlink = SIZE_MAX;
+
     auto guardEnt = std::make_pair(&mod, name);
     bool visitUse = true;
-    if (std::count(antirecurseStack.begin(), antirecurseStack.end(), guardEnt) > 0) {
-        DEBUG(StringView("Recursion detected, not looking at `use` statements in ") << mod.path());
-        visitUse = false;
+    for (size_t i = 0; i < depth; i++) {
+        if (antirecurseStack[i] == guardEnt) {
+            DEBUG(StringView("Recursion detected, not looking at `use` statements in ") << mod.path());
+            visitUse = false;
+            lowlink = i;
+            break;
+        }
     }
 
     antirecurseStack.push_back(std::move(guardEnt));
-    STD_DEFER {
-        antirecurseStack.pop_back();
-    };
+    auto rv = searchItem(mod, name, ns, outPath, visitUse);
+    antirecurseStack.pop_back();
 
+    if (rv.is_None()) {
+        settleSearch(mod, name, ns, depth, unsettledMark);
+    } else {
+        discardSearches(unsettledMark);
+    }
+    lowlink = min(outerLowlink, lowlink);
+    return rv;
+}
+
+auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath, bool visitUse) -> ResolveItemRef {
     if (ns == ResolveNamespace::Macro) {
         for (const auto& i : mod.macros()) {
             DEBUG(StringView("> MACRO ") << i.name);
