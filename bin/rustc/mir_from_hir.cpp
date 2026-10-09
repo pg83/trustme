@@ -62,18 +62,231 @@ namespace {
         return blocks;
     }
 
+    struct LoopPartEntry {
+        unsigned int slot;
+        u32 offset;
+        u32 length;
+    };
+
+    u32 loopPartField(size_t index) {
+        return static_cast<u32>(index * 2);
+    }
+
+    u32 loopPartVariant(size_t index) {
+        return static_cast<u32>(index * 2 + 1);
+    }
+
+    size_t structFieldIndex(const HIRStruct& str, const RcString& name) {
+        if (const auto* fields = str.data.opt_Named()) {
+            for (size_t i = 0; i < fields->size(); i++) {
+                if ((*fields)[i].name == name) {
+                    return i;
+                }
+            }
+            return SIZE_MAX;
+        }
+        if (const auto* fields = str.data.opt_Tuple()) {
+            size_t index = 0;
+            for (const char* c = name.c_str(); *c; c++) {
+                if (*c < '0' || *c > '9') {
+                    return SIZE_MAX;
+                }
+                index = index * 10 + static_cast<size_t>(*c - '0');
+            }
+            return index < fields->size() ? index : SIZE_MAX;
+        }
+        return SIZE_MAX;
+    }
+
     struct LoopAssignedVariables: public HIRExprVisitorDef {
+        const StaticTraitResolve& resolve;
+        const Vector<const HIRType*>& variableTypes;
         Vector<unsigned int> assigned;
         Vector<unsigned int> bound;
         Vector<unsigned int> moved;
+        Vector<u32> partSteps;
+        Vector<LoopPartEntry> parts;
 
-        explicit LoopAssignedVariables(HIRTypeInterner& types)
+        LoopAssignedVariables(HIRTypeInterner& types, const StaticTraitResolve& resolve, const Vector<const HIRType*>& variableTypes)
             : HIRExprVisitorDef(types)
+            , resolve(resolve)
+            , variableTypes(variableTypes)
         {
+        }
+
+        bool placeOf(HIRExprNode* node, unsigned int& slot, Vector<u32>& steps) {
+            Vector<u32> reversed;
+            while (auto* field = cast<HIRExprNodeField>(node)) {
+                const auto* ty = field->value->resType;
+                size_t index = SIZE_MAX;
+                if (const auto* tuple = ty->opt_Tuple()) {
+                    index = 0;
+                    for (const char* c = field->field.c_str(); *c; c++) {
+                        index = index * 10 + static_cast<size_t>(*c - '0');
+                    }
+                    if (index >= tuple->length()) {
+                        return false;
+                    }
+                } else if (const auto* path = ty->opt_Path(); path && path->binding.is_Struct()) {
+                    index = structFieldIndex(*path->binding.as_Struct(), field->field);
+                }
+                if (index == SIZE_MAX) {
+                    return false;
+                }
+                reversed.pushBack(loopPartField(index));
+                node = field->value.get();
+            }
+            const auto* var = cast<HIRExprNodeVariable>(node);
+            if (!var) {
+                return false;
+            }
+            slot = var->slot;
+            for (size_t i = reversed.length(); i-- > 0;) {
+                steps.pushBack(reversed[i]);
+            }
+            return true;
+        }
+
+        void addPart(unsigned int slot, const Vector<u32>& steps) {
+            if (steps.empty()) {
+                return;
+            }
+            parts.pushBack(LoopPartEntry{slot, static_cast<u32>(partSteps.length()), static_cast<u32>(steps.length())});
+            partSteps.append(steps.data(), steps.length());
+        }
+
+        void patternParts(const HIRPattern& pattern, unsigned int slot, Vector<u32>& steps) {
+            if (pattern.implicitDerefCount != 0) {
+                return;
+            }
+            for (const auto& binding : pattern.bindings) {
+                if (binding.type == HIRPatternBinding::Type::Move && binding.slot < variableTypes.length() && !resolve.typeIsCopy(Span(), variableTypes[binding.slot])) {
+                    addPart(slot, steps);
+                }
+            }
+            const auto fieldsFrom = [&](const auto& subPatterns, size_t first) {
+                for (size_t i = 0; i < subPatterns.size(); i++) {
+                    steps.pushBack(loopPartField(first + i));
+                    patternParts(subPatterns[i], slot, steps);
+                    steps.popBack();
+                }
+            };
+            const auto variantStruct = [&](const HIRPatternPathBinding& binding) -> const HIRStruct* {
+                if (const auto* e = binding.opt_Enum()) {
+                    if (!e->ptr->data.is_Data()) {
+                        return nullptr;
+                    }
+                    const auto* varTy = e->ptr->data.as_Data()[e->varIdx].type;
+                    return varTy->is_Path() && varTy->as_Path().binding.is_Struct() ? varTy->as_Path().binding.as_Struct() : nullptr;
+                }
+                return binding.is_Struct() ? binding.as_Struct() : nullptr;
+            };
+            switch (pattern.data.tag()) {
+                case HIRPatternData::TAG_Tuple: {
+                    const auto& e = pattern.data.as_Tuple();
+                    fieldsFrom(e.subPatterns, 0);
+                    break;
+                }
+                case HIRPatternData::TAG_SplitTuple: {
+                    const auto& e = pattern.data.as_SplitTuple();
+                    fieldsFrom(e.leading, 0);
+                    fieldsFrom(e.trailing, e.totalSize - e.trailing.size());
+                    break;
+                }
+                case HIRPatternData::TAG_PathTuple: {
+                    const auto& e = pattern.data.as_PathTuple();
+                    const auto* variant = e.binding.opt_Enum();
+                    if (variant) {
+                        steps.pushBack(loopPartVariant(variant->varIdx));
+                    }
+                    fieldsFrom(e.leading, 0);
+                    fieldsFrom(e.trailing, e.totalSize - e.trailing.size());
+                    if (variant) {
+                        steps.popBack();
+                    }
+                    break;
+                }
+                case HIRPatternData::TAG_PathNamed: {
+                    const auto& e = pattern.data.as_PathNamed();
+                    const auto* str = variantStruct(e.binding);
+                    if (!str) {
+                        break;
+                    }
+                    const auto* variant = e.binding.opt_Enum();
+                    if (variant) {
+                        steps.pushBack(loopPartVariant(variant->varIdx));
+                    }
+                    for (const auto& sub : e.subPatterns) {
+                        const auto index = structFieldIndex(*str, sub.first);
+                        if (index == SIZE_MAX) {
+                            continue;
+                        }
+                        steps.pushBack(loopPartField(index));
+                        patternParts(sub.second, slot, steps);
+                        steps.popBack();
+                    }
+                    if (variant) {
+                        steps.popBack();
+                    }
+                    break;
+                }
+                case HIRPatternData::TAG_Or: {
+                    for (const auto& alternative : pattern.data.as_Or()) {
+                        patternParts(alternative, slot, steps);
+                    }
+                    break;
+                }
+                case HIRPatternData::TAG_Box:
+                case HIRPatternData::TAG_Slice:
+                case HIRPatternData::TAG_SplitSlice: {
+                    addPart(slot, steps);
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        void scrutineeParts(HIRExprNode* value, const HIRPattern& pattern) {
+            unsigned int slot = 0;
+            Vector<u32> steps;
+            if (value && placeOf(value, slot, steps)) {
+                patternParts(pattern, slot, steps);
+            }
+        }
+
+        void visit(HIRExprNodeField& node) override {
+            if (node.usage == HIRValueUsage::Move) {
+                unsigned int slot = 0;
+                Vector<u32> steps;
+                if (placeOf(&node, slot, steps)) {
+                    addPart(slot, steps);
+                }
+            }
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeMatch& node) override {
+            for (const auto& arm : node.arms) {
+                for (const auto& pattern : arm.patterns) {
+                    scrutineeParts(node.value.get(), pattern);
+                }
+            }
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeLet& node) override {
+            scrutineeParts(node.value.get(), node.pattern);
+            HIRExprVisitorDef::visit(node);
         }
 
         void visit(HIRExprNodeAssign& node) override {
             if (node.op == HIRExprNodeAssign::Op::None) {
+                unsigned int slot = 0;
+                Vector<u32> steps;
+                if (placeOf(node.slot.get(), slot, steps)) {
+                    addPart(slot, steps);
+                }
                 HIRExprNode* root = node.slot.get();
                 for (;;) {
                     if (auto* field = cast<HIRExprNodeField>(root)) {
@@ -7577,7 +7790,7 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
     }
 }
 
-bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, bool moved, VarState& head) {
+bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, bool moved, const Vector<MirLoopPart>& parts, VarState& head) {
     const auto type = var.root.is_Argument() ? SlotType::Argument : SlotType::Local;
     const auto idx = var.root.is_Argument() ? var.root.as_Argument() : var.root.as_Local();
     const auto& entry = getSlotState(sp, idx, type);
@@ -7586,7 +7799,7 @@ bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, bool moved,
         return false;
     }
     if (needsDrop && (entry.is_Valid() || entry.is_Invalid() || entry.is_Optional())) {
-        head = loopHeadWhole(sp, var, entry);
+        head = loopHeadWhole(sp, var, entry, parts, 0);
     } else {
         head = entry.clone();
         loopHeadTemplate(sp, head);
@@ -7595,7 +7808,7 @@ bool MirBuilder::enterLoopHead(const Span& sp, const MIRLValue& var, bool moved,
     return true;
 }
 
-VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const VarState& entry) {
+VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const VarState& entry, const Vector<MirLoopPart>& parts, size_t depth) {
     const auto entryFlag = [&]() {
         if (const auto* flag = entry.opt_Optional()) {
             const auto rv = newDropFlag(false);
@@ -7607,16 +7820,31 @@ VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const Va
         pushStmtSetDropflagVal(sp, rv, valid);
         return rv;
     };
+    const auto continuing = [](const Vector<MirLoopPart>& candidates, size_t at) {
+        return std::any_of(candidates.begin(), candidates.end(), [&](const MirLoopPart& part) {
+            return part.length > at;
+        });
+    };
+    const auto through = [](const Vector<MirLoopPart>& candidates, size_t at, u32 step) {
+        Vector<MirLoopPart> rv;
+        for (const auto& part : candidates) {
+            if (part.length > at && part.steps[at] == step) {
+                rv.pushBack(part);
+            }
+        }
+        return rv;
+    };
     const auto* ty = valType(sp, lv);
-    if (!resolve_.typeNeedsDropGlue(sp, ty)) {
+    if (!continuing(parts, depth) || !resolve_.typeNeedsDropGlue(sp, ty)) {
         return VarState::make_Optional(entryFlag());
     }
-    const auto fieldsOf = [&](const MIRLValue& base, size_t fieldCount) {
+    const auto fieldsOf = [&](const MIRLValue& base, size_t fieldCount, const Vector<MirLoopPart>& baseParts, size_t at) {
         auto rv = VarState::make_Partial({{}, ~0u});
         auto& fields = rv.as_Partial().innerStates;
         fields.reserve(fieldCount);
         for (size_t j = 0; j < fieldCount; j++) {
-            fields.push_back(loopHeadWhole(sp, MIRLValue::newField(base.clone(), static_cast<unsigned int>(j)), entry));
+            const auto fieldParts = through(baseParts, at, loopPartField(j));
+            fields.push_back(loopHeadWhole(sp, MIRLValue::newField(base.clone(), static_cast<unsigned int>(j)), entry, fieldParts, at + 1));
         }
         return rv;
     };
@@ -7633,7 +7861,7 @@ VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const Va
         return 0;
     };
     if (const auto* tuple = ty->opt_Tuple(); tuple && tuple->length() > 0) {
-        return fieldsOf(lv, tuple->length());
+        return fieldsOf(lv, tuple->length(), parts, depth);
     }
     const auto* path = ty->opt_Path();
     const auto* markings = path ? path->binding.getTraitMarkings() : nullptr;
@@ -7642,7 +7870,7 @@ VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const Va
     }
     if (path->binding.is_Struct()) {
         const auto fieldCount = structFieldCount(path->binding.as_Struct());
-        return fieldCount > 0 ? fieldsOf(lv, fieldCount) : VarState::make_Optional(entryFlag());
+        return fieldCount > 0 ? fieldsOf(lv, fieldCount, parts, depth) : VarState::make_Optional(entryFlag());
     }
     if (!path->binding.is_Enum()) {
         return VarState::make_Optional(entryFlag());
@@ -7655,7 +7883,8 @@ VarState MirBuilder::loopHeadWhole(const Span& sp, const MIRLValue& lv, const Va
         const auto variantLv = MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i));
         const auto* variantPath = valType(sp, variantLv)->opt_Path();
         const auto fieldCount = structFieldCount(variantPath && variantPath->binding.is_Struct() ? variantPath->binding.as_Struct() : nullptr);
-        variants.push_back(fieldCount > 0 ? fieldsOf(variantLv, fieldCount) : VarState::make_Optional(entryFlag()));
+        const auto variantParts = through(parts, depth, loopPartVariant(i));
+        variants.push_back(fieldCount > 0 && continuing(variantParts, depth + 1) ? fieldsOf(variantLv, fieldCount, variantParts, depth + 1) : VarState::make_Optional(entryFlag()));
     }
     rv.as_Partial().outerFlag = entryFlag();
     return rv;
@@ -9603,7 +9832,7 @@ auto ExprVisitorConv::visit(HIRExprNodeLet& node) -> void {
 }
 
 auto ExprVisitorConv::enterLoopHeads(const Span& sp, HIRExprNode& body) -> LoopHead* {
-    LoopAssignedVariables scan{builder.resolve().hirCrateMut().types};
+    LoopAssignedVariables scan{builder.resolve().hirCrateMut().types, builder.resolve(), variableTypes};
     body.visit(scan);
     LoopHead* heads = nullptr;
     for (auto slot : scan.assigned) {
@@ -9613,7 +9842,13 @@ auto ExprVisitorConv::enterLoopHeads(const Span& sp, HIRExprNode& body) -> LoopH
         auto var = builder.getVariable(sp, slot);
         auto head = VarState::make_Valid({});
         const bool moved = std::find(scan.moved.begin(), scan.moved.end(), slot) != scan.moved.end();
-        if (builder.enterLoopHead(sp, var, moved, head)) {
+        Vector<MirLoopPart> parts;
+        for (const auto& part : scan.parts) {
+            if (part.slot == slot) {
+                parts.pushBack(MirLoopPart{scan.partSteps.data() + part.offset, part.length});
+            }
+        }
+        if (builder.enterLoopHead(sp, var, moved, parts, head)) {
             heads = loopHeadPool->make<LoopHead>(LoopHead{heads, mv$(var), mv$(head)});
         }
     }

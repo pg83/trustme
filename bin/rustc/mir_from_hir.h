@@ -118,6 +118,11 @@ struct PatternBinding {
     }
 };
 
+struct MirLoopPart {
+    const u32* steps;
+    u32 length;
+};
+
 class MirBuilder {
     friend class ScopeHandle;
 
@@ -371,14 +376,14 @@ public:
 
     void movedLvalue(const Span& sp, const MIRLValue& lv);
 
-    bool enterLoopHead(const Span& sp, const MIRLValue& var, bool moved, VarState& head);
+    bool enterLoopHead(const Span& sp, const MIRLValue& var, bool moved, const stl::Vector<MirLoopPart>& parts, VarState& head);
 
     void writeLoopHead(const Span& sp, const MIRLValue& var, const VarState& head);
 
 private:
     void loopHeadTemplate(const Span& sp, VarState& state);
 
-    VarState loopHeadWhole(const Span& sp, const MIRLValue& lv, const VarState& entry);
+    VarState loopHeadWhole(const Span& sp, const MIRLValue& lv, const VarState& entry, const stl::Vector<MirLoopPart>& parts, size_t depth);
 
     void writeLoopHeadState(const Span& sp, const MIRLValue& lv, const VarState& head, const VarState& cur);
 
