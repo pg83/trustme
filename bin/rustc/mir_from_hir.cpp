@@ -5527,6 +5527,7 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     , retTy(retTy)
     , args_(args)
     , output(output)
+    , firstTemporary_(output.locals.length())
     , langBox_(nullptr)
     , blockActive_(false)
     , resultValid(false)
@@ -11087,6 +11088,11 @@ auto ExprVisitorConv::visit(HIRExprNodeIndex& node) -> void {
         }
     }
 
+    if (!index.is_Local() || !builder.isTemporary(index.root.as_Local())) {
+        auto localIdx = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
+        builder.pushStmtAssign(node.span(), localIdx.clone(), mv$(index));
+        index = mv$(localIdx);
+    }
     {
         auto limitLval = builder.lvalueOrTemp(node.span(), tyIdx, mv$(limitVal));
 
@@ -11120,11 +11126,6 @@ auto ExprVisitorConv::visit(HIRExprNodeIndex& node) -> void {
         builder.setCurBlock(armContinue);
     }
 
-    if (!index.is_Local()) {
-        auto localIdx = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
-        builder.pushStmtAssign(node.span(), localIdx.clone(), mv$(index));
-        index = mv$(localIdx);
-    }
     builder.setResult(node.span(), MIRLValue::newIndex(mv$(value), index.root.as_Local()));
 }
 

@@ -131,6 +131,7 @@ class MirBuilder {
     const HIRType* retTy;
     const HIRFunction::argsT& args_;
     MIRFunction& output;
+    const size_t firstTemporary_;
 
     const HIRSimplePath* langBox_;
 
@@ -218,6 +219,10 @@ public:
 
     size_t localCount() const {
         return output.locals.length();
+    }
+
+    bool isTemporary(unsigned idx) const {
+        return idx >= firstTemporary_;
     }
 
     bool hasResult() const {
