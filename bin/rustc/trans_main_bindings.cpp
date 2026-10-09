@@ -872,6 +872,14 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
             TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms, !impl.params.bounds.empty() || !m.second.data.params.bounds.empty());
         }
     }
+    for (auto& e : impl.constants) {
+        TransParams tp(state.crate.types);
+        tp.ppImpl = HIRPathParams();
+        TransEnumerateFillFromLiteral(state, e.second.data.valueRes, std::move(tp));
+        if (impl.params.isGeneric() || e.second.data.params.isGeneric()) {
+            TransEnumerateGenericBodyItems(state, Span(), e.second.data.value, ms, !impl.params.bounds.empty() || !e.second.data.params.bounds.empty());
+        }
+    }
 }
 
 template <typename T>
