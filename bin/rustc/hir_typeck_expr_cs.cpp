@@ -12553,6 +12553,15 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
     const auto ty = this->getStructenumTy(node.span(), node.isStruct, tyPath);
     this->context.equateTypes(node.span(), node.resType, ty);
+    if (const auto* expected = this->expectationFor(node)) {
+        Vector<const HIRType*> signature;
+        signature.pushBack(ty);
+        signature.pushBack(ty);
+        const auto hint = this->context.expectedInputsForExpectedOutput(node.span(), expected, signature, 0);
+        if (hint[0] != ty) {
+            this->context.equateTypes(node.span(), node.resType, hint[0]);
+        }
+    }
     if (node.baseValue) {
         this->context.equateTypes(node.span(), node.baseValue->resType, ty);
     }
