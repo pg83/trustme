@@ -4657,6 +4657,14 @@ namespace {
                     }
                     e.crate = ecIt->second;
                     crate.markExternCrateUsed(e.crate);
+                } else if (e.crate == "" && !e.nodes.empty() && crate.edition >= ASTEdition::Rust2018) {
+                    const auto name = e.nodes.front().name();
+                    auto ecIt = settings.implicitCrates.find(name);
+                    if (ecIt != settings.implicitCrates.end() && ResolveUseGetBindingMod(resolveContext, span, settings, crate, crate.rootModule_.path(), crate.rootModule_, name, {}, /*types_only*/ true).type.is_Unbound()) {
+                        crate.markExternCrateUsed(ecIt->second);
+                        e.nodes.erase(e.nodes.begin());
+                        return ASTPath(ecIt->second, e.nodes);
+                    }
                 }
                 return path;
             }
