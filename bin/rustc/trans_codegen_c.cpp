@@ -14,6 +14,7 @@
 #include "hir_typeck_static.h"
 #include "hir_typeck_monomorph.h"
 
+#include <std/alg/defer.h>
 #include <std/alg/qsort.h>
 #include <std/alg/range.h>
 #include <std/sym/i_map.h>
@@ -183,6 +184,7 @@ namespace {
         bool currentFunctionTracksCaller = false;
         bool unwindRegion = false;
         bool currentFunctionRealignsArguments = false;
+        unsigned destructorLoopDepth = 0;
 
         static constexpr size_t maxCTypeAlignment = 1u << 28;
         static constexpr size_t backendOptimizationBudget = 10'000;
@@ -9499,17 +9501,21 @@ auto CodeGeneratorC::emitTermSwitchvalue(const MIRTypeResolve& localMirRes, cons
 
 auto CodeGeneratorC::emitDestructorLoopCb(const MIRLValue& slot, const HIRType* elementTy, CDestructorCountCallback& emitCount, unsigned indentLevel) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-    auto element = MIRLValue::newIndex(slot.clone(), MIRLValue::Storage::MAX_ARG);
+    const auto depth = destructorLoopDepth++;
+    STD_DEFER {
+        destructorLoopDepth--;
+    };
+    auto element = MIRLValue::newIndex(slot.clone(), MIRLValue::Storage::MAX_ARG - depth);
 
-    of << indent << StringView("for(unsigned i = 0; i < ");
+    of << indent << StringView("for(unsigned i") << depth << StringView(" = 0; i") << depth << StringView(" < ");
     emitCount.emit();
-    of << StringView("; i++) {\n");
+    of << StringView("; i") << depth << StringView("++) {\n");
     of << indent << StringView("\ttry {\n");
     emitDestructorCall(element, elementTy, false, indentLevel + 2);
     of << StringView("\n") << indent << StringView("\t} catch (...) {\n");
-    of << indent << StringView("\t\tfor(i++; i < ");
+    of << indent << StringView("\t\tfor(i") << depth << StringView("++; i") << depth << StringView(" < ");
     emitCount.emit();
-    of << StringView("; i++) {\n");
+    of << StringView("; i") << depth << StringView("++) {\n");
     of << indent << StringView("\t\t\ttry {\n");
     emitDestructorCall(element, elementTy, false, indentLevel + 4);
     of << StringView("\n") << indent << StringView("\t\t\t} catch (...) { abort(); }\n");
@@ -9825,8 +9831,8 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
         }
         case MIRLValue::RefCommon::TAG_Local: {
             decltype(val.as_Local()) e = val.as_Local();
-            if (e == MIRLValue::Storage::MAX_ARG) {
-                of << StringView("i");
+            if (destructorLoopDepth != 0 && e <= MIRLValue::Storage::MAX_ARG && e > MIRLValue::Storage::MAX_ARG - destructorLoopDepth) {
+                of << StringView("i") << MIRLValue::Storage::MAX_ARG - e;
                 break;
             }
             const HIRType* tmp;
