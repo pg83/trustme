@@ -1237,7 +1237,8 @@ namespace {
             }
             toks.push_back(TokenTree(TOK_BRACE_CLOSE));
             toks.push_back(TokenTree(TOK_BRACE_CLOSE));
-            return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
+            const Span expansion(sp, crate.extCratenameCore, RcString::newInterned("format_args"), true);
+            return box$(TTStreamO(expansion, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
         }
 
         {

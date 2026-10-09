@@ -44,4 +44,5 @@ fn main() {
     assert_eq!(format_args!("plain").as_str(), Some("plain"));
     assert_eq!(format_args!("").as_str(), Some(""));
     assert_eq!(format!("{{}} {{{}}}", 1), "{} {1}");
+    assert_eq!(std::fmt::format(format_args!("{}+{:?}", 1, "x")), "1+\"x\"");
 }
