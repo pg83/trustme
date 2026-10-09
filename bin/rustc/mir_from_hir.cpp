@@ -7803,6 +7803,9 @@ void MirBuilder::writeLoopHeadState(const Span& sp, const MIRLValue& lv, const V
 }
 
 void MirBuilder::writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigned int flag, const VarState& cur) {
+    if (!resolve_.typeNeedsDropGlue(sp, valType(sp, lv))) {
+        return;
+    }
     switch (cur.tag()) {
         case VarState::TAG_Valid: {
             pushStmtSetDropflagVal(sp, flag, true);
@@ -7837,7 +7840,20 @@ void MirBuilder::writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigne
                         uniform = sameState(ce.innerStates[i], ce.innerStates[common]);
                     }
                 }
-                ASSERT_BUG(sp, uniform && common < ce.innerStates.size(), StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
+                if (uniform && common == ce.innerStates.size()) {
+                    const auto optional = std::find_if(ce.innerStates.begin(), ce.innerStates.end(), [](const VarState& state) {
+                        return state.is_Optional();
+                    });
+                    if (optional != ce.innerStates.end()) {
+                        pushStmtSetDropflagOther(sp, flag, optional->as_Optional());
+                    } else {
+                        pushStmtSetDropflagVal(sp, flag, std::all_of(ce.innerStates.begin(), ce.innerStates.end(), [](const VarState& state) {
+                            return state.is_Valid();
+                        }));
+                    }
+                    break;
+                }
+                ASSERT_BUG(sp, uniform, StringView("Loop back edge leaves ") << lv << StringView(" partially moved"));
                 writeLoopHeadWhole(sp, MIRLValue::newField(lv.clone(), static_cast<unsigned int>(common)), flag, ce.innerStates[common]);
                 break;
             }
