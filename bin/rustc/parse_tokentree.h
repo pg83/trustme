@@ -33,6 +33,8 @@ public:
 
     TokenTree(ASTEdition edition, Ident::Hygiene hygiene, std::vector<TokenTree> subtrees);
 
+    static TokenTree sequence(ASTEdition edition, Ident::Hygiene hygiene, TokenTree first, TokenTree second);
+
     TokenTree clone() const;
 
     bool isToken() const {

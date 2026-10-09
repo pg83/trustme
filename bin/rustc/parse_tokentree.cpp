@@ -55,6 +55,13 @@ TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, std::vector<Tok
 {
 }
 
+TokenTree TokenTree::sequence(ASTEdition edition, Ident::Hygiene hygiene, TokenTree first, TokenTree second) {
+    TokenTree rv(edition, std::move(hygiene), decltype(subtrees){});
+    rv.subtrees.push_back(std::move(first));
+    rv.subtrees.push_back(std::move(second));
+    return rv;
+}
+
 const TokenTree& TokenTree::operator[](unsigned int idx) const {
     BUG_ASSERT(idx < subtrees.size());
     return subtrees[idx];

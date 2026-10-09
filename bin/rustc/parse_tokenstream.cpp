@@ -179,6 +179,17 @@ bool TokenStream::lookaheadIdentIs(unsigned int i, const char* name) {
     return lookaheadAt(i).tok.ident().name == name;
 }
 
+bool TokenStream::lookaheadIsDollarCrate(unsigned int i) {
+    if (this->lookahead(i) != TOK_DOUBLE_COLON || this->lookahead(i + 1) != TOK_STRING) {
+        return false;
+    }
+    auto name = i + 1;
+    if (cacheValid) {
+        name--;
+    }
+    return lookaheadAt(name).tok.spelling() == RcString();
+}
+
 Ident::Hygiene TokenStream::getHygiene() const {
     return hygiene_;
 }

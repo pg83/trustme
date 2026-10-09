@@ -349,6 +349,14 @@ namespace {
         return cast<const ASTExprNodeInteger>(node) || cast<const ASTExprNodeFloat>(node) || cast<const ASTExprNodeString>(node) || cast<const ASTExprNodeByteString>(node) || cast<const ASTExprNodeCString>(node) || cast<const ASTExprNodeBool>(node) || cast<const ASTExprNodeSuffixedLiteral>(node);
     }
 
+    TokenTree takeDollarCrate(TokenStream& lex) {
+        auto colons = lex.getToken();
+        TokenTree first(lex.getEdition(), lex.getHygiene(), mv$(colons));
+        auto name = lex.getToken();
+        TokenTree second(lex.getEdition(), lex.getHygiene(), mv$(name));
+        return TokenTree::sequence(lex.getEdition(), lex.getHygiene(), mv$(first), mv$(second));
+    }
+
     InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmtIsItem) {
         Token tok;
         switch (type) {
@@ -358,6 +366,9 @@ namespace {
                 BUG(lex.pointSpan(), StringView("Encountered PAT_LOOP when handling capture"));
 
             case MacroPatEnt::PAT_TT:
+                if (lex.lookaheadIsDollarCrate(0)) {
+                    return InterpolatedFragment(takeDollarCrate(lex));
+                }
                 if (GET_TOK(tok, lex) == TOK_EOF) {
                     parseErrorUnexpected(lex, TOK_EOF);
                 } else {
@@ -412,6 +423,9 @@ namespace {
                 return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
             } break;
             case MacroPatEnt::PAT_IDENT:
+                if (lex.lookaheadIsDollarCrate(0)) {
+                    return InterpolatedFragment(takeDollarCrate(lex));
+                }
                 GET_TOK(tok, lex);
                 tok.setSpacing(TokenSpacing::Alone);
                 if (Token::typeIsRword(tok.type())) {
@@ -458,6 +472,15 @@ namespace {
     };
     bool consumeItem(TokenStreamRO& lex, ItemConsumeMode mode = ItemConsumeMode::ItemFragment);
 
+    bool nextIsDollarCrate(const TokenStreamRO& lex) {
+        if (lex.next() != TOK_DOUBLE_COLON) {
+            return false;
+        }
+        auto peek = lex.clone();
+        peek.consume();
+        return peek.next() == TOK_STRING && peek.nextTok().spelling() == RcString();
+    }
+
     bool consumeTt(TokenStreamRO& lex) {
         TRACE_FUNCTION;
         switch (lex.next()) {
@@ -488,6 +511,9 @@ namespace {
                 lex.consume();
                 break;
             default:
+                if (nextIsDollarCrate(lex)) {
+                    lex.consume();
+                }
                 lex.consume();
                 break;
         }
@@ -1832,6 +1858,9 @@ namespace {
                 break;
             case MacroPatEnt::PAT_IDENT:
                 if (lex.next() == TOK_IDENT || Token::typeIsRword(lex.next())) {
+                    lex.consume();
+                } else if (nextIsDollarCrate(lex)) {
+                    lex.consume();
                     lex.consume();
                 } else {
                     return false;

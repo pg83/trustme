@@ -104,6 +104,8 @@ public:
 
     bool lookaheadIdentIs(unsigned int count, const char* name);
 
+    bool lookaheadIsDollarCrate(unsigned int count);
+
     Ident::Hygiene getHygiene() const;
 
     virtual void pushHygine();
