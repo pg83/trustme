@@ -290,6 +290,11 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
     s.write_sym(b"");
 }
 
+pub fn send_panic<T: ::std::io::Write>(out_stream: T, message: Option<&str>)
+{
+    Writer::new(out_stream).write_panic(message);
+}
+
 
 #[cfg(test)]
 mod write_tests {

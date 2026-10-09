@@ -64,6 +64,7 @@ namespace {
         SpanDef = 11,
         RawLiteral = 12,
         Joined = 13,
+        Panicked = 14,
     };
 
     enum class FragType {
@@ -145,6 +146,8 @@ namespace {
         } handles;
 
         bool eofHit = false;
+        bool hasPendingHeader = false;
+        u8 pendingHeader = 0;
         Vector<u8> pendingSymbols;
         size_t pendingSymbolOffset = 0;
         Token pendingLiteral;
@@ -157,6 +160,8 @@ namespace {
         ~ProcMacroInv();
 
         bool checkGood();
+
+        void checkPanicked(const Span& sp, StringView what);
 
         void sendDone();
 
@@ -356,7 +361,7 @@ namespace {
     }
 
     template <typename F>
-    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree* attrInput, F cb, const Ident::Hygiene& callSite = Ident::Hygiene()) {
+    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree* attrInput, StringView what, F cb, const Ident::Hygiene& callSite = Ident::Hygiene()) {
         auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
         if (!pmi.checkGood()) {
             return std::unique_ptr<TokenStream>();
@@ -378,6 +383,7 @@ namespace {
         ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
         cb(v);
         pmi.sendDone();
+        pmi.checkPanicked(sp, what);
         return box$(pmi);
     }
 }
@@ -441,7 +447,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i, const Ident::Hygiene& callSite) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, StringView("proc-macro derive panicked"), [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on struct"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
@@ -450,7 +456,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i, const Ident::Hygiene& callSite) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, StringView("proc-macro derive panicked"), [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on enum"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
@@ -459,7 +465,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i, const Ident::Hygiene& callSite) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, StringView("proc-macro derive panicked"), [&](ProcMacroVisitor& v) {
         DEBUG(StringView("derive on union"));
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
@@ -468,7 +474,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const ASTAttribute& invoked, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, &invoked.data(), [&](ProcMacroVisitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, &invoked.data(), StringView("custom attribute panicked"), [&](ProcMacroVisitor& v) {
         v.emitAllAttrs = true;
         v.invokedAttr = &invoked;
         v.visitTopAttrs(attrs);
@@ -477,7 +483,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, StringView("proc macro panicked"), [&](ProcMacroVisitor& v) {
         v.visitTokentree(tt);
     }, tt.hygiene());
 }
@@ -601,6 +607,20 @@ bool ProcMacroInv::checkGood() {
         return false;
     }
     return true;
+}
+
+void ProcMacroInv::checkPanicked(const Span& sp, StringView what) {
+    const auto v = this->recvU8();
+    if (static_cast<TokenClass>(v) != TokenClass::Panicked) {
+        hasPendingHeader = true;
+        pendingHeader = v;
+        return;
+    }
+    if (this->recvU8() == 0) {
+        ERROR(sp, E0000, what);
+    }
+    const auto message = this->recvBytes();
+    ERROR(sp, E0000, what << StringView("\n  = help: message: ") << StringView(reinterpret_cast<const u8*>(message.data()), message.size()));
 }
 
 void ProcMacroInv::sendU8(u8 v) {
@@ -736,7 +756,8 @@ Token ProcMacroInv::realGetToken_() {
     if (eofHit) {
         return Token(TOK_EOF);
     }
-    u8 v = this->recvU8();
+    u8 v = hasPendingHeader ? pendingHeader : this->recvU8();
+    hasPendingHeader = false;
 
     /* A span marker gives the context of every token after it, up to the next
        marker: a token the macro passed through names the context it arrived

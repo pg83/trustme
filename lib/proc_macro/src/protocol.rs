@@ -212,6 +212,17 @@ impl<T: ::std::io::Write> Writer<T>
         Token::Joined(v) => { self.putb(13); self.putb(v); },
         }
     }
+    /// The macro panicked instead of producing a stream: upstream's bridge
+    /// hands the compiler the payload's text if it was a `&str` or `String`.
+    pub fn write_panic(&mut self, message: Option<&str>)
+    {
+        self.putb(14);
+        match message
+        {
+        Some(m) => { self.putb(1); self.put_bytes(m.as_bytes()); },
+        None => self.putb(0),
+        }
+    }
     pub fn write_sym(&mut self, v: &[u8])
     {
         self.putb(1);   // "Symbol"

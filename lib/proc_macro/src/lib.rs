@@ -6,6 +6,7 @@
 #![feature(optin_builtin_traits)]
 #![feature(vec_resize_with)]
 #![feature(const_vec_new)]
+#![feature(panic_can_unwind)]
 
 macro_rules! some_else {
     ($e:expr => $alt:expr) => {match $e { Some(v) => v, None => $alt }};
@@ -329,13 +330,19 @@ static mut IS_AVAILABLE: bool = false;
 /// upstream loads a proc macro crate once and runs every invocation in it: a
 /// macro's statics live from one invocation to the next. Named on the command
 /// line, a macro runs once, on stdin or on the file named after it.
+///
+/// As upstream's bridge (`maybe_install_panic_hook`), the host hides the
+/// output of a panic that unwinds out of a running macro: the compiler
+/// reports it instead.
 #[doc(hidden)]
 pub fn main(macros: &[MacroDesc])
 {
-    // SAFE: This is the entrypoint, so no threads running yet
-    unsafe {
-        IS_AVAILABLE = true;
-    }
+    let prev = ::std::panic::take_hook();
+    ::std::panic::set_hook(Box::new(move |info| {
+        if !is_available() || !info.can_unwind() {
+            prev(info)
+        }
+    }));
     //::env_logger::init();
 
     let mut args = ::std::env::args();
@@ -377,12 +384,25 @@ fn report_found(found: bool)
     ::std::io::stdout().flush().expect("Stdout write error?");
 }
 
+fn set_available(available: bool)
+{
+    // SAFE: The host runs one macro at a time on its only thread
+    unsafe {
+        IS_AVAILABLE = available;
+    }
+}
+
+/// Upstream's client decodes the input and runs the macro inside
+/// `catch_unwind`, and returns the panic payload's message to the compiler
+/// in place of a stream.
 fn run(m: &MacroDesc, stdin: &mut dyn ::std::io::Read)
 {
-    debug!("Waiting for input\r");
-    let input = crate::serialisation::recv_token_stream(&mut *stdin);
-    debug!("INPUT = `{}`\r", input);
-    let output = match m.handler
+    set_available(true);
+    let output = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        debug!("Waiting for input\r");
+        let input = crate::serialisation::recv_token_stream(&mut *stdin);
+        debug!("INPUT = `{}`\r", input);
+        match m.handler
         {
         MacroType::SingleStream(h) => {
             Span::freeze_definitions();
@@ -394,10 +414,25 @@ fn run(m: &MacroDesc, stdin: &mut dyn ::std::io::Read)
             Span::freeze_definitions();
             (h)(input, input_body)
             },
-        };
-    debug!("OUTPUT = `{}`\r", output);
+        }
+        }));
+    set_available(false);
     let stdout = ::std::io::stdout();
-    crate::serialisation::send_token_stream(stdout.lock(), output);
+    match output
+    {
+    Ok(output) => {
+        debug!("OUTPUT = `{}`\r", output);
+        crate::serialisation::send_token_stream(stdout.lock(), output);
+        },
+    Err(payload) => {
+        let message = match payload.downcast_ref::<&'static str>()
+            {
+            Some(s) => Some(*s),
+            None => payload.downcast_ref::<String>().map(|s| &s[..]),
+            };
+        crate::serialisation::send_panic(stdout.lock(), message);
+        },
+    }
     ::std::io::Write::flush(&mut ::std::io::stdout()).expect("Stdout write error?");
     note!("Done");
 }
