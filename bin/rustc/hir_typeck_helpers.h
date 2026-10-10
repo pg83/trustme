@@ -983,7 +983,7 @@ private:
     bool assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
     bool assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
     bool assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
-    bool assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const;
+    bool assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback, AssembledImplCallback* itemBoundCallback = nullptr) const;
 
     template <typename F>
     bool assembleMagicCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, F f) const {
@@ -1001,6 +1001,13 @@ private:
     bool assembleParamEnvCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, F f) const {
         AssembledImplCb<F> cb(f);
         return assembleParamEnvCandidatesCb(sp, trait, params, type, cb);
+    }
+
+    template <typename F, typename G>
+    bool assembleParamEnvCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, F f, G itemBounds) const {
+        AssembledImplCb<F> cb(f);
+        AssembledImplCb<G> itemBoundCb(itemBounds);
+        return assembleParamEnvCandidatesCb(sp, trait, params, type, cb, &itemBoundCb);
     }
 
     HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;

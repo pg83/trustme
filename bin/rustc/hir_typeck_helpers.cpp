@@ -5813,7 +5813,7 @@ bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePat
     return false;
 }
 
-bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const {
+bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback, AssembledImplCallback* itemBoundCallback) const {
     TRACE_FUNCTION_F(StringView("trait = ") << trait << params << StringView(", type = ") << type);
     const HIRPath::Data::Data_UfcsKnown* assocInfo = nullptr;
     if (const auto* e = type->opt_Path()) {
@@ -5852,10 +5852,11 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         }
     }
 
-    auto visitDeclaredTrait = [&](auto&& visit, const HIRType* subject, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
+    auto& itemBoundSink = itemBoundCallback ? *itemBoundCallback : callback;
+    auto visitDeclaredTrait = [&](auto&& visit, AssembledImplCallback& sink, const HIRType* subject, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
         if (matchCurrent && declaredTrait.path.path == trait) {
             auto response = declaredTrait.clone();
-            if (callback.visit(SolverImpl(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness))) {
+            if (sink.visit(SolverImpl(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness))) {
                 return true;
             }
         }
@@ -5863,7 +5864,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         for (const auto& associated : declaredTrait.traitBounds) {
             auto nestedSubject = crate.types.path(HIRPath(subject, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
             for (const auto& nestedTrait : associated.second.traits) {
-                if (visit(visit, nestedSubject, nestedTrait, true)) {
+                if (visit(visit, sink, nestedSubject, nestedTrait, true)) {
                     return true;
                 }
             }
@@ -5910,7 +5911,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
             })) {
                 continue;
             }
-            if (visitDeclaredTrait(visitDeclaredTrait, impliedType, impliedTrait, true)) {
+            if (visitDeclaredTrait(visitDeclaredTrait, callback, impliedType, impliedTrait, true)) {
                 return true;
             }
         }
@@ -5938,7 +5939,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                     continue;
                 }
                 auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait, false);
-                if (visitDeclaredTrait(visitDeclaredTrait, associatedType, impliedTrait, false)) {
+                if (visitDeclaredTrait(visitDeclaredTrait, itemBoundSink, associatedType, impliedTrait, false)) {
                     found = true;
                     break;
                 }
@@ -5964,7 +5965,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                         ty.second.type = this->expandAssociatedTypes(sp, mv$(ty.second.type));
                     }
                     auto projectedSubject = crate.types.path(HIRPath(boundTy, boundTrait.clone(), assocInfo->item, assocInfo->params.clone()), HIRTypePathBinding::make_Opaque({}));
-                    if (callback.visit(SolverImpl(std::move(projectedSubject), mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness))) {
+                    if (itemBoundSink.visit(SolverImpl(std::move(projectedSubject), mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness))) {
                         return true;
                     }
                 }
@@ -12567,7 +12568,7 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             }
             auto effectiveSource = source;
             if (source == CandidateSource::Other && selfIsRigidProjection && !impl.isTraitImpl()) {
-                effectiveSource = CandidateSource::ParamEnv;
+                effectiveSource = CandidateSource::AliasBound;
             }
             bool headNormalizationAmbiguity = false;
             ThinVector<SolverTypeEquality> headEqualities;
@@ -12615,7 +12616,7 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
         resolve_.assembleMagicCandidates(span(), trait, params, type, collect(CandidateSource::Builtin));
     }
     resolve_.assembleOtherCandidates(span(), trait, params, type, collect(CandidateSource::Other));
-    resolve_.assembleParamEnvCandidates(span(), trait, params, type, collect(CandidateSource::ParamEnv));
+    resolve_.assembleParamEnvCandidates(span(), trait, params, type, collect(CandidateSource::ParamEnv), collect(CandidateSource::AliasBound));
     assembleAliasBoundCandidates(frameIndex, trait, params, type);
 
     if (includeTraitImplCandidates) {
