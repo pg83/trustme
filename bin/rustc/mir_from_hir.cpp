@@ -7754,12 +7754,28 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
     }
 }
 
+bool MirBuilder::slotHasDropGlue(const Span& sp, const ScopeDropSlot& slot) {
+    if (slot.isArgument) {
+        return resolve_.typeNeedsDropGlue(sp, valType(sp, MIRLValue::newArgument(slot.index)));
+    }
+    while (slotDropGlue_.length() <= slot.index) {
+        slotDropGlue_.pushBack(0);
+    }
+    if (slotDropGlue_[slot.index] == 0) {
+        slotDropGlue_.mut(slot.index) = resolve_.typeNeedsDropGlue(sp, valType(sp, MIRLValue::newLocal(slot.index))) ? 2 : 1;
+    }
+    return slotDropGlue_[slot.index] == 2;
+}
+
 void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
     switch (sd.data.tag()) {
         case ScopeType::TAG_Owning: {
             auto& e = sd.data.as_Owning();
             for (size_t i = e.dropSlots.length(); i > 0; i--) {
                 const auto slot = e.dropSlots[i - 1];
+                if (buildingCleanup && !slotHasDropGlue(sd.span, slot)) {
+                    continue;
+                }
                 const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
                 auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
                 if (buildingCleanup) {
@@ -8274,6 +8290,9 @@ MIRBasicBlockId MirBuilder::unwindCleanupChain(const MIRLValue* consumedValue, b
         const auto& dropSlots = sd.data.as_Owning().dropSlots;
         for (size_t i = 0; i < dropSlots.length(); i++) {
             const auto& slot = dropSlots[i];
+            if (!slotHasDropGlue(sd.span, slot)) {
+                continue;
+            }
             const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
             if (consumedValue) {
                 auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);

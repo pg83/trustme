@@ -412,6 +412,9 @@ private:
 
     void dropScopeValues(ScopeDef& sd, bool preserveStates = false);
 
+    stl::Vector<u8> slotDropGlue_;
+    bool slotHasDropGlue(const Span& sp, const ScopeDropSlot& slot);
+
     /* One node of the unwind cleanup chain: the cleanup block that drops a
        slot (under `flag`, `~0u` when unconditional) and then continues at
        `target`. `nextNode` chains the nodes built for one slot, `~0u` ends
