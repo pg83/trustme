@@ -981,6 +981,8 @@ namespace {
                 ASSERT_BUG(lex.pointSpan(), ty->isPath(), StringView("TODO: No path :ty in derive, ") << ty);
                 ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), StringView("") << ty);
                 rv.push_back(*ty->data.as_Path());
+            } else if (lex.getTokenIf(TOK_INTERPOLATED_PATH, tok)) {
+                rv.push_back(ASTPath(tok.fragPath()));
             } else if (lex.getTokenIf(TOK_INTERPOLATED_META, tok)) {
                 const auto& mi = tok.fragMeta();
                 ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), StringView("Empty meta item in derive"));
