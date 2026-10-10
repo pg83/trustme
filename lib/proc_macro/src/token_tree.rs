@@ -99,6 +99,13 @@ pub struct Group {
     pub(crate) delimiter: Delimiter,
     pub(crate) stream: TokenStream,
     pub(crate) span: DelimSpan,
+    /// The compiler's fragment this invisible group is, one past its place
+    /// among those of the invocation (0 for none), while the macro has not been
+    /// handed the group itself: one that comes back untouched inside a stream
+    /// is the fragment again, as upstream keeps the compiler's own delimiter
+    /// for a tree the macro never iterated to. Two bytes keep a group at
+    /// upstream's 20, which proc-macro2's tests pin.
+    pub(crate) fragment: u16,
 }
 impl ::std::fmt::Display for Group
 {
@@ -139,6 +146,7 @@ impl Group {
             delimiter,
             stream,
             span: DelimSpan::from_single(Span::call_site()),
+            fragment: 0,
         }
     }
     pub fn delimiter(&self) -> Delimiter {

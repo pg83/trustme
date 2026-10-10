@@ -181,8 +181,17 @@ pub mod token_stream {
     }
     impl Iterator for IntoIter {
         type Item = crate::TokenTree;
+        /// A tree the macro is handed is the macro's own from then on: an
+        /// invisible group of the compiler's goes back as one the macro made,
+        /// which upstream's parser reads through (`InvisibleOrigin::ProcMacro`).
         fn next(&mut self) -> Option<crate::TokenTree> {
-            self.it.next()
+            self.it.next().map(|tree| match tree {
+                crate::TokenTree::Group(mut group) => {
+                    group.fragment = 0;
+                    crate::TokenTree::Group(group)
+                    },
+                tree => tree,
+            })
         }
     }
 

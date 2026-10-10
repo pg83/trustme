@@ -26,9 +26,13 @@ pub enum Token
     Joined(u8),
     /// The opening and the closing of a group with no delimiter: the tokens
     /// of a `macro_rules!` fragment, which upstream transcribes inside an
-    /// invisible delimiter.
-    OpenInvisible,
+    /// invisible delimiter. The opening names the fragment by its place among
+    /// those of the invocation.
+    OpenInvisible(u32),
     CloseInvisible,
+    /// A fragment's group handed back as the compiler gave it: the compiler
+    /// puts the fragment itself in its place.
+    Fragment(u32),
 }
 pub struct SpanDef {
     pub idx: usize,
@@ -105,8 +109,9 @@ impl<R: ::std::io::Read> Reader<R>
             }),
         12 => Token::RawLiteral(self.get_string()),
         13 => Token::Joined(self.getb().expect("getb joined")),
-        15 => Token::OpenInvisible,
+        15 => Token::OpenInvisible(self.get_u128v() as u32),
         16 => Token::CloseInvisible,
+        17 => Token::Fragment(self.get_u128v() as u32),
         _ => panic!("Unknown tag byte: {:#x}", hdr_b),
         })
     }
@@ -217,8 +222,9 @@ impl<T: ::std::io::Write> Writer<T>
             },
         Token::RawLiteral(v) => { self.putb(12); self.put_bytes(v.as_bytes()); },
         Token::Joined(v) => { self.putb(13); self.putb(v); },
-        Token::OpenInvisible => { self.putb(15); },
+        Token::OpenInvisible(i) => { self.putb(15); self.put_u128v(i as u128); },
         Token::CloseInvisible => { self.putb(16); },
+        Token::Fragment(i) => { self.putb(17); self.put_u128v(i as u128); },
         }
     }
     /// The macro panicked instead of producing a stream: upstream's bridge

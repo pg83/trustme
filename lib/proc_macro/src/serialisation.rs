@@ -58,10 +58,13 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                 Token::Symbol(ref s) if s == "" => panic!("Unexpected end-of-stream marker"),
                 Token::EndOfStream => panic!("Unexpected end-of-stream marker"),
                 Token::CloseInvisible => panic!("Unexpected end of an invisible group"),
-                Token::OpenInvisible => {
+                Token::OpenInvisible(index) => {
                     open_joined = ::std::mem::take(joined) != 0;
-                    group(Delimiter::None, s, Close::Invisible, span, joined).into()
+                    let mut group = group(Delimiter::None, s, Close::Invisible, span, joined);
+                    group.fragment = if index < u16::MAX as u32 { index as u16 + 1 } else { 0 };
+                    group.into()
                     },
+                Token::Fragment(_) => panic!("Unexpected fragment reference from the compiler"),
                 Token::Symbol(sym) => {
                     match &sym[..]
                     {
@@ -138,6 +141,7 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
             delimiter,
             stream,
             span: crate::token_tree::DelimSpan { open, close: *span, entire: open },
+            fragment: 0,
         }
     }
 
@@ -194,6 +198,10 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
             index += 1;
             match t
             {
+            TokenTree::Group(sg) if sg.delimiter == Delimiter::None && sg.fragment != 0 => {
+                set_span(s, last, sg.span.open);
+                s.write_ent(Token::Fragment(sg.fragment as u32 - 1));
+                },
             TokenTree::Group(sg) => {
                 set_span(s, last, sg.span.open);
                 if sg.delimiter != Delimiter::None && open_hidden_at(this) {

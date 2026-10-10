@@ -67,6 +67,7 @@ namespace {
         Panicked = 14,
         OpenInvisible = 15,
         CloseInvisible = 16,
+        Fragment = 17,
     };
 
     enum class FragType {
@@ -154,6 +155,8 @@ namespace {
         Vector<u8> pendingSymbols;
         size_t pendingSymbolOffset = 0;
         Token pendingLiteral;
+        ObjPool::Ref fragmentPool = ObjPool::fromMemory();
+        Vector<const Token*> fragments;
 
         ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc);
         ProcMacroInv(const ProcMacroInv&) = delete;
@@ -170,7 +173,7 @@ namespace {
 
         void sendSymbol(const char* val);
 
-        void sendInvisible(bool open);
+        void sendInvisible(bool open, u32 fragment = 0);
 
         void sendRword(const char* val);
 
@@ -800,6 +803,11 @@ Token ProcMacroInv::realGetToken_() {
         case TokenClass::SpanDef:
             TODO(this->parentSpan, StringView("SpanDef"));
             break;
+        case TokenClass::Fragment: {
+            const auto index = this->recvV128u();
+            ASSERT_BUG(this->parentSpan, index < fragments.length(), StringView("Fragment #") << index << StringView(" was never sent to the child process"));
+            return fragments[index]->clone();
+        }
         case TokenClass::Symbol: {
             auto val = this->recvBytes();
             if (val == "") {
@@ -1068,8 +1076,11 @@ auto ProcMacroInv::sendSymbol(const char* val) -> void {
     this->sendBytes(val, std::strlen(val));
 }
 
-auto ProcMacroInv::sendInvisible(bool open) -> void {
+auto ProcMacroInv::sendInvisible(bool open, u32 fragment) -> void {
     this->sendU8(static_cast<u8>(open ? TokenClass::OpenInvisible : TokenClass::CloseInvisible));
+    if (open) {
+        this->sendV128u(u64(fragment));
+    }
 }
 
 auto ProcMacroInv::sendRword(const char* val) -> void {
@@ -1383,13 +1394,25 @@ static bool tokenIsFragment(eTokenType type) {
 
 auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
     if (tokenIsFragment(tok.type())) {
-        const auto* recorded = tok.fragmentTokens();
-        if (recorded && recorded->count == 1 && tokenIsFragment(recorded->items[0]->tok.type())) {
-            this->visitToken(recorded->items[0]->tok);
-            return;
+        const Token* content = &tok;
+        const Token* identity = nullptr;
+        for (;;) {
+            if (!identity && content->rawData().as_Fragment().ptr != nullptr) {
+                identity = content;
+            }
+            const auto* recorded = content->fragmentTokens();
+            if (!recorded || recorded->count != 1 || !tokenIsFragment(recorded->items[0]->tok.type())) {
+                break;
+            }
+            content = &recorded->items[0]->tok;
         }
-        pmi.sendInvisible(true);
-        this->visitFragment(tok);
+        u32 index = ~0u;
+        if (identity) {
+            index = static_cast<u32>(pmi.fragments.length());
+            pmi.fragments.pushBack(pmi.fragmentPool->make<Token>(identity->clone()));
+        }
+        pmi.sendInvisible(true, index);
+        this->visitFragment(*content);
         pmi.sendInvisible(false);
         return;
     }
