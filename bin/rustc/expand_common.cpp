@@ -3353,6 +3353,7 @@ auto CExpandExpr::visit(ASTExprNodeClosure& node) -> void {
 }
 
 auto CExpandExpr::visit(ASTExprNodeStructLiteral& node) -> void {
+    ExpandPath(this->expandState, this->curMod(), node.path);
     node.baseValue = this->visitNodelete(node, node.baseValue);
     for (auto& val : node.values) {
         CfgExpandAttrs(expandState.wb, val.attrs);
@@ -3377,6 +3378,7 @@ auto CExpandExpr::visit(ASTExprNodeStructLiteral& node) -> void {
 }
 
 auto CExpandExpr::visit(ASTExprNodeStructLiteralPattern& node) -> void {
+    ExpandPath(this->expandState, this->curMod(), node.path);
     for (auto& val : node.values) {
         CfgExpandAttrs(expandState.wb, val.attrs);
         ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
