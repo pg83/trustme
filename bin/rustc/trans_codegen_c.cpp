@@ -5103,6 +5103,14 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         return;
     }
 
+    if ((ve.type == HIRCoreType::I128 || ve.type == HIRCoreType::U128) && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
+        emitLvalue(dst);
+        of << StringView(ve.type == HIRCoreType::I128 ? " = cast_float_to_i128(" : " = cast_float_to_u128(");
+        emitLvalue(ve.val);
+        of << StringView(")");
+        return;
+    }
+
     if (dstPrimitive && isInteger(*dstPrimitive) && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
         unsigned bits = 0;
         bool isSigned = false;
@@ -5294,6 +5302,12 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
                     case HIRCoreType::Isize:
                     case HIRCoreType::Char:
                         break;
+                    case HIRCoreType::U128:
+                    case HIRCoreType::I128:
+                        if (!typeIsEmulatedI128(tagTy)) {
+                            break;
+                        }
+                        [[fallthrough]];
                     default:
                         MIR_BUG(localMirRes, StringView("Invalid tag type?! ") << tagTy);
                 }
@@ -6980,6 +6994,8 @@ auto CodeGeneratorC::tagUnsignedType(size_t size) -> const char* {
             return "u16";
         case 4:
             return "u32";
+        case 16:
+            return "uint128_t";
         default:
             return "u64";
     }

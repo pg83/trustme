@@ -413,6 +413,8 @@ static inline uint128_t __builtin_bswap128(uint128_t v) {
     return ((uint128_t)lo << 64) | (uint128_t)hi;
 }
 
+static inline uint128_t popcount128(uint128_t a) { return __builtin_popcountll((u64)a) + __builtin_popcountll((u64)(a >> 64)); }
+
 static inline uint128_t intrinsic_ctlz_u128(uint128_t v) {
     return v == 0 ? 128 : v >> 64 != 0 ? __builtin_clz64(v >> 64) : 64 + __builtin_clz64(v);
 }

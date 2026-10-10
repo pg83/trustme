@@ -1512,8 +1512,7 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
             auto& variant = enmRepr->variants.as_Linear();
             if (!variant.isNiche(index)) {
                 const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
-                MIR_ASSERT(state, variant.field.size <= 64 / 8, StringView(""));
-                dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
+                dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, U128(variant.tagValue(index)));
             }
             break;
         }
