@@ -7342,7 +7342,22 @@ Unifier::Outcome TraitResolution::checkMethodReceiver(const Span& sp, const HIRF
             .relateProjectionInputs = true,
         }
     );
-    return relation.unify(actual, declared);
+    const auto outcome = relation.unify(actual, declared);
+    if (outcome != Unifier::Outcome::Ambiguous) {
+        return outcome;
+    }
+
+    Unifier normalizedRelation(
+        sp,
+        this->ivars,
+        this,
+        {
+            .bindRigidValues = true,
+            .relateProjectionInputs = true,
+            .rigidProjectionsAreDistinct = true,
+        }
+    );
+    return normalizedRelation.unify(this->expandAssociatedTypes(sp, actual), this->expandAssociatedTypes(sp, declared));
 }
 
 auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
