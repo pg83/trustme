@@ -1005,7 +1005,27 @@ static void TransEnumerateTypes(EnumState& state) {
     for (const auto& path : state.rv.traitObjectMethods) {
         const auto& pe = path.data.as_UfcsKnown();
         const auto& tyDyn = pe.type->as_TraitObject();
-        tv.visitType(tyDyn.trait.traitPtr->getVtableType(sp, state.crate, tyDyn));
+        const auto* vtableTy = tyDyn.trait.traitPtr->getVtableType(sp, state.crate, tyDyn);
+        tv.visitType(vtableTy);
+
+        const auto vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(state.crate.types, sp, tyDyn.trait.path.params, pe.trait, pe.item);
+        const auto& vtablePath = vtableTy->as_Path();
+        const auto& vtableData = vtablePath.binding.as_Struct()->data;
+        const auto* slotTemplate = vtableData.is_Named() ? vtableData.as_Named()[vtableIdx].ty : vtableData.is_Tuple() ? vtableData.as_Tuple()[vtableIdx].ent : nullptr;
+        if (!slotTemplate) {
+            continue;
+        }
+        MonomorphStatePtr vtableMonomorph(state.crate.types, vtableTy, &vtablePath.path.data.as_Generic().params, nullptr);
+        const auto* slot = state.resolve.monomorphExpandOpt(sp, slotTemplate, vtableMonomorph);
+        const auto* function = slot->opt_Function();
+        if (!function || function->argTypes.empty()) {
+            continue;
+        }
+        const auto* receiver = function->argTypes[0];
+        const auto* receiverPath = receiver->opt_Path();
+        if (receiverPath && receiverPath->binding.is_Struct() && receiverPath->binding.as_Struct()->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None) {
+            tv.visitType(receiver);
+        }
     }
 
     unsigned int typesCount = 0;
