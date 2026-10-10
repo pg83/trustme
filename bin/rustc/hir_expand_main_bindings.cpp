@@ -2396,7 +2396,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
                     const auto* ty = &variableTypes[cap.rootSlot];
                     const HIRType* tmpTy;
                     for (const auto& fld : cap.fields) {
-                        tmpTy = resolve_.getFieldType(node.span(), *ty, fld);
+                        tmpTy = resolve_.expandAssociatedTypes(node.span(), resolve_.getFieldType(node.span(), *ty, fld));
                         ty = &tmpTy;
                     }
                     if (!typeIsCopyHere(node.span(), *ty)) {
@@ -2813,7 +2813,7 @@ auto AnnotateExprVisitorMark::typeIsCopyHere(const Span& sp, const HIRType* type
         }
         const auto* captured = variableTypes[capture.rootSlot];
         for (const auto& name : capture.fields) {
-            captured = resolve_.getFieldType(sp, captured, name);
+            captured = resolve_.expandAssociatedTypes(sp, resolve_.getFieldType(sp, captured, name));
         }
         if (!typeIsCopyHere(sp, captured)) {
             return false;
@@ -2827,7 +2827,7 @@ auto AnnotateExprVisitorMark::getRealUsage(const Span& sp, unsigned slot, const 
         const auto* ty = &variableTypes[slot];
         const HIRType* tmpTy;
         for (const auto& name : fields) {
-            tmpTy = resolve_.getFieldType(sp, *ty, name);
+            tmpTy = resolve_.expandAssociatedTypes(sp, resolve_.getFieldType(sp, *ty, name));
             ty = &tmpTy;
         }
 
