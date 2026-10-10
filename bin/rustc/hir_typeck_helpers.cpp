@@ -16934,7 +16934,29 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             return type;
         };
-        const auto* self = throughHead(candidate.impl.getImplType(crate.types));
+        const auto throughRelations = [&](const HIRType* type) {
+            for (unsigned depth = 0; depth < 8; depth++) {
+                bool changed = false;
+                type = cloneTyWith(crate.types, span(), type, [&](const HIRType* inner) -> const HIRType* {
+                    if (!inner->is_Infer()) {
+                        return nullptr;
+                    }
+                    for (const auto& equality : candidate.relationEqualities) {
+                        const auto* other = equality.left == inner ? equality.right : equality.right == inner ? equality.left : nullptr;
+                        if (other && !other->is_Infer() && !visitTyWith(other, [&](const HIRType* t) { return t == inner; })) {
+                            changed = true;
+                            return other;
+                        }
+                    }
+                    return nullptr;
+                });
+                if (!changed) {
+                    break;
+                }
+            }
+            return type;
+        };
+        const auto* self = throughRelations(throughHead(candidate.impl.getImplType(crate.types)));
         const auto& inputs = candidate.impl.getTraitParamsRef(crate.types);
         bool selfBoundByCoercion = false;
         Vector<bool> inputBoundByCoercion;
@@ -16951,7 +16973,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             ThinVector<SolverTypeEquality> selectedEqualities;
             const auto evaluate = [&](const SolverCoercionConstraint& alternative) {
                 ASSERT_BUG(span(), alternative.isSelf || alternative.typeIndex < inputs.types.size(), StringView("coercion-constrained trait input is out of range"));
-                const auto* input = alternative.isSelf ? self : throughHead(inputs.types[alternative.typeIndex]);
+                const auto* input = alternative.isSelf ? self : throughRelations(throughHead(inputs.types[alternative.typeIndex]));
                 ThinVector<SolverTypeEquality> alternativeEqualities;
                 const auto alternativeResult = resolve_.evaluateCoercionConstraint(span(), alternative, input, &alternativeEqualities, nullptr, nullptr, nullptr, nullptr, true);
                 if (alternativeResult == Certainty::Proven || (alternativeResult == Certainty::Ambiguous && result == Certainty::NoSolution)) {
