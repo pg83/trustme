@@ -833,9 +833,10 @@ public:
         RcString name;
         ASTAbsolutePath path;
         MacroRef ref;
+        bool warnPrivate = false;
 
         MacroImport clone() const {
-            return MacroImport{isPub, name, path, ref.clone()};
+            return MacroImport{isPub, name, path, ref.clone(), warnPrivate};
         }
     };
 

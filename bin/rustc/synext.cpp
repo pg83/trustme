@@ -196,34 +196,28 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
     } else if (const auto* ecItem = i.opt_Crate()) {
         const auto& ec = crate.externCrates.at(ecItem->name);
 
-        DEBUG(ec.hir->exportedMacroNames.length() << StringView(" exported macros"));
-        for (const auto& name : ec.hir->exportedMacroNames) {
-            if (!filterValid(name)) {
-                DEBUG(StringView("Skip ") << name);
-                continue;
-            }
-            ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, StringView("Macro `") << name << StringView("` missing from crate ") << ec.name);
-            const auto* e = &*ec.hir->rootModule.macroItems.at(name);
-            if (!e->publicity.isGlobal()) {
-                DEBUG(StringView("Not public: ") << name);
-                continue;
-            }
-
+        const auto importMacro = [&](const RcString& name, const HIRVisEnt<HIRMacroItem>* e, bool warnPrivate) {
             ASTAbsolutePath path = singleNodePath(ecItem->name, name);
             if (const auto* imp = e->ent.opt_Import()) {
                 if (imp->path.crateName() == CRATE_BUILTINS) {
                     DEBUG(StringView("Importing builtin (skip): ") << name);
-                    continue;
+                    return;
+                }
+                if (warnPrivate && !crate.externCrates.count(imp->path.crateName())) {
+                    return;
                 }
                 ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), StringView("Crate `") << imp->path.crateName() << StringView("` not loaded"));
                 const HIRModule& mod = crate.externCrates.at(imp->path.crateName()).hir->getModByPath(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
 
+                if (warnPrivate && !mod.macroItems.count(imp->path.components().back())) {
+                    return;
+                }
                 ASSERT_BUG(sp, mod.macroItems.count(imp->path.components().back()), StringView("Failed to find final component of ") << imp->path);
                 e = &*mod.macroItems.at(imp->path.components().back());
                 if (const auto& imp2 = e->ent.opt_Import()) {
                     if (imp2->path.crateName() == CRATE_BUILTINS) {
                         DEBUG(StringView("Importing builtin (skip): ") << name);
-                        continue;
+                        return;
                     } else {
                         ASSERT_BUG(sp, !e->ent.is_Import(), StringView("Recursive import - ") << imp->path << StringView(" pointed to ") << imp2->path);
                     }
@@ -249,9 +243,37 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                 }
             }
             if (!exists(name, mr)) {
-                auto mi = ASTModule::MacroImport{false, name, std::move(path), std::move(mr)};
+                auto mi = ASTModule::MacroImport{false, name, std::move(path), std::move(mr), warnPrivate};
                 DEBUG(StringView("Import macro ") << mi.path);
                 mod.macroImports.push_back(mv$(mi));
+            }
+        };
+
+        DEBUG(ec.hir->exportedMacroNames.length() << StringView(" exported macros"));
+        for (const auto& name : ec.hir->exportedMacroNames) {
+            if (!filterValid(name)) {
+                DEBUG(StringView("Skip ") << name);
+                continue;
+            }
+            ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, StringView("Macro `") << name << StringView("` missing from crate ") << ec.name);
+            const auto* e = &*ec.hir->rootModule.macroItems.at(name);
+            if (!e->publicity.isGlobal()) {
+                DEBUG(StringView("Not public: ") << name);
+                continue;
+            }
+            importMacro(name, e, false);
+        }
+        if (filter.empty()) {
+            for (const auto& item : ec.hir->rootModule.macroItems) {
+                if (item.second->publicity.isGlobal()) {
+                    continue;
+                }
+                const bool named = std::any_of(mod.macroImports.begin(), mod.macroImports.end(), [&](const ASTModule::MacroImport& imp) {
+                    return imp.name == item.first;
+                });
+                if (!named) {
+                    importMacro(item.first, &*item.second, true);
+                }
             }
         }
     } else if (const auto* submodP = i.opt_Module()) {

@@ -2166,13 +2166,32 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             }
 
             MacroRef rv;
+            bool rvPrivate = false;
             for (const auto& mri : macMod.macroImports) {
                 if (mri.name == name) {
+                    if (mri.warnPrivate && !rv.is_None() && !rvPrivate) {
+                        continue;
+                    }
                     DEBUG(StringView("?::") << mri.name << StringView(" - Imported"));
                     rv = mri.ref.clone();
+                    rvPrivate = mri.warnPrivate;
                 }
             }
             if (!rv.is_None()) {
+                const auto inStdPrelude = [&]() {
+                    return crate.preludePath != ASTPath() && !ResolveLookupMacro(miSpan, *wb.settings, crate, macMod.path(), crate.preludePath + name, nullptr).is_None();
+                };
+                if (rvPrivate && !inStdPrelude()) {
+                    auto level = wb.settings->lintLevel(RcString::newInterned("private_macro_use"), CfgLintLevel::Deny);
+                    if (LintLevelOverrides overrides; CollectLintLevelAttributes(crate.attrs, overrides)) {
+                        level = ApplyLintLevelOverrides(*wb.settings, overrides, "private_macro_use", level);
+                    }
+                    if (level >= CfgLintLevel::Deny) {
+                        ERROR(miSpan, E0000, StringView("macro `") << name << StringView("` is private"));
+                    } else if (level >= CfgLintLevel::Warn) {
+                        WARNING(miSpan, W0000, StringView("macro `") << name << StringView("` is private"));
+                    }
+                }
                 return rv;
             }
         }
