@@ -809,6 +809,7 @@ private:
 
     mutable stl::IntMap<ThinVector<SolverExistentials>> solverExistentials_;
     mutable u64 eatCacheGeneration = 0;
+    mutable unsigned methodExpectationRejections_ = 0;
     mutable bool normalizingBoundType = false;
 
     /* The probe standing in for a sink while a sink-less normalization runs, and
@@ -1052,6 +1053,10 @@ public:
         /* Out -> */ SolverResponse* deferredEffects = nullptr,
         bool singleTraitScope = false
     ) const;
+
+    unsigned methodExpectationRejections() const {
+        return methodExpectationRejections_;
+    }
 
     enum class AutoderefResult {
         NoMatch,

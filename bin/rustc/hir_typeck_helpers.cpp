@@ -8814,6 +8814,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         if (expectedResult && !methodReturn->is_ErasedType()) {
             const auto resultApplicability = evaluateMethodArgument(expectedResult, methodReturn, ~0u, signatureEffects);
             if (resultApplicability == Certainty::NoSolution) {
+                resolve_.methodExpectationRejections_++;
                 return Certainty::NoSolution;
             }
             if (!expectedGuidesProof) {
@@ -8875,6 +8876,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
         }
         if (!hasProof || proof.effects.certainty == Certainty::NoSolution) {
+            if (expectedAssocName) {
+                resolve_.methodExpectationRejections_++;
+            }
             return Certainty::NoSolution;
         }
         const bool obligationOnlyAmbiguity = proof.effects.certainty == Certainty::Ambiguous && proof.effects.ambiguityOnlyFromObligations;
@@ -8911,6 +8915,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     const auto resultApplicability = evaluateMethodArgument(expectedResult, selectedReturn, ~0u, signatureEffects);
                     if (resultApplicability == Certainty::NoSolution) {
                         DEBUG(StringView("method candidate dropped: the selected return does not reach the expected result"));
+                        resolve_.methodExpectationRejections_++;
                         return Certainty::NoSolution;
                     }
                     merge(applicability, resultApplicability);
@@ -9158,10 +9163,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                         const auto* destinationPointer = resolve_.ivars.getType(expectedResult)->opt_Pointer();
                         const auto* sourcePointer = resolve_.ivars.getType(methodReturn)->opt_Pointer();
                         if (!destinationPointer || !sourcePointer || destinationPointer->type > sourcePointer->type) {
+                            resolve_.methodExpectationRejections_++;
                             return Certainty::NoSolution;
                         }
                         Unifier pointeeRelation(callSpan, resolve_.ivars, &resolve_, {.relateProjectionInputs = true});
                         if (pointeeRelation.unify(destinationPointer->inner, sourcePointer->inner) == Unifier::Outcome::Mismatch) {
+                            resolve_.methodExpectationRejections_++;
                             return Certainty::NoSolution;
                         }
                     } else {

@@ -9581,15 +9581,32 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
     ThinVector<TraitResolution::MethodCandidate> possibleMethods;
     SolverResponse deferredMethodEffects;
     const auto findMethod = [&](const RcString& method) {
-        possibleMethods.clear();
-        deferredMethodEffects = SolverResponse{};
-        auto derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, contextualResult, this->isFallback, possibleMethods, &deferredMethodEffects, !node.probeTrait.components().empty());
-        if ((derefCount == ~0u || possibleMethods.empty()) && contextualResult != resultType) {
+        const auto lookup = [&](const HIRType* expectedResult) {
             possibleMethods.clear();
             deferredMethodEffects = SolverResponse{};
-            derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, resultType, this->isFallback, possibleMethods, &deferredMethodEffects, !node.probeTrait.components().empty());
+            return this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, method, node.params, methodArgumentTypes, expectedResult, this->isFallback, possibleMethods, &deferredMethodEffects, !node.probeTrait.components().empty());
+        };
+        const auto rejectionsBefore = this->context.resolve.methodExpectationRejections();
+        const auto contextualCount = lookup(contextualResult);
+        if (contextualResult == resultType) {
+            return contextualCount;
         }
-        return derefCount;
+        const bool contextualFound = contextualCount != ~0u && !possibleMethods.empty();
+        if (contextualFound && this->context.resolve.methodExpectationRejections() == rejectionsBefore) {
+            return contextualCount;
+        }
+        auto contextualMethods = std::move(possibleMethods);
+        auto contextualEffects = std::move(deferredMethodEffects);
+        const auto naturalCount = lookup(resultType);
+        const bool samePick = contextualFound && contextualCount == naturalCount && possibleMethods.size() == contextualMethods.size() && std::equal(possibleMethods.begin(), possibleMethods.end(), contextualMethods.begin(), [](const TraitResolution::MethodCandidate& a, const TraitResolution::MethodCandidate& b) {
+            return a.borrow == b.borrow && a.inherentImpl == b.inherentImpl && a.traitDeclaration == b.traitDeclaration && a.declaringTrait == b.declaringTrait;
+        });
+        if (naturalCount == ~0u || possibleMethods.empty() || samePick) {
+            possibleMethods = std::move(contextualMethods);
+            deferredMethodEffects = std::move(contextualEffects);
+            return contextualCount;
+        }
+        return naturalCount;
     };
     unsigned int derefCount = findMethod(node.method);
     if ((derefCount == ~0u || possibleMethods.empty()) && deferredMethodEffects.certainty != SolverCertainty::Ambiguous && node.method != node.fallbackMethod) {
