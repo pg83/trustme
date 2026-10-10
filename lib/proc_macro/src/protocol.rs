@@ -24,6 +24,11 @@ pub enum Token
     /// The next token is followed by the one after it with no space: 1 when
     /// that is punctuation it joins (`Joint`), 2 otherwise (`JointHidden`).
     Joined(u8),
+    /// The opening and the closing of a group with no delimiter: the tokens
+    /// of a `macro_rules!` fragment, which upstream transcribes inside an
+    /// invisible delimiter.
+    OpenInvisible,
+    CloseInvisible,
 }
 pub struct SpanDef {
     pub idx: usize,
@@ -100,6 +105,8 @@ impl<R: ::std::io::Read> Reader<R>
             }),
         12 => Token::RawLiteral(self.get_string()),
         13 => Token::Joined(self.getb().expect("getb joined")),
+        15 => Token::OpenInvisible,
+        16 => Token::CloseInvisible,
         _ => panic!("Unknown tag byte: {:#x}", hdr_b),
         })
     }
@@ -210,6 +217,8 @@ impl<T: ::std::io::Write> Writer<T>
             },
         Token::RawLiteral(v) => { self.putb(12); self.put_bytes(v.as_bytes()); },
         Token::Joined(v) => { self.putb(13); self.putb(v); },
+        Token::OpenInvisible => { self.putb(15); },
+        Token::CloseInvisible => { self.putb(16); },
         }
     }
     /// The macro panicked instead of producing a stream: upstream's bridge

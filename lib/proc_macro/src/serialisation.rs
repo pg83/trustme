@@ -16,9 +16,18 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
     // join the macro cannot see but the compiler gets back with the stream. One
     // before an opening delimiter belongs to the group, not to its first tree.
     let mut joined = 0;
-    return get_subtree(&mut s, "", &mut span, &mut joined);
+    return get_subtree(&mut s, Close::Stream, &mut span, &mut joined);
 
-    fn get_subtree<R: ::std::io::Read>(s: &mut Reader<R>, end: &'static str, span: &mut Span, joined: &mut u8) -> TokenStream {
+    /// What ends the stream being read: the end of the input, a closing
+    /// delimiter, or the end of an invisible group.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Close {
+        Stream,
+        Symbol(&'static str),
+        Invisible,
+    }
+
+    fn get_subtree<R: ::std::io::Read>(s: &mut Reader<R>, end: Close, span: &mut Span, joined: &mut u8) -> TokenStream {
         let mut toks: Vec<TokenTree> = Vec::new();
         let mut hidden: Vec<u8> = Vec::new();
         while let Some(t) = s.read_ent()
@@ -43,10 +52,16 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                         );
                     continue
                     },
-                Token::EndOfStream if end == "" => { hidden.resize(toks.len(), 0); return TokenStream::from_received(toks, hidden) },
-                Token::Symbol(ref s) if s == end => { hidden.resize(toks.len(), 0); return TokenStream::from_received(toks, hidden) },
+                Token::EndOfStream if end == Close::Stream => { hidden.resize(toks.len(), 0); return TokenStream::from_received(toks, hidden) },
+                Token::Symbol(ref s) if matches!(end, Close::Symbol(e) if e == s.as_str()) => { hidden.resize(toks.len(), 0); return TokenStream::from_received(toks, hidden) },
+                Token::CloseInvisible if end == Close::Invisible => { hidden.resize(toks.len(), 0); return TokenStream::from_received(toks, hidden) },
                 Token::Symbol(ref s) if s == "" => panic!("Unexpected end-of-stream marker"),
                 Token::EndOfStream => panic!("Unexpected end-of-stream marker"),
+                Token::CloseInvisible => panic!("Unexpected end of an invisible group"),
+                Token::OpenInvisible => {
+                    open_joined = ::std::mem::take(joined) != 0;
+                    group(Delimiter::None, s, Close::Invisible, span, joined).into()
+                    },
                 Token::Symbol(sym) => {
                     match &sym[..]
                     {
@@ -54,9 +69,9 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                         open_joined = ::std::mem::take(joined) != 0;
                         match &sym[..]
                         {
-                        "{" => group(Delimiter::Brace, s, "}", span, joined).into(),
-                        "[" => group(Delimiter::Bracket, s, "]", span, joined).into(),
-                        _ => group(Delimiter::Parenthesis, s, ")", span, joined).into(),
+                        "{" => group(Delimiter::Brace, s, Close::Symbol("}"), span, joined).into(),
+                        "[" => group(Delimiter::Bracket, s, Close::Symbol("]"), span, joined).into(),
+                        _ => group(Delimiter::Parenthesis, s, Close::Symbol(")"), span, joined).into(),
                         }
                         },
                     _ => {
@@ -116,7 +131,7 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
 
     /// A delimited group opens with the span in force at its opening delimiter;
     /// its contents carry on updating the same running span.
-    fn group<R: ::std::io::Read>(delimiter: Delimiter, s: &mut Reader<R>, end: &'static str, span: &mut Span, joined: &mut u8) -> Group {
+    fn group<R: ::std::io::Read>(delimiter: Delimiter, s: &mut Reader<R>, end: Close, span: &mut Span, joined: &mut u8) -> Group {
         let open = *span;
         let stream = get_subtree(s, end, span, joined);
         Group {

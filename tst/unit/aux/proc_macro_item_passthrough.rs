@@ -266,3 +266,26 @@ pub fn helper_forward_derive(item: TokenStream) -> TokenStream {
 pub fn call_crate_helper(_item: TokenStream) -> TokenStream {
     "macro_rules! call_crate_helper { () => { $crate::crate_helper() } }".parse().unwrap()
 }
+
+// Function-like: the shape of each top-level tree of the input, joined by
+// spaces into a string literal: `ident`, `punct`, `literal`, or the group's
+// delimiter (`none` for an invisible one).
+#[proc_macro]
+pub fn tree_shapes(input: TokenStream) -> TokenStream {
+    use proc_macro::{Delimiter, Literal, TokenTree};
+    let shapes: Vec<&str> = input
+        .into_iter()
+        .map(|tree| match tree {
+            TokenTree::Ident(_) => "ident",
+            TokenTree::Punct(_) => "punct",
+            TokenTree::Literal(_) => "literal",
+            TokenTree::Group(group) => match group.delimiter() {
+                Delimiter::None => "none",
+                Delimiter::Parenthesis => "paren",
+                Delimiter::Bracket => "bracket",
+                Delimiter::Brace => "brace",
+            },
+        })
+        .collect();
+    TokenTree::from(Literal::string(&shapes.join(" "))).into()
+}

@@ -65,6 +65,8 @@ namespace {
         RawLiteral = 12,
         Joined = 13,
         Panicked = 14,
+        OpenInvisible = 15,
+        CloseInvisible = 16,
     };
 
     enum class FragType {
@@ -168,6 +170,8 @@ namespace {
 
         void sendSymbol(const char* val);
 
+        void sendInvisible(bool open);
+
         void sendRword(const char* val);
 
         void sendIdent(const char* val, bool raw = false);
@@ -267,6 +271,7 @@ namespace {
         void visitBoundConstness(ASTBoundConstness constness);
 
         void visitToken(const ::Token& tok);
+        void visitFragment(const ::Token& tok);
 
         void visitMacroInvocation(const ASTMacroInvocation& inv);
         void visitTokentree(const ::TokenTree& tt);
@@ -1061,6 +1066,10 @@ auto ProcMacroInv::sendSymbol(const char* val) -> void {
     this->sendBytes(val, std::strlen(val));
 }
 
+auto ProcMacroInv::sendInvisible(bool open) -> void {
+    this->sendU8(static_cast<u8>(open ? TokenClass::OpenInvisible : TokenClass::CloseInvisible));
+}
+
 auto ProcMacroInv::sendRword(const char* val) -> void {
     this->sendU8(static_cast<u8>(TokenClass::Ident));
     this->sendBytes(val, std::strlen(val));
@@ -1352,7 +1361,36 @@ auto ProcMacroVisitor::visitBoundConstness(ASTBoundConstness constness) -> void 
     }
 }
 
+static bool tokenIsFragment(eTokenType type) {
+    switch (type) {
+        case TOK_INTERPOLATED_TYPE:
+        case TOK_INTERPOLATED_PATH:
+        case TOK_INTERPOLATED_PATTERN:
+        case TOK_INTERPOLATED_STMT:
+        case TOK_INTERPOLATED_BLOCK:
+        case TOK_INTERPOLATED_EXPR:
+        case TOK_INTERPOLATED_STMT_ITEM:
+        case TOK_INTERPOLATED_ITEM:
+        case TOK_INTERPOLATED_META:
+        case TOK_INTERPOLATED_VIS:
+            return true;
+        default:
+            return false;
+    }
+}
+
 auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
+    if (tokenIsFragment(tok.type())) {
+        const auto* recorded = tok.fragmentTokens();
+        if (recorded && recorded->count == 1 && tokenIsFragment(recorded->items[0]->tok.type())) {
+            this->visitToken(recorded->items[0]->tok);
+            return;
+        }
+        pmi.sendInvisible(true);
+        this->visitFragment(tok);
+        pmi.sendInvisible(false);
+        return;
+    }
     const auto& pos = tok.getPos();
     const Span at = pos.span ? pos.span : (pos.filename == "" ? sp : Span(sp, pos));
     switch (tok.type()) {
@@ -1365,38 +1403,13 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_LIFETIME:
         case TOK_STRING:
         case TOK_BYTESTRING:
-        case TOK_INTERPOLATED_TYPE:
-        case TOK_INTERPOLATED_PATH:
-        case TOK_INTERPOLATED_PATTERN:
-        case TOK_INTERPOLATED_STMT:
-        case TOK_INTERPOLATED_BLOCK:
-        case TOK_INTERPOLATED_EXPR:
-        case TOK_INTERPOLATED_STMT_ITEM:
-        case TOK_INTERPOLATED_ITEM:
-        case TOK_INTERPOLATED_META:
-        case TOK_INTERPOLATED_VIS:
             break;
         default:
             pmi.sendSpan(groupContext, at);
             break;
     }
-    switch (tok.type()) {
-        case TOK_INTERPOLATED_TYPE:
-        case TOK_INTERPOLATED_PATH:
-        case TOK_INTERPOLATED_PATTERN:
-        case TOK_INTERPOLATED_STMT:
-        case TOK_INTERPOLATED_BLOCK:
-        case TOK_INTERPOLATED_EXPR:
-        case TOK_INTERPOLATED_STMT_ITEM:
-        case TOK_INTERPOLATED_ITEM:
-        case TOK_INTERPOLATED_META:
-        case TOK_INTERPOLATED_VIS:
-            break;
-        default:
-            if (tok.spacing() != TokenSpacing::Alone) {
-                pmi.sendJoined(tok.spacing());
-            }
-            break;
+    if (tok.spacing() != TokenSpacing::Alone) {
+        pmi.sendJoined(tok.spacing());
     }
     switch (tok.type()) {
         case TOK_NULL:
@@ -1408,61 +1421,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_WHITESPACE:
         case TOK_COMMENT:
             BUG(sp, StringView("Unexpected whitepace in tokenstream"));
-            break;
-        case TOK_INTERPOLATED_TYPE:
-            visitType(tok.fragType());
-            break;
-        case TOK_INTERPOLATED_PATH:
-            visitPath(tok.fragPath());
-            break;
-        case TOK_INTERPOLATED_PATTERN: {
-            StringBuilder ss;
-            pprustPatToString(ss, tok.fragPattern());
-            ss << StringView(" ");
-            parseText(ss);
-            break;
-        }
-        case TOK_INTERPOLATED_STMT:
-        case TOK_INTERPOLATED_BLOCK:
-        case TOK_INTERPOLATED_EXPR:
-            if (const auto* recorded = tok.fragmentTokens()) {
-                const bool grouped = tok.type() == TOK_INTERPOLATED_EXPR && (tok.rawData().as_Fragment().ptr == nullptr || !pprustExprIsAtom(tok.fragNode()));
-                if (grouped) {
-                    pmi.sendSymbol("(");
-                }
-                for (const auto* token : *recorded) {
-                    visitToken(token->tok);
-                }
-                if (grouped) {
-                    pmi.sendSymbol(")");
-                }
-                break;
-            }
-            visitNode(tok.fragNode());
-            break;
-        case TOK_INTERPOLATED_STMT_ITEM:
-        case TOK_INTERPOLATED_ITEM: {
-            /* An `$x:item` a `macro_rules!` captured is one token to the rest of
-               expansion, but a proc macro is handed the item spelled out: upstream
-               transcribes the capture as `TokenStream::from_ast(item)` wrapped in an
-               invisible `MetaVar(Item)` delimiter (`transcribe_metavar` in
-               rustc_expand/src/mbe/transcribe.rs), and `from_ast` is the item's own
-               attributes followed by its tokens. The invisible group carries no
-               delimiter of its own on the wire - `Delimiter::from_internal` maps it to
-               `Delimiter::None` (rustc_expand/src/proc_macro_server.rs) - so the item
-               is written straight into the stream, attributes first.
-               rstest_reuse's `#[apply(..)]` hands the annotated function to
-               `merge_attrs!` exactly this way. */
-            const auto& item = tok.fragItem();
-            visitAttrs(item.attrs);
-            visitItem(item.name, item.vis, item.data);
-            break;
-        }
-        case TOK_INTERPOLATED_META:
-            visitMetaItem(tok.fragMeta());
-            break;
-        case TOK_INTERPOLATED_VIS:
-            visitVis(tok.fragVis());
             break;
         case TOK_IDENT:
             /* A token of the invocation is passed through with the context it
@@ -1851,6 +1809,56 @@ auto ProcMacroVisitor::visitMacroInvocation(const ASTMacroInvocation& inv) -> vo
     pmi.sendSymbol(open);
     visitTokentree(inv.inputTt());
     pmi.sendSymbol(close);
+}
+
+auto ProcMacroVisitor::visitFragment(const ::Token& tok) -> void {
+    if (tok.rawData().as_Fragment().ptr == nullptr) {
+        for (const auto* token : *tok.fragmentTokens()) {
+            visitToken(token->tok);
+        }
+        return;
+    }
+    switch (tok.type()) {
+        case TOK_INTERPOLATED_TYPE:
+            visitType(tok.fragType());
+            break;
+        case TOK_INTERPOLATED_PATH:
+            visitPath(tok.fragPath());
+            break;
+        case TOK_INTERPOLATED_PATTERN: {
+            StringBuilder ss;
+            pprustPatToString(ss, tok.fragPattern());
+            ss << StringView(" ");
+            parseText(ss);
+            break;
+        }
+        case TOK_INTERPOLATED_STMT:
+        case TOK_INTERPOLATED_BLOCK:
+        case TOK_INTERPOLATED_EXPR:
+            if (const auto* recorded = tok.fragmentTokens()) {
+                for (const auto* token : *recorded) {
+                    visitToken(token->tok);
+                }
+                break;
+            }
+            visitNode(tok.fragNode());
+            break;
+        case TOK_INTERPOLATED_STMT_ITEM:
+        case TOK_INTERPOLATED_ITEM: {
+            const auto& item = tok.fragItem();
+            visitAttrs(item.attrs);
+            visitItem(item.name, item.vis, item.data);
+            break;
+        }
+        case TOK_INTERPOLATED_META:
+            visitMetaItem(tok.fragMeta());
+            break;
+        case TOK_INTERPOLATED_VIS:
+            visitVis(tok.fragVis());
+            break;
+        default:
+            BUG(sp, StringView("Not a fragment: ") << tok);
+    }
 }
 
 auto ProcMacroVisitor::visitTokentree(const ::TokenTree& tt) -> void {
