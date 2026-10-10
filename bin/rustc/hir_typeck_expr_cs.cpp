@@ -9526,6 +9526,33 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                         break;
                     }
                 }
+                const auto component = methodCoercions.componentOf(infer->index);
+                Vector<unsigned int> bindingIvars;
+                for (const auto& rule : this->context.linkCoerce) {
+                    if (hasPendingReceiverCoercion || infer->isLit()) {
+                        break;
+                    }
+                    if (!rule->argumentSite || !rule->rightNodePtr || node.checkOrderEnd == 0) {
+                        continue;
+                    }
+                    const auto argumentPlace = bindingPlace(*rule);
+                    if (argumentPlace.after(callPlace) || (argumentPlace.start <= callPlace.start && callPlace.end <= argumentPlace.end)) {
+                        continue;
+                    }
+                    if (node.value->checkOrderEnd != 0 && argumentPlace.start > node.value->checkOrderEnd && argumentPlace.end <= callPlace.end) {
+                        continue;
+                    }
+                    const auto binding = argumentBinding(this->context, *rule);
+                    if (!binding.destination) {
+                        continue;
+                    }
+                    bindingIvars.clear();
+                    methodCoercions.collectIvars(this->context.getType(binding.destination), bindingIvars);
+                    if (!bindingIvars.empty() && bindingIvars[0] < methodCoercions.count && methodCoercions.componentOf(bindingIvars[0]) == component) {
+                        DEBUG(StringView("receiver variable ") << infer->index << StringView(" waits for the binding of argument R") << rule->ruleIdx);
+                        hasPendingReceiverCoercion = true;
+                    }
+                }
             }
             /* ...and so can a pending projection rule that is to give the variable its
                type - a variable this pass made, past the index, included: `?U = <closure
