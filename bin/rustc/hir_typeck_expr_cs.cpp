@@ -13234,6 +13234,7 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
             fixParamCount(sp, this->context, e.type, true, e.trait, trait.params, e.trait.params);
 
             this->context.addTraitBound(sp, e.type, e.trait.path, e.trait.params.clone());
+            applyBoundsAsRules(this->context, sp, trait.params, MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, nullptr), /*is_impl_level=*/true);
 
             auto it = trait.values.find(e.item);
             if (it == trait.values.end()) {
