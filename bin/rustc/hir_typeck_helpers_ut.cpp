@@ -55,13 +55,14 @@ namespace {
     }
 
     [[maybe_unused]] void traitGoalQueryApiGate(TraitGoalQuery& query) {
-        auto& [assocName, assocType, assocParams, associated, valueName, allowInferInputs, excludedImpl, coercions, operatorGoal, ambiguity] = query;
+        auto& [assocName, assocType, assocParams, associated, valueName, allowInferInputs, inputsNormalized, excludedImpl, coercions, operatorGoal, ambiguity] = query;
         (void)assocName;
         (void)assocType;
         (void)assocParams;
         (void)associated;
         (void)valueName;
         (void)allowInferInputs;
+        (void)inputsNormalized;
         (void)excludedImpl;
         (void)coercions;
         (void)operatorGoal;

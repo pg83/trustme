@@ -2624,6 +2624,7 @@ Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution*
     , rigidGenericsAreDistinct_(options.rigidGenericsAreDistinct)
     , rigidProjectionsAreDistinct_(options.rigidProjectionsAreDistinct)
     , distinctRigidProjections_(options.distinctRigidProjections)
+    , leftNormalized_(options.leftNormalized)
 {
 }
 
@@ -2837,7 +2838,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         const auto* rightProjection = rightPath ? rightPath->path.data.opt_UfcsKnown() : nullptr;
         if (leftProjection || rightProjection) {
             if (rigidProjectionsAreDistinct_ && resolve_) {
-                auto normalizedLeft = leftProjection ? resolve_->expandAssociatedTypes(sp_, left) : nullptr;
+                auto normalizedLeft = leftProjection && !leftNormalized_ ? resolve_->expandAssociatedTypes(sp_, left) : nullptr;
                 auto normalizedRight = rightProjection ? resolve_->expandAssociatedTypes(sp_, right) : nullptr;
                 if (normalizedLeft && normalizedLeft->is_Infer()) {
                     normalizedLeft = left;
@@ -5747,7 +5748,7 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span
     eatDepth_ += 1;
 
     bool normalized = false;
-    const bool answered = this->solveNormalizesTo(sp, NormalizesTo{input}, [&](NormalizesToResponse response) {
+    const bool answered = this->solveNormalizesTo(sp, NormalizesTo{input, true}, [&](NormalizesToResponse response) {
         if (response.output == nullptr || response.output == input) {
             return true;
         }
@@ -12166,6 +12167,7 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
             .bindRigidValues = headHasHrtb,
             .relateProjectionInputs = paramEnvHead,
             .rigidProjectionsAreDistinct = paramEnvHead,
+            .leftNormalized = true,
         }
     );
     auto relation = unifier.unify(goalType, candidateType);
@@ -15737,8 +15739,10 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (!allowInferInputs && goalHasUnassignedInfer(goalParams, goalType, nullptr)) {
         return emitForcedAmbiguity();
     }
-    goalType = normalizeGoalInput(goalType);
-    goalParams = goalParams.mapTypes([&](const HIRType* param) { return normalizeGoalInput(param); });
+    if (!query.inputsNormalized) {
+        goalType = normalizeGoalInput(goalType);
+        goalParams = goalParams.mapTypes([&](const HIRType* param) { return normalizeGoalInput(param); });
+    }
     if (selfIsUnresolvedProjectionOverIvar(goalType)) {
         return emitForcedAmbiguity();
     }
@@ -17545,6 +17549,7 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
             .assocName = projection->item.c_str(),
             .assocType = outputSlot,
             .assocParams = &projection->params,
+            .inputsNormalized = goal.inputsNormalized,
         },
         callerBoundary
     );

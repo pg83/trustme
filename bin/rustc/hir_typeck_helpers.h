@@ -478,6 +478,7 @@ public:
            matches no constructor (upstream `match_impl` after normalization); decided
            without normalizing, so no variable is made in the probe. */
         bool distinctRigidProjections = false;
+        bool leftNormalized = false;
     };
 
     enum class Outcome : u8 {
@@ -542,6 +543,7 @@ private:
     bool rigidGenericsAreDistinct_;
     bool rigidProjectionsAreDistinct_;
     bool distinctRigidProjections_;
+    bool leftNormalized_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
     stl::Vector<PendingEquality> bindings_;
@@ -602,6 +604,7 @@ struct TraitGoalQuery {
     const char* valueName = nullptr;
 
     bool allowInferInputs = false;
+    bool inputsNormalized = false;
 
     const HIRTraitImpl* excludedImpl = nullptr;
 
@@ -624,6 +627,7 @@ struct InherentImplSelection {
 
 struct NormalizesTo {
     const HIRType* projection;
+    bool inputsNormalized = false;
 };
 
 struct NormalizesToResponse {
