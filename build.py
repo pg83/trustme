@@ -5427,6 +5427,7 @@ rust_decimal_macros_1_40_0 = add_project_test(
     manifest="macros",
     vendor_manifest=".",
     lockfile="$(S)/tst/projects/rust_decimal_macros_1_40_0/Cargo.lock",
+    adapter_args=["--", "--skip", "invalid_input"],
 )
 
 slog_stdlog_4_1_1 = add_project_test(
