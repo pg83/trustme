@@ -1063,3 +1063,57 @@ func TestAnExampleWithALibraryCrateTypeIsALibrary(t *testing.T) {
 		t.Fatal("the example is not built")
 	}
 }
+
+// utoipa-swagger-ui's build script unpacks Swagger UI into its `OUT_DIR` and
+// writes an `embed.rs` that names every unpacked file by its absolute path for
+// `include_bytes!`. Cargo runs the script and compiles the package with the
+// same `OUT_DIR`, `target/<profile>/build/<pkg>-<hash>/out`; ours compiled it
+// with a copy of the tree under the compiling task's own directory, and the
+// path the script wrote was gone. The script's run must also be found there
+// when it came out of the cache in a later build.
+func TestABuildScriptsOutDirIsThePackagesOutDir(t *testing.T) {
+	builder, pkgs := hostGraph(t, nil)
+	root := t.TempDir()
+
+	newScript := func() *Task {
+		script := *builder.buildScriptRunTask(pkgs["hostonly"])
+		script.deps = nil
+		script.after = nil
+		script.action = func(ctx *TaskContext) {
+			outDir := ctx.output(1)
+			data := filepath.Join(outDir, "data.bin")
+
+			throw(os.WriteFile(data, []byte("unpacked"), 0o644))
+			throw(os.WriteFile(filepath.Join(outDir, "embed.rs"), []byte(data), 0o644))
+			throw(os.WriteFile(ctx.output(0), nil, 0o644))
+		}
+		return &script
+	}
+	newConsumer := func(script *Task, key string) *Task {
+		return &Task{
+			key:     key,
+			name:    key,
+			kind:    "RS",
+			deps:    []*Task{script},
+			outputs: []TaskOutput{{name: key + ".done"}},
+			action: func(ctx *TaskContext) {
+				embed, err := os.ReadFile(filepath.Join(ctx.tree(script, 1), "embed.rs"))
+
+				if err != nil {
+					t.Error(err)
+				} else if data, err := os.ReadFile(string(embed)); err != nil || string(data) != "unpacked" {
+					t.Errorf("%s: the path the build script wrote = %q, %v", key, data, err)
+				}
+				throw(os.WriteFile(ctx.output(0), nil, 0o644))
+			},
+		}
+	}
+
+	runTasks([]*Task{newConsumer(newScript(), "first")}, 1, root, false)
+
+	if err := os.RemoveAll(filepath.Join(root, "out")); err != nil {
+		t.Fatal(err)
+	}
+
+	runTasks([]*Task{newConsumer(newScript(), "second")}, 1, root, false)
+}

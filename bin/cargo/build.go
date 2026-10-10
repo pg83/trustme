@@ -880,7 +880,7 @@ func (b *Builder) buildScriptRunTask(pkg *Package) *Task {
 		name:      pkg.name + " v" + pkg.version.string() + " (build script run)",
 		kind:      "RUN",
 		inputs:    b.packageInputs(pkg),
-		outputs:   []TaskOutput{{name: b.buildScriptBase(pkg) + ".txt"}, {name: b.buildScriptBase(pkg) + ".out", tree: true}},
+		outputs:   []TaskOutput{{name: b.buildScriptBase(pkg) + ".txt"}, {name: b.buildScriptBase(pkg) + ".out", tree: true, stable: true}},
 		signature: b.buildScriptRunSignature(pkg),
 	}
 

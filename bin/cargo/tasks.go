@@ -22,6 +22,10 @@ type TaskOutput struct {
 	name       string
 	tree       bool
 	executable bool
+	// A stable output lives at the same path for the task that writes it and
+	// for every task that reads it, as cargo's `OUT_DIR` does: a build script
+	// may write that path into the files it generates.
+	stable bool
 }
 
 type Task struct {
@@ -236,6 +240,12 @@ func (ex *TaskExecutor) execute(task *Task) {
 
 	throw(os.RemoveAll(tmp))
 	throw(os.MkdirAll(filepath.Join(tmp, "out"), 0o755))
+
+	for index, output := range task.outputs {
+		if output.stable {
+			throw(os.RemoveAll(ex.stablePath(uid, task, index)))
+		}
+	}
 
 	if task.action != nil {
 		task.action(ctx)
@@ -452,6 +462,10 @@ func (ctx *TaskContext) output(index int) string {
 
 	path := filepath.Join(ctx.tmp, "out", clean)
 
+	if output.stable {
+		path = ctx.executor.stablePath(ctx.task.state.uid, ctx.task, index)
+	}
+
 	if output.tree {
 		throw(os.MkdirAll(path, 0o755))
 	} else {
@@ -499,7 +513,45 @@ func (ctx *TaskContext) tree(task *Task, index int) string {
 		throwFmt("internal: task %s has no result", task.name)
 	}
 
+	if task.outputs[index].stable {
+		return ctx.stableTree(task, index)
+	}
+
 	root := filepath.Join(ctx.tmp, "in", task.state.uid, fmt.Sprintf("%d", index))
+	ctx.fillTree(root, task, index)
+
+	return root
+}
+
+func (ex *TaskExecutor) stablePath(uid string, task *Task, index int) string {
+	return filepath.Join(ex.root, "out", uid, filepath.Base(filepath.Clean(task.outputs[index].name)))
+}
+
+// stableTree is a stable tree output at its own path, put back from the cache
+// first when the task that wrote it did not run in this build.
+func (ctx *TaskContext) stableTree(task *Task, index int) string {
+	path := ctx.executor.stablePath(task.state.uid, task, index)
+
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+
+	throw(os.MkdirAll(filepath.Dir(path), 0o755))
+	staging := throw2(os.MkdirTemp(filepath.Dir(path), ".stable-*"))
+	ctx.fillTree(staging, task, index)
+
+	if err := os.Rename(staging, path); err != nil {
+		throw(os.RemoveAll(staging))
+
+		if _, statErr := os.Stat(path); statErr != nil {
+			throw(err)
+		}
+	}
+
+	return path
+}
+
+func (ctx *TaskContext) fillTree(root string, task *Task, index int) {
 	throw(os.MkdirAll(root, 0o755))
 	prefix := task.outputs[index].name + "/"
 
@@ -531,8 +583,6 @@ func (ctx *TaskContext) tree(task *Task, index int) string {
 			throw(os.Symlink(source, destination))
 		}
 	}
-
-	return root
 }
 
 // stageFile materialises one file output under the name the task gave it and
