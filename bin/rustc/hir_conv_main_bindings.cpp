@@ -1125,6 +1125,10 @@ auto BindVisitor::bindConstgeneric(HIRConstGeneric& value, bool repeatCount) -> 
                 && (root->nodeKind() == HIRExprNodePathValue::kind || root->nodeKind() == HIRExprNodeUnitVariant::kind);
             (*unevaluated)->expr->state->anonymousConst = !pathConstArg;
             inheritsGenerics = pathConstArg || repeatCount || root->nodeKind() == HIRExprNodeConstParam::kind || crate.featureEnabled("generic_const_exprs");
+            if (!inheritsGenerics) {
+                (*unevaluated)->expr->state->implGenerics = nullptr;
+                (*unevaluated)->expr->state->itemGenerics = nullptr;
+            }
         }
         auto next = (*unevaluated)->clone();
         next.selfType = selfType;
