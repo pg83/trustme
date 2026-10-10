@@ -1403,10 +1403,18 @@ namespace {
                 DEBUG(StringView("- Super"));
                 const auto& mpNodes = context.mod.path().nodes;
                 BUG_ASSERT(e.count >= 1);
-                // TODO: The first super should ignore any anon modules.
-                unsigned int startLen = e.count > mpNodes.length() ? 0 : mpNodes.length() - e.count;
+                unsigned int startLen = mpNodes.length();
                 while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
                     startLen--;
+                }
+                for (unsigned int count = 0; count < e.count; count++) {
+                    if (startLen == 0) {
+                        ERROR(sp, E0000, StringView("Too many `super` components"));
+                    }
+                    startLen--;
+                    while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
+                        startLen--;
+                    }
                 }
 
                 ASTPath np("", {});
