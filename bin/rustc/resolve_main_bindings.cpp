@@ -3675,7 +3675,8 @@ namespace {
             ASTPath p = mod.path() + item.name;
             p.bindings.macro.set(mod.path() + item.name, ASTPathBindingMacro::make_MacroRules({nullptr, &*item.data}));
             // NOTE: Macros can be freely duplicated, BUT the last entry takes precedence (TODO)
-            _add_item(item.span, mod, IndexName::Macro, item.name, item.vis, mv$(p), /*error_on_collision=*/false);
+            const auto vis = &mod == &crate.rootModule_ && item.data->exported ? ASTVisibility::makeGlobal() : item.vis;
+            _add_item(item.span, mod, IndexName::Macro, item.name, vis, mv$(p), /*error_on_collision=*/false);
         }
 
         bool hasPubWildcard = false;
