@@ -1309,6 +1309,12 @@ func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool, p
 		args = append(args, "--cfg", "feature=\""+feature+"\"")
 	}
 
+	// A package that is not a path package compiles with its lints capped, as
+	// cargo's `show_warnings` has it: a dependency's lints never fail the build.
+	if b.context.repository != nil && b.context.repository.isVendored(pkg) {
+		args = append(args, "--cap-lints", "allow")
+	}
+
 	return append(args, b.unitRustflags(isHost)...)
 }
 

@@ -1117,3 +1117,38 @@ func TestABuildScriptsOutDirIsThePackagesOutDir(t *testing.T) {
 
 	runTasks([]*Task{newConsumer(newScript(), "second")}, 1, root, false)
 }
+
+// diesel_derives 2.0 uses a macro only the deny-by-default `private_macro_use`
+// lint lets through, and builds under cargo because cargo hands a package
+// that is not a path package `--cap-lints allow` (`show_warnings`,
+// cargo/core/compiler/mod.rs): a dependency's lints never fail the build. A
+// path package - a workspace member or a sibling - keeps its lints.
+func TestAVendoredPackageHasItsLintsCapped(t *testing.T) {
+	root := t.TempDir()
+	vendor := filepath.Join(root, "vendor")
+	member := &Package{dir: filepath.Join(root, "member"), name: "member"}
+	vendored := &Package{dir: filepath.Join(vendor, "dep"), name: "dep"}
+	outside := &Package{dir: filepath.Join(filepath.Dir(root), "sibling"), name: "sibling"}
+	context := &BuildContext{
+		workspace:  &Workspace{dir: root},
+		repository: &Repository{vendorDir: vendor},
+	}
+	builder := &Builder{context: context}
+
+	capped := func(pkg *Package) bool {
+		args := builder.commonCompilerArgs(pkg, "out", false, Profile{})
+		for i := 0; i+1 < len(args); i++ {
+			if args[i] == "--cap-lints" && args[i+1] == "allow" {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !capped(vendored) {
+		t.Fatal("a vendored package's lints are not capped")
+	}
+	if capped(member) || capped(outside) {
+		t.Fatal("a path package's lints are capped")
+	}
+}
