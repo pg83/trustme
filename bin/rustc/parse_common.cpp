@@ -2177,6 +2177,7 @@ namespace {
 
         bool isVariadic = false;
         bool hasNamedVariadic = false;
+        bool argsTrailingComma = false;
         if (tok.type() != TOK_PAREN_CLOSE) {
             if (args.size()) {
                 CHECK_TOK(tok, TOK_COMMA);
@@ -2187,6 +2188,7 @@ namespace {
             do {
                 if (LOOK_AHEAD(lex) == TOK_PAREN_CLOSE) {
                     GET_TOK(tok, lex);
+                    argsTrailingComma = true;
                     break;
                 }
                 ASTAttributeList argAttrs;
@@ -2248,6 +2250,9 @@ namespace {
         }
 
         auto rv = ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
+        if (argsTrailingComma) {
+            rv.setArgsTrailingComma();
+        }
         if (defaultReturn) {
             rv.setDefaultReturn();
         }

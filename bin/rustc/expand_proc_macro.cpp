@@ -2903,6 +2903,9 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
     pmi.sendSymbol("(");
     for (size_t i = 0; i < fcn.args().size(); i++) {
         const auto& arg = fcn.args()[i];
+        if (i > 0) {
+            pmi.sendSymbol(",");
+        }
         this->visitAttrs(arg.attrs);
         if (arg.selfShorthand) {
             if (const auto* borrow = arg.ty->data.opt_Borrow()) {
@@ -2913,7 +2916,6 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
                 }
             }
             this->visitPattern(arg.pat);
-            pmi.sendSymbol(",");
             continue;
         }
         this->visitPattern(arg.pat);
@@ -2923,10 +2925,14 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
         } else {
             this->visitType(arg.ty);
         }
-        pmi.sendSymbol(",");
     }
     if (fcn.isVariadic() && !fcn.hasNamedVariadic()) {
+        if (!fcn.args().empty()) {
+            pmi.sendSymbol(",");
+        }
         pmi.sendSymbol("...");
+    } else if (fcn.hasArgsTrailingComma() && !fcn.args().empty()) {
+        pmi.sendSymbol(",");
     }
     pmi.sendSymbol(")");
     if (!fcn.hasDefaultReturn()) {

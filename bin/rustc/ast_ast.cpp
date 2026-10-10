@@ -82,6 +82,7 @@ ASTFunction ASTFunction::clone() const {
 
     auto rv = ASTFunction(span_, abi_, flags, params_.clone(), rettype_->clone(), mv$(newArgs), isVariadic_, hasNamedVariadic_);
     rv.defaultReturn_ = defaultReturn_;
+    rv.argsTrailingComma_ = argsTrailingComma_;
     if (code_) {
         rv.code_ = code_->clone();
     }

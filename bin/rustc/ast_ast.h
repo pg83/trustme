@@ -214,6 +214,7 @@ private:
     ASTExprNode* code_ = nullptr;
     ASTType* rettype_;
     bool defaultReturn_ = false;
+    bool argsTrailingComma_ = false;
     Arglist args_;
     bool isVariadic_;
     bool hasNamedVariadic_;
@@ -316,6 +317,14 @@ public:
 
     void setDefaultReturn() {
         defaultReturn_ = true;
+    }
+
+    bool hasArgsTrailingComma() const {
+        return argsTrailingComma_;
+    }
+
+    void setArgsTrailingComma() {
+        argsTrailingComma_ = true;
     }
 
     const Arglist& args() const {
