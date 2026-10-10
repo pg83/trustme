@@ -7527,8 +7527,19 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
                 passStartIvars.pushBack(context.ivars.getType(i));
             }
+            auto indexGeneration = context.ivars.mutationGeneration;
             for (size_t i = 0; i < context.toVisit.length();) {
                 HIRExprNode& node = *context.toVisit[i];
+                if (context.ivars.mutationGeneration != indexGeneration) {
+                    const auto* call = cast<HIRExprNodeCallMethod>(&node);
+                    if (call && visitTyWith(context.getType(call->value->resType), [&](const HIRType* inner) {
+                        const auto* infer = context.getType(inner)->opt_Infer();
+                        return infer && !infer->isLit();
+                    })) {
+                        ivarCoercionIndex.emplace(context);
+                        indexGeneration = context.ivars.mutationGeneration;
+                    }
+                }
                 ExprVisitorRevisit visitor{context, false, &passStartIvars, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 context.currentOrder = node.checkOrder;
