@@ -5769,6 +5769,10 @@ const HIRType* TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span
             selectionHasIvars |= this->ivars.typeContainsIvars(param, false);
         }
     }
+    selectionHasIvars |= visitTyWith(input, [&](const HIRType* inner) {
+        const auto* generic = inner->opt_Generic();
+        return generic && generic->isSolverExistential() && isUnknownExistentialScope(generic->solverScope);
+    });
     const bool selectionHasOpenValue = typeHasOpenValue(crate.types, this->ivars, input);
     const bool unimplemented = !answered && projection && typeIsConcrete(projection->type);
     if (!selectionHasIvars && !selectionHasOpenValue && !unimplemented) {
@@ -10744,12 +10748,14 @@ auto NextTraitGoalEvaluator::selfIsUnresolvedProjectionOverIvar(const HIRType* t
        over an inference variable - here the existential of an impl parameter its head
        left open - normalizes to a fresh one: the goal is as ambiguous as any on an
        unknown, and no impl is matched against the projection by guesswork. */
-    const auto* self = resolve_.resolveType(projection->type);
-    const auto* selfGeneric = self->opt_Generic();
-    if (selfGeneric && selfGeneric->isSolverExistential() && isUnknownExistentialScope(selfGeneric->solverScope)) {
+    const bool namesUnknown = visitTyWith(type, [&](const HIRType* inner) {
+        const auto* generic = resolve_.resolveType(inner)->opt_Generic();
+        return generic && generic->isSolverExistential() && isUnknownExistentialScope(generic->solverScope);
+    });
+    if (namesUnknown) {
         return true;
     }
-    return selfIsUnresolvedProjectionOverIvar(self);
+    return selfIsUnresolvedProjectionOverIvar(resolve_.resolveType(projection->type));
 }
 
 auto NextTraitGoalEvaluator::selfIsUnimplementedProjection(const HIRType* type) const -> bool {
@@ -14677,7 +14683,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         HIRTraitPath::assocListT associated;
     };
     ThinVector<PreparedTraitBound> preparedBounds(implParamsDef->bounds.size());
-    bool prebindingChanged = false;
+    bool preparedBoundsStale = false;
     size_t boundsRuledOut = 0;
     for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
         const auto& bound = implParamsDef->bounds[boundIndex];
@@ -14726,7 +14732,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         if (binding == CandidateBindingResult::Mismatch) {
             return Certainty::NoSolution;
         }
-        prebindingChanged |= binding == CandidateBindingResult::Changed;
+        preparedBoundsStale |= binding == CandidateBindingResult::Changed;
     }
 
     const auto assocResult = matchAssociatedTypes(trait, *candidate, associated, &materializeHead);
@@ -14769,7 +14775,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             HIRTraitPath::assocListT nestedAssociated;
 
             auto& prepared = preparedBounds[boundIndex];
-            if (prepared.ready && !prebindingChanged) {
+            if (prepared.ready && !preparedBoundsStale) {
                 nestedType = prepared.type;
                 nestedTrait = std::move(prepared.trait);
                 nestedParams = std::move(prepared.params);
@@ -14842,6 +14848,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                     DEBUG(StringView("nested bound response rejected: ") << nestedType << StringView(": ") << nestedTrait << nestedParams << StringView(" binding=") << static_cast<unsigned>(responseBinding));
                     return Certainty::NoSolution;
                 }
+                preparedBoundsStale |= responseBinding == CandidateBindingResult::Changed;
                 if (responseBinding == CandidateBindingResult::Unchanged && !responseHadEffects) {
                     if (responseMemo.goal) {
                         rememberCanonicalNestedNoEffectResponse(responseMemo.goal, *candidate, responseMemo.canonicalCandidateParams, responseCertainty);
