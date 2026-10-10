@@ -4000,11 +4000,6 @@ auto UfcsVisitor::locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGener
     // TODO: Get the span from caller
     Span _sp;
     const auto& sp = _sp;
-    if (locateItemInTrait(pc, trait, pd)) {
-        pd = getUfcsKnown(pc, mv$(pd.as_UfcsUnknown()), traitPath.clone(), trait);
-        return true;
-    }
-
     auto pp = traitPath.params.clone();
     while (pp.types.size() < trait.params.types.size()) {
         auto idx = pp.types.size();
@@ -4019,6 +4014,10 @@ auto UfcsVisitor::locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGener
         }
         auto defaultMonomorph = MonomorphStatePtr(crate.types, pd.as_UfcsUnknown().type, &pp, nullptr);
         pp = pp.appended(defaultMonomorph.monomorphType(sp, def, false));
+    }
+    if (locateItemInTrait(pc, trait, pd)) {
+        pd = getUfcsKnown(pc, mv$(pd.as_UfcsUnknown()), HIRGenericPath(traitPath.path, pp.clone()), trait);
+        return true;
     }
 
     auto monomorphCb = MonomorphStatePtr(crate.types, pd.as_UfcsUnknown().type, &pp, nullptr);
