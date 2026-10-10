@@ -2113,13 +2113,25 @@ ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) 
 }
 
 MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<ASTModule*> modstack, const ASTAttributeName& path) {
-    const bool fromCrateRoot = path.crate == RcString() && !path.hasLeading && path.elems.length() > 1 && path.elems[0] == "crate";
-    ASTPath p = path.crate != RcString() ? ASTPath(path.crate.c_str(), {}) : fromCrateRoot ? ASTPath("", {}) : ASTPath::newRelative({}, {});
-    for (const auto& ent : path.elems) {
-        if (fromCrateRoot && &ent == &path.elems[0]) {
-            continue;
+    const bool rooted = path.crate == RcString() && !path.hasLeading && path.elems.length() > 1;
+    size_t skip = 0;
+    ASTPath p = ASTPath::newRelative({}, {});
+    if (path.crate != RcString()) {
+        p = ASTPath(path.crate.c_str(), {});
+    } else if (rooted && path.elems[0] == "crate") {
+        p = ASTPath("", {});
+        skip = 1;
+    } else if (rooted && path.elems[0] == "self") {
+        p = ASTPath::newSelf({});
+        skip = 1;
+    } else if (rooted && path.elems[0] == "super") {
+        while (skip + 1 < path.elems.length() && path.elems[skip] == "super") {
+            skip++;
         }
-        p += ASTPathNode(ent);
+        p = ASTPath::newSuper(static_cast<unsigned>(skip), {});
+    }
+    for (size_t i = skip; i < path.elems.length(); i++) {
+        p += ASTPathNode(path.elems[i]);
     }
     return ExpandLookupMacro(miSpan, wb, crate, modstack, p);
 }
