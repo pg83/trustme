@@ -8477,8 +8477,10 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
        it - related first, the argument would have read `&String` into it.  Only a
        method parameter an argument mentions is worth the probe, and only bounds
        that decide such a parameter outright are kept. */
-    const auto decideMethodParamsBeforeArguments = [&](const HIRGenericParams& definition, const HIRPathParams& parameters, size_t argCount, const auto& argumentTemplate, const Monomorphiser& monomorph, SolverResponse& effects) {
-        heldMethodSlots.clear();
+    const auto decideMethodParamsBeforeArguments = [&](const HIRGenericParams& definition, const HIRPathParams& parameters, size_t argCount, const auto& argumentTemplate, const Monomorphiser& monomorph, SolverResponse& effects, bool holdsAfter = true) {
+        if (holdsAfter) {
+            heldMethodSlots.clear();
+        }
         ThinVector<unsigned> openSlots;
         for (const auto* param : parameters.types) {
             const auto* infer = resolve_.ivars.getType(param)->opt_Infer();
@@ -8508,18 +8510,19 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
            candidate is assembled for an inference-variable self - and decides
            nothing; this solver would read an impl's self pattern into it, so the
            bounds are not evaluated with one among them. */
-        bool boundOnVariable = false;
+        auto decidable = definition.clone();
+        decidable.bounds.clear();
         for (const auto& bound : definition.bounds) {
             const auto* traitBound = bound.opt_TraitBound();
             if (traitBound && traitBound->trait.path.path != resolve_.langSized() && isOpenVariable(monomorph.monomorphType(callSpan, traitBound->type, true))) {
-                boundOnVariable = true;
-                break;
+                continue;
             }
+            decidable.bounds.push_back(bound.clone());
         }
-        if (!boundOnVariable) {
+        if (!decidable.bounds.empty()) {
             const auto snapshot = resolve_.ivars.snapshot();
             SolverResponse preliminaryEffects;
-            const auto preliminary = evaluateMethodBounds(definition, parameters, monomorph, &preliminaryEffects);
+            const auto preliminary = evaluateMethodBounds(decidable, parameters, monomorph, &preliminaryEffects);
             const bool decided = preliminary == Certainty::Proven && std::any_of(openSlots.begin(), openSlots.end(), [&](unsigned index) {
                 return !resolve_.ivars.getType(index)->is_Infer();
             });
@@ -8530,6 +8533,9 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 return;
             }
             resolve_.ivars.rollbackTo(snapshot);
+        }
+        if (!holdsAfter) {
+            return;
         }
         /* Not decided yet.  A bound naming the parameter whose other inputs are still
            open - `[?T]: Join<?S>` with the vector's element unknown - may be decided
@@ -8751,6 +8757,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             for (size_t i = 0; i < argumentTypes.size(); i++) {
                 if (i > 0) {
                     constrainTraitParamsBeforeArguments(function, proofTrait, proofParams, selfType, methodMonomorph, signatureEffects, i);
+                    decideMethodParamsBeforeArguments(function.params, methodParams, argumentTypes.size() - i, [&](size_t j) -> const HIRType* { return function.args[i + j + 1].second; }, methodMonomorph, signatureEffects, false);
                 }
                 const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, function.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                 const auto argumentApplicability = evaluateArgumentUnderExpectation(i, expectedArgument, argumentTypes[i], signatureEffects);
@@ -9102,6 +9109,12 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                     earlierArgumentWaits = false;
                     earlierArgumentVariables.clear();
                     for (size_t i = 0; i < argumentTypes.size(); i++) {
+                        if (!boundsFirst) {
+                            decideMethodParamsBeforeArguments(impl.params, implParams, argumentTypes.size() - i, [&](size_t j) -> const HIRType* { return method.data.args[i + j + 1].second; }, methodMonomorph, signatureEffects, false);
+                        }
+                        if (i > 0 && !boundsFirst) {
+                            decideMethodParamsBeforeArguments(method.data.params, methodParams, argumentTypes.size() - i, [&](size_t j) -> const HIRType* { return method.data.args[i + j + 1].second; }, methodMonomorph, signatureEffects, false);
+                        }
                         const auto* expectedArgument = normalizeSignatureType(methodMonomorph.monomorphType(callSpan, method.data.args[i + 1].second, true), argumentTypes[i], signatureEffects);
                         const auto argumentApplicability = evaluateArgumentUnderExpectation(i, expectedArgument, argumentTypes[i], signatureEffects);
                         if (argumentApplicability == Certainty::NoSolution) {
