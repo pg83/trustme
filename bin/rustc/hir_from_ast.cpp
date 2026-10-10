@@ -97,7 +97,7 @@ namespace {
         HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {}, bool typeSegment = false);
         HIRConstGeneric LowerHIRConstGeneric(ASTExprNode& nodeRef);
         HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
-        HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
+        HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never, const HIRType* boundedType = nullptr);
         HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
         const HIRType* LowerHIRType(::ASTType* ty);
         HIRTypeAlias LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta);
@@ -865,7 +865,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                     TODO(bound.span, StringView("Handle two layers of HRBs in a bound"));
                 }
 
-                auto boundTraitPath = LowerHIRTraitPath(bound.span, e.trait, e.innerHrbs, /*allow_bounds=*/true, e.constness);
+                auto boundTraitPath = LowerHIRTraitPath(bound.span, e.trait, e.innerHrbs, /*allow_bounds=*/true, e.constness, type);
                 const bool isTrivial = !usesGenericLifetime && !monomorphiseTypeNeeded(type) && !monomorphiseTraitpathNeeded(boundTraitPath);
                 auto tpBounds = mv$(boundTraitPath.traitBounds);
                 boundTraitPath.traitBounds.clear();
@@ -1392,7 +1392,7 @@ HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path,
     }
 }
 
-HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds /*=false*/, ASTBoundConstness constness /*=Never*/) {
+HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds /*=false*/, ASTBoundConstness constness /*=Never*/, const HIRType* boundedType /*=nullptr*/) {
     DEBUG(hrbs << StringView(" ") << path);
     HIRTraitPath rv{LowerHIRGenericPath(sp, path, FromASTPathClass::Type, /*allow_assoc=*/true), {}, {}, nullptr, LowerHIRBoundConstness(constness)};
 
@@ -1403,9 +1403,11 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
         };
 
         AST2HIR& ctx;
+        const HIRType* subject;
 
-        explicit H(AST2HIR& ctx)
+        explicit H(AST2HIR& ctx, const HIRType* boundedType = nullptr)
             : ctx(ctx)
+            , subject(boundedType ? boundedType : ctx.crate->types.self())
         {
         }
 
@@ -1431,7 +1433,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             while (params.types.size() < definition.types.size()) {
                 const auto* fallback = definition.types[params.types.size()].defaultValue;
                 const HIRPathParams known(params);
-                MonomorphStatePtr ms(ctx.crate->types, ctx.crate->types.self(), &known, nullptr);
+                MonomorphStatePtr ms(ctx.crate->types, subject, &known, nullptr);
                 params.types.push_back(fallback->is_Infer() ? fallback : ms.monomorphType(sp, fallback, /*allow_infer=*/true));
             }
             return HIRPathParams(mv$(params));
@@ -1441,9 +1443,8 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             if (hasItem(trait, name, ns)) {
                 return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
-            auto selfTy = ctx.crate->types.self();
             const auto params = withDefaults(sp, path.params, trait.params);
-            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &params, nullptr);
+            auto cb = MonomorphStatePtr(ctx.crate->types, subject, &params, nullptr);
             for (const auto& st : trait.allParentTraits) {
                 const auto& t = ctx.crate->getTraitByPath(sp, st.path.path);
 
@@ -1460,9 +1461,8 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
 
-            auto selfTy = ctx.crate->types.self();
             const auto params = withDefaults(sp, path.params, ctx.LowerHIRGenericParams(trait.params(), nullptr));
-            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &params, nullptr);
+            auto cb = MonomorphStatePtr(ctx.crate->types, subject, &params, nullptr);
             for (const auto& st : trait.supertraits()) {
                 auto b = ctx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
                 ASSERT_BUG(sp, st.ent.path->bindings.type.binding.is_Trait(), StringView("Not a trait: ") << *st.ent.path);
@@ -1477,7 +1477,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                `ValueType`. */
             for (const auto& bound : trait.params().bounds) {
                 const auto* isTrait = bound.opt_IsTrait();
-                if (!isTrait || ctx.LowerHIRType(isTrait->type) != selfTy || !isTrait->trait.bindings.type.binding.is_Trait()) {
+                if (!isTrait || ctx.LowerHIRType(isTrait->type) != ctx.crate->types.self() || !isTrait->trait.bindings.type.binding.is_Trait()) {
                     continue;
                 }
                 auto b = ctx.LowerHIRTraitPath(sp, isTrait->trait, isTrait->innerHrbs, true, isTrait->constness);
@@ -1563,7 +1563,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     ERROR(sp, E0000, StringView("Return-type notation does not support equality constraints"));
                 }
                 auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
-                auto srcTrait = H(*this).findSourceTrait(sp, rv.path, path.bindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(crate->types));
+                auto srcTrait = H(*this, boundedType).findSourceTrait(sp, rv.path, path.bindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(crate->types));
                 DEBUG(StringView("src_trait = ") << srcTrait << StringView(" for ") << assoc.first);
                 rv.typeBounds.insert(std::make_pair(nameArgs.first, HIRTraitPath::AtyEqual{std::move(srcTrait), std::move(nameArgs.second), LowerHIRType(assoc.second)}));
                 break;
@@ -1579,7 +1579,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
                     const auto sourceName = nameArgs.first;
                     const auto ns = assoc.first.args().isRtn ? H::Namespace::Function : H::Namespace::Type;
-                    auto srcTrait = H(*this).findSourceTrait(sp, rv.path, path.bindings.type.binding, sourceName, ns, MonomorphiserNop(crate->types));
+                    auto srcTrait = H(*this, boundedType).findSourceTrait(sp, rv.path, path.bindings.type.binding, sourceName, ns, MonomorphiserNop(crate->types));
                     if (assoc.first.args().isRtn) {
                         nameArgs.first = RcString::newInterned(FMT(ATY_PREFIX_ERASED << sourceName << StringView("_0")));
                     }
