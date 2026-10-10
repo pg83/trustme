@@ -244,9 +244,9 @@ bool ASTImpl::hasNamedItem(const RcString& name) const {
 ASTUseItem ASTUseItem::clone() const {
     decltype(this->entries) entries;
     for (const auto& e : this->entries) {
-        entries.push_back({e.sp, e.path, e.name, e.isSelf});
+        entries.push_back({e.sp, e.path, e.name, e.isSelf, e.group});
     }
-    return ASTUseItem{this->sp, this->isPrelude, mv$(entries)};
+    return ASTUseItem{this->sp, this->isPrelude, mv$(entries), this->groups};
 }
 
 ASTExternBlock::ASTExternBlock(std::string abi)

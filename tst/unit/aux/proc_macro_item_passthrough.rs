@@ -289,3 +289,26 @@ pub fn tree_shapes(input: TokenStream) -> TokenStream {
         .collect();
     TokenTree::from(Literal::string(&shapes.join(" "))).into()
 }
+
+// The same check as `echo_item_spelled` with all whitespace left out of both
+// sides, for a spelling whose spacing is not what is being pinned down.
+#[proc_macro_attribute]
+pub fn echo_item_spelled_compact(attribute: TokenStream, item: TokenStream) -> TokenStream {
+    let quoted = attribute.to_string();
+    let expected: String = quoted.trim().trim_matches('"').chars().filter(|c| !c.is_whitespace()).collect();
+    let text: String = item.to_string().chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(
+        text.contains(&expected),
+        "the item's tokens should contain `{}`, they are: {}",
+        expected,
+        item
+    );
+    item
+}
+
+// Function-like: the input's top-level trees, iterated and collected again
+// unchanged.
+#[proc_macro]
+pub fn reemit(input: TokenStream) -> TokenStream {
+    input.into_iter().collect()
+}

@@ -326,6 +326,8 @@ namespace {
         void visitStatic(const RcString& name, const ASTVisibility& vis, const ASTStatic& i);
 
         void visitUse(const RcString& /*name*/, const ASTVisibility& vis, const ASTUseItem& item);
+        void visitUseTree(const ASTUseItem& item, size_t begin, size_t end, size_t depth, size_t from, bool withRoot);
+        bool visitUsePathPart(const ASTPath& path, size_t from, size_t to, bool withRoot);
 
         void visitImplHdr(const ASTImplDef& impl);
 
@@ -2969,28 +2971,118 @@ auto ProcMacroVisitor::visitStatic(const RcString& name, const ASTVisibility& vi
 auto ProcMacroVisitor::visitUse(const RcString& /*name*/, const ASTVisibility& vis, const ASTUseItem& item) -> void {
     this->visitVis(vis);
     pmi.sendRword("use");
+    this->visitUseTree(item, 0, item.entries.size(), 0, 0, true);
+    pmi.sendSymbol(";");
+}
 
-    auto visitEntry = [&](const auto& entry) {
-        visitPath(entry.path);
-        if (entry.name == "") {
+static u32 useGroupAt(const ASTUseItem& item, const ASTUseItem::Ent& entry, size_t depth) {
+    Vector<u32> chain;
+    for (u32 group = entry.group; group != ASTUseItem::NO_GROUP; group = item.groups[group].parent) {
+        chain.pushBack(group);
+    }
+    return depth < chain.length() ? chain[chain.length() - 1 - depth] : ASTUseItem::NO_GROUP;
+}
+
+static RcString useLeafName(const ASTPath& path) {
+    if (!path.nodes().empty()) {
+        return path.nodes().back().name();
+    }
+    if (const auto* absolute = path.cls.opt_Absolute(); absolute && absolute->crate.c_str()[0] == '=') {
+        return RcString::newInterned(absolute->crate.c_str() + 1);
+    }
+    return RcString();
+}
+
+auto ProcMacroVisitor::visitUseTree(const ASTUseItem& item, size_t begin, size_t end, size_t depth, size_t from, bool withRoot) -> void {
+    size_t i = begin;
+    while (i < end) {
+        if (i != begin) {
+            pmi.sendSymbol(",");
+        }
+        const auto& entry = item.entries[i];
+        const u32 group = useGroupAt(item, entry, depth);
+        if (group != ASTUseItem::NO_GROUP) {
+            size_t groupEnd = i + 1;
+            while (groupEnd < end && useGroupAt(item, item.entries[groupEnd], depth) == group) {
+                groupEnd++;
+            }
+            const u32 prefix = item.groups[group].prefix;
+            if (prefix == ASTUseItem::NO_GROUP) {
+                pmi.sendSymbol("{");
+                this->visitUseTree(item, i, groupEnd, depth + 1, 0, true);
+            } else {
+                if (this->visitUsePathPart(entry.path, from, prefix, withRoot)) {
+                    pmi.sendSymbol("::");
+                }
+                pmi.sendSymbol("{");
+                this->visitUseTree(item, i, groupEnd, depth + 1, prefix, false);
+            }
+            pmi.sendSymbol("}");
+            i = groupEnd;
+            continue;
+        }
+        if (entry.isSelf) {
+            pmi.sendRword("self");
+        } else if (this->visitUsePathPart(entry.path, from, entry.path.nodes().size(), withRoot) && entry.name == "") {
             pmi.sendSymbol("::");
+        }
+        if (entry.name == "") {
             pmi.sendSymbol("*");
-        } else if (entry.name != entry.path.nodes().back().name()) {
+        } else if (entry.name != useLeafName(entry.path)) {
             pmi.sendRword("as");
             pmi.sendIdent(entry.name.c_str());
         }
-    };
-    if (item.entries.size() == 1) {
-        visitEntry(item.entries[0]);
-    } else {
-        pmi.sendSymbol("{");
-        for (const auto& entry : item.entries) {
-            visitEntry(entry);
-            pmi.sendSymbol(",");
-        }
-        pmi.sendSymbol("}");
+        i++;
     }
-    pmi.sendSymbol(";");
+}
+
+auto ProcMacroVisitor::visitUsePathPart(const ASTPath& path, size_t from, size_t to, bool withRoot) -> bool {
+    bool printed = false;
+    if (withRoot) {
+        switch (path.cls.tag()) {
+            case ASTPathClass::TAG_Relative:
+                break;
+            case ASTPathClass::TAG_Self:
+                pmi.sendRword("self");
+                printed = true;
+                break;
+            case ASTPathClass::TAG_Super: {
+                const auto& pe = path.cls.as_Super();
+                for (unsigned i = 0; i < pe.count; i++) {
+                    if (i > 0) {
+                        pmi.sendSymbol("::");
+                    }
+                    pmi.sendRword("super");
+                }
+                printed = true;
+                break;
+            }
+            case ASTPathClass::TAG_Absolute: {
+                const auto& pe = path.cls.as_Absolute();
+                if (pe.crate == "") {
+                    pmi.sendRword("crate");
+                } else if (pe.crate.c_str()[0] == '=') {
+                    pmi.sendSymbol("::");
+                    pmi.sendIdent(pe.crate.c_str() + 1);
+                } else {
+                    pmi.sendDollarCrate(Ident::Hygiene(), sp, pe.crate);
+                }
+                printed = true;
+                break;
+            }
+            default:
+                BUG(sp, StringView("Unexpected path in a use item - ") << path);
+        }
+    }
+    const auto& nodes = path.nodes();
+    for (size_t i = from; i < to; i++) {
+        if (printed) {
+            pmi.sendSymbol("::");
+        }
+        this->visitPathNode(nodes[i], false);
+        printed = true;
+    }
+    return printed;
 }
 
 auto ProcMacroVisitor::visitImplHdr(const ASTImplDef& impl) -> void {

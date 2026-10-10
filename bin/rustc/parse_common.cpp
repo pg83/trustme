@@ -2761,8 +2761,8 @@ namespace {
         }
     }
 
-    void ParseUseInner(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries, ASTPath& path, bool explicitAbsolute = false) {
-        TRACE_FUNCTION_FR(path, entries);
+    void ParseUseInner(TokenStream& lex, ASTUseItem& out, ASTPath& path, bool explicitAbsolute = false, u32 group = ASTUseItem::NO_GROUP) {
+        TRACE_FUNCTION_FR(path, out.entries);
         Token tok;
 
         while (lex.getTokenIf(TOK_RWORD_SUPER)) {
@@ -2800,10 +2800,12 @@ namespace {
                     if (lex.getTokenIf(TOK_RWORD_AS)) {
                         name = getOptionalIdent(lex);
                     }
-                    entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name), /*isSelf=*/true});
+                    out.entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name), /*isSelf=*/true, group});
                     return;
                 }
-                case TOK_BRACE_OPEN:
+                case TOK_BRACE_OPEN: {
+                    const u32 inner = out.groups.length();
+                    out.groups.pushBack(ASTUseItem::Group{group, static_cast<u32>(path.nodes().size())});
                     if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
                         GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
                         return;
@@ -2821,24 +2823,25 @@ namespace {
                                 }
                                 name = path.nodes().back().hygienicName();
                             }
-                            entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), /*isSelf=*/true});
+                            out.entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), /*isSelf=*/true, inner});
                         } else {
                             auto savedPath = ASTPath(path);
 
-                            ParseUseInner(lex, entries, path, explicitAbsolute);
+                            ParseUseInner(lex, out, path, explicitAbsolute, inner);
 
                             path = std::move(savedPath);
                         }
                     } while (GET_TOK(tok, lex) == TOK_COMMA);
                     CHECK_TOK(tok, TOK_BRACE_CLOSE);
                     return;
+                }
                 case TOK_DOUBLE_COLON: {
                     auto absolutePath = ASTPath("", {});
-                    ParseUseInner(lex, entries, absolutePath, true);
+                    ParseUseInner(lex, out, absolutePath, true, group);
                     return;
                 }
                 case TOK_STAR:
-                    entries.push_back({lex.pointSpan(), ASTPath(path), ""});
+                    out.entries.push_back({lex.pointSpan(), ASTPath(path), "", false, group});
                     return;
                 default:
                     parseErrorUnexpected(lex, tok);
@@ -2856,10 +2859,10 @@ namespace {
         }
 
         // TODO: Get a span covering the final node.
-        entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
+        out.entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), false, group});
     }
 
-    void ParseUseRoot(TokenStream& lex, std::vector<ASTUseItem::Ent>& entries) {
+    void ParseUseRoot(TokenStream& lex, ASTUseItem& out, u32 group = ASTUseItem::NO_GROUP) {
         ASTPath path = ASTPath("", {});
         bool explicitAbsolute = false;
         Token tok;
@@ -2883,7 +2886,7 @@ namespace {
                 if (lex.lookahead(0) == TOK_RWORD_AS) {
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
                     auto name = getOptionalIdent(lex);
-                    entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
+                    out.entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), false, group});
                     return;
                 }
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
@@ -2909,7 +2912,7 @@ namespace {
                         }
 
                         // TODO: Get a span covering the final node.
-                        entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
+                        out.entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), false, group});
                         return;
                     }
                 } else {
@@ -2945,7 +2948,7 @@ namespace {
                         ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, StringView("`use` with an empty path fragment"));
                         name = path.nodes().back().hygienicName();
                     }
-                    entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name)});
+                    out.entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), false, group});
                     return;
                 }
             } break;
@@ -2957,7 +2960,7 @@ namespace {
                 break;
         }
 
-        ParseUseInner(lex, entries, path, explicitAbsolute);
+        ParseUseInner(lex, out, path, explicitAbsolute, group);
     }
 
     ASTUseItem ParseUse(TokenStream& lex) {
@@ -2965,29 +2968,33 @@ namespace {
         Token tok;
         ProtoSpan spanStart = lex.startSpan();
 
-        std::vector<ASTUseItem::Ent> entries;
+        ASTUseItem out;
 
         if (lex.lookahead(0) == TOK_BRACE_OPEN) {
             GET_TOK(tok, lex);
+            const u32 root = out.groups.length();
+            out.groups.pushBack(ASTUseItem::Group{ASTUseItem::NO_GROUP, ASTUseItem::NO_GROUP});
             do {
                 if (lex.lookahead(0) == TOK_BRACE_CLOSE) {
                     GET_TOK(tok, lex);
                     break;
                 }
-                ParseUseRoot(lex, entries);
+                ParseUseRoot(lex, out, root);
             } while (GET_TOK(tok, lex) == TOK_COMMA);
             CHECK_TOK(tok, TOK_BRACE_CLOSE);
         } else {
-            ParseUseRoot(lex, entries);
+            ParseUseRoot(lex, out);
         }
 
-        return ASTUseItem{lex.endSpan(spanStart), false, mv$(entries)};
+        out.sp = lex.endSpan(spanStart);
+        return out;
     }
 
     ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName) {
         Token tok;
         auto ps = lex.startSpan();
-        std::vector<ASTUseItem::Ent> entries;
+        ASTUseItem tree;
+        auto& entries = tree.entries;
 
         if (lex.lookahead(0) == TOK_LT) {
             GET_TOK(tok, lex);
@@ -2999,7 +3006,7 @@ namespace {
             GET_CHECK_TOK(tok, lex, TOK_GT);
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
             auto path = trait ? ASTPath::newUfcsTrait(mv$(type), mv$(*trait), {}) : ASTPath::newUfcsTy(mv$(type), {});
-            ParseUseInner(lex, entries, path);
+            ParseUseInner(lex, tree, path);
         } else {
             Ident::Hygiene relativeHygiene;
             const bool relativeRoot = lex.lookahead(0) == TOK_IDENT;
@@ -3008,7 +3015,7 @@ namespace {
                 relativeHygiene = tok.ident().hygiene;
                 PUTBACK(tok, lex);
             }
-            ParseUseRoot(lex, entries);
+            ParseUseRoot(lex, tree);
             if (relativeRoot) {
                 for (auto& entry : entries) {
                     if (entry.path.cls.is_Absolute() && entry.path.cls.as_Absolute().crate == "") {

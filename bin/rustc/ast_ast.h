@@ -686,6 +686,8 @@ private:
 };
 
 struct ASTUseItem {
+    static constexpr u32 NO_GROUP = ~u32(0);
+
     Span sp;
     bool isPrelude = false;
 
@@ -695,9 +697,16 @@ struct ASTUseItem {
         RcString name;
 
         bool isSelf = false;
+        u32 group = NO_GROUP;
+    };
+
+    struct Group {
+        u32 parent;
+        u32 prefix;
     };
 
     std::vector<Ent> entries;
+    stl::Vector<Group> groups;
 
     ASTUseItem clone() const;
 };
