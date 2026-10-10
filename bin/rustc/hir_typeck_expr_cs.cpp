@@ -9384,7 +9384,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
             // TODO: Sometimes there's impls that just forward for wrappers, which can lead to incorrect rules
 
             bool found = false;
-            bool ambiguous = false;
+            bool mayHold = false;
             const auto inspectImpl = [&](const SolverImpl& impl) {
                 auto tup = impl.getTraitTyParam(context.crate.types, 0);
                 if (!tup->is_Tuple()) {
@@ -9403,11 +9403,11 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
                 if (!probe.candidate) {
                     return false;
                 }
-                context.applySolverResponse(node.span(), probe.effects);
                 if (probe.effects.certainty != SolverCertainty::Proven) {
-                    ambiguous = true;
+                    mayHold = true;
                     return false;
                 }
+                context.applySolverResponse(node.span(), probe.effects);
                 inspectImpl(*probe.candidate);
                 found = true;
                 return true;
@@ -9418,8 +9418,12 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
                     .allowInferInputs = true,
                 }
             );
-            if (ambiguous) {
-                return;
+            if (!found && mayHold) {
+                context.addTraitBound(node.span(), ty, langFnOnce, traitPp.clone());
+                context.equateTypesAssoc(node.span(), node.resType, langFnOnce, traitPp.clone(), ty, "Output", {});
+                fcnArgsTup = traitPp.types[0];
+                fcnRet = node.resType;
+                found = true;
             }
             if (found) {
                 if (fcnRet == nullptr) {
