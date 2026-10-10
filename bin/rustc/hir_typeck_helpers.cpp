@@ -14702,6 +14702,12 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     ThinVector<PreparedTraitBound> preparedBounds(implParamsDef->bounds.size());
     bool preparedBoundsStale = false;
     size_t boundsRuledOut = 0;
+    const auto boundIsOpen = [&](const HIRType* type) {
+        return visitTyWith(resolve_.ivars.expandIvars(type), [](const HIRType* inner) {
+            const auto* generic = inner->opt_Generic();
+            return inner->is_Infer() || (generic && (generic->group() == GENERICPlaceholder || generic->isSolverExistential()));
+        });
+    };
     for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
         const auto& bound = implParamsDef->bounds[boundIndex];
         const auto* traitBound = bound.opt_TraitBound();
@@ -14734,10 +14740,10 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
            candidate is gone and nothing later needs preparing. */
         for (; boundsRuledOut < boundIndex; boundsRuledOut++) {
             const auto& earlier = preparedBounds[boundsRuledOut];
-            if (!earlier.ready || !earlier.associated.empty()) {
+            if (!earlier.ready) {
                 continue;
             }
-            if (typeHasUnknown(earlier.type) || paramsHaveUnknownTypes(earlier.params)) {
+            if (boundIsOpen(earlier.type) || std::any_of(earlier.params.types.begin(), earlier.params.types.end(), boundIsOpen) || std::any_of(earlier.params.values.begin(), earlier.params.values.end(), [](const HIRConstGeneric& value) { return value.is_Infer(); })) {
                 continue;
             }
             if (solveGoal(earlier.trait, earlier.params, earlier.type, nullptr) == Certainty::NoSolution) {
