@@ -199,30 +199,6 @@ ASTPath::ASTPath(const ASTPath& x)
     }
 }
 
-bool ASTPath::isParentOf(const ASTPath& x) const {
-    if (!this->cls.is_Absolute() || !x.cls.is_Absolute()) {
-        return false;
-    }
-    const auto& te = this->cls.as_Absolute();
-    const auto& xe = x.cls.as_Absolute();
-
-    if (te.crate != xe.crate) {
-        return false;
-    }
-
-    if (te.nodes.size() > xe.nodes.size()) {
-        return false;
-    }
-
-    for (size_t i = 0; i < te.nodes.size(); i++) {
-        if (te.nodes[i].name() != xe.nodes[i].name()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 void ASTPath::bindVariable(unsigned int slot) {
     bindings.value.set(ASTAbsolutePath(), ASTPathBindingValue::make_Variable({slot}));
 }

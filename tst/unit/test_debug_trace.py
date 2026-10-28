@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Run a Rust CLI regression with tracing enabled and check stage boundaries."""
 
+import argparse
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,13 +13,32 @@ import time
 
 
 def main():
-    rustc, source, archive, stamp = map(Path, sys.argv[1:])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("rustc", type=Path)
+    parser.add_argument("source", type=Path)
+    parser.add_argument("archive", type=Path)
+    parser.add_argument("stamp", type=Path)
+    parser.add_argument("--dump", action="store_true")
+    args = parser.parse_args()
+    rustc, source, archive, stamp = args.rustc, args.source, args.archive, args.stamp
     environment = dict(os.environ, RUSTC=str(rustc.resolve()))
     runner = Path(__file__).with_name("run_one.py")
-    markers = (b"ParseModRoot: >>", b"ParseModRoot: <<",
-               b"emitFunctionCode: >>", b"emitFunctionCode: <<")
+    markers = (b"ParseModRoot: >>", b"ParseModRoot: <<")
+    source_text = source.read_text(encoding="utf-8", errors="surrogateescape")
+    if not re.search(r"^//@\s*crate-type:\s*lib\s*$", source_text, re.MULTILINE):
+        markers += (b"emitFunctionCode: >>", b"emitFunctionCode: <<")
     with tempfile.TemporaryDirectory() as directory:
         work = Path(directory)
+        if args.dump:
+            wrapper = work / "rustc-dump"
+            binary = str(rustc.resolve())
+            wrapper.write_text(
+                f"#!{sys.executable}\nimport os, sys\n"
+                f"os.execv({binary!r}, [{binary!r}, *sys.argv[1:], "
+                "'-Zdump-ast', '-Zdump-hir', '-Zdump-mir'])\n"
+            )
+            wrapper.chmod(0o755)
+            environment["RUSTC"] = str(wrapper)
         print(f"debug trace: compiling {source.name}", file=sys.stderr, flush=True)
         remaining = set(markers)
         tail = b""

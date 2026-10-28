@@ -263,25 +263,6 @@ namespace {
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& raw) const override;
     };
 
-    struct CorrelateSolverResponseSlots final: public MonomorphiserNop {
-        const SolverSlotValues& slots_;
-        Vector<std::pair<const HIRType*, const HIRType*>> structuralTypes_;
-
-        void correlateParams(const HIRPathParams& input, const HIRPathParams& response);
-
-        void correlateGenericPath(const HIRGenericPath& input, const HIRGenericPath& response);
-
-        void correlatePath(const HIRPath& input, const HIRPath& response);
-
-        CorrelateSolverResponseSlots(HIRTypeInterner& interner, const SolverSlotValues& slots);
-
-        void correlateType(const HIRType* input, const HIRType* response);
-
-        const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
-    };
-
     struct DecanonicalizeSolverInfers final: public MonomorphiserNop {
         const CanonicalizeTraitGoal& canonicalizer_;
 
@@ -756,8 +737,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     const SolverImpl* monomorphSolverImpl(const SolverImpl& source, const Monomorphiser& monomorph) const;
 
-    const SolverImpl* correlateSolverImplForRead(const SolverImpl& source, const SolverSlotValues& slots, const HIRType* type, const HIRPathParams& params) const;
-
     SolverResponse monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations = true) const;
 
     SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
@@ -1140,34 +1119,6 @@ void HMTypeInferrence::checkForLoops() {
             indexes.clear();
             indexes.pushBack(i);
             (LoopChecker{indexes}).checkTy(*this, v.type);
-        }
-        i++;
-    }
-}
-
-void HMTypeInferrence::compactIvars() {
-    ASSERT_BUG(Span(), snapshotDepth == 0, StringView("ivar compaction during an active inference snapshot"));
-    this->checkForLoops();
-
-    unsigned int i = 0;
-    for (auto& v : ivars) {
-        if (!v.isAlias()) {
-            auto old = v.type;
-            v.type = this->expandIvars(v.type);
-            DEBUG(StringView("- ") << i << StringView(" ") << old << StringView(" -> ") << v.type);
-        } else {
-            auto index = v.alias;
-            unsigned int count = 0;
-            BUG_ASSERT(index < ivars.size());
-            while (ivars.at(index).isAlias()) {
-                index = ivars.at(index).alias;
-
-                if (count >= ivars.size()) {
-                    BUG(Span(), StringView("Loop detected in ivar list when starting at ") << v.alias << StringView(", current is ") << index);
-                }
-                count++;
-            }
-            v.alias = index;
         }
         i++;
     }
@@ -10189,192 +10140,6 @@ auto InstantiateTraitResponseForCaller::getValue(const Span&, const HIRGenericRe
     return fresh;
 }
 
-auto CorrelateSolverResponseSlots::correlateParams(const HIRPathParams& input, const HIRPathParams& response) -> void {
-    if (input.types.size() != response.types.size()) {
-        return;
-    }
-    for (size_t i = 0; i < input.types.size(); i++) {
-        correlateType(input.types[i], response.types[i]);
-    }
-}
-
-auto CorrelateSolverResponseSlots::correlateGenericPath(const HIRGenericPath& input, const HIRGenericPath& response) -> void {
-    if (input.path == response.path) {
-        correlateParams(input.params, response.params);
-    }
-}
-
-auto CorrelateSolverResponseSlots::correlatePath(const HIRPath& input, const HIRPath& response) -> void {
-    if (input.data.tag() != response.data.tag()) {
-        return;
-    }
-    switch (input.data.tag()) {
-        case HIRPathData::TAG_Generic:
-            correlateGenericPath(input.data.as_Generic(), response.data.as_Generic());
-            break;
-        case HIRPathData::TAG_UfcsInherent: {
-            const auto& left = input.data.as_UfcsInherent();
-            const auto& right = response.data.as_UfcsInherent();
-            if (left.item == right.item) {
-                correlateType(left.type, right.type);
-                correlateParams(left.params, right.params);
-                correlateParams(left.implParams, right.implParams);
-            }
-            break;
-        }
-        case HIRPathData::TAG_UfcsKnown: {
-            const auto& left = input.data.as_UfcsKnown();
-            const auto& right = response.data.as_UfcsKnown();
-            if (left.item == right.item && left.trait.path == right.trait.path) {
-                correlateType(left.type, right.type);
-                correlateParams(left.trait.params, right.trait.params);
-                correlateParams(left.params, right.params);
-            }
-            break;
-        }
-        case HIRPathData::TAG_UfcsUnknown: {
-            const auto& left = input.data.as_UfcsUnknown();
-            const auto& right = response.data.as_UfcsUnknown();
-            if (left.item == right.item) {
-                correlateType(left.type, right.type);
-                correlateParams(left.params, right.params);
-            }
-            break;
-        }
-    }
-}
-
-CorrelateSolverResponseSlots::CorrelateSolverResponseSlots(HIRTypeInterner& interner, const SolverSlotValues& slots)
-    : MonomorphiserNop(interner)
-    , slots_(slots)
-{
-}
-
-auto CorrelateSolverResponseSlots::correlateType(const HIRType* input, const HIRType* response) -> void {
-    if (input == response) {
-        return;
-    }
-    if (const auto* infer = response->opt_Infer(); infer && infer->index != ~0u) {
-        for (const auto& entry : structuralTypes_) {
-            if (entry.first == response) {
-                return;
-            }
-        }
-        structuralTypes_.pushBack({response, input});
-        return;
-    }
-    if (const auto* left = input->opt_Path()) {
-        if (const auto* right = response->opt_Path()) {
-            correlatePath(left->path, right->path);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_Tuple()) {
-        const auto* right = response->opt_Tuple();
-        if (!right || left->length() != right->length()) {
-            return;
-        }
-        for (size_t i = 0; i < left->length(); i++) {
-            correlateType((*left)[i], (*right)[i]);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_Borrow()) {
-        const auto* right = response->opt_Borrow();
-        if (right && left->type == right->type) {
-            correlateType(left->inner, right->inner);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_Pointer()) {
-        const auto* right = response->opt_Pointer();
-        if (right && left->type == right->type) {
-            correlateType(left->inner, right->inner);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_Slice()) {
-        if (const auto* right = response->opt_Slice()) {
-            correlateType(left->inner, right->inner);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_Array()) {
-        if (const auto* right = response->opt_Array(); right && left->size == right->size) {
-            correlateType(left->inner, right->inner);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_ErasedType()) {
-        const auto* right = response->opt_ErasedType();
-        if (!right || left->inner.tag() != right->inner.tag()) {
-            return;
-        }
-        correlateParams(left->use, right->use);
-        switch (left->inner.tag()) {
-            case TypeDataErasedTypeInner::TAG_Fcn: {
-                const auto& leftOrigin = left->inner.as_Fcn();
-                const auto& rightOrigin = right->inner.as_Fcn();
-                if (leftOrigin.index == rightOrigin.index) {
-                    correlatePath(leftOrigin.origin, rightOrigin.origin);
-                }
-                break;
-            }
-            case TypeDataErasedTypeInner::TAG_Known:
-                correlateType(left->inner.as_Known(), right->inner.as_Known());
-                break;
-            case TypeDataErasedTypeInner::TAG_Alias: {
-                const auto& leftAlias = left->inner.as_Alias();
-                const auto& rightAlias = right->inner.as_Alias();
-                if (leftAlias.inner == rightAlias.inner) {
-                    correlateParams(leftAlias.params, rightAlias.params);
-                }
-                break;
-            }
-        }
-        return;
-    }
-    if (const auto* left = input->opt_NamedFunction()) {
-        if (const auto* right = response->opt_NamedFunction()) {
-            correlatePath(left->path, right->path);
-        }
-        return;
-    }
-    if (const auto* left = input->opt_Function()) {
-        const auto* right = response->opt_Function();
-        if (!right || left->argTypes.length() != right->argTypes.length()) {
-            return;
-        }
-        for (size_t i = 0; i < left->argTypes.length(); i++) {
-            correlateType(left->argTypes[i], right->argTypes[i]);
-        }
-        correlateType(left->rettype, right->rettype);
-    }
-}
-
-auto CorrelateSolverResponseSlots::monomorphType(const Span& sp, const HIRType* type, bool allowInfer) const -> const HIRType* {
-    for (const auto& entry : structuralTypes_) {
-        if (entry.first == type) {
-            return entry.second;
-        }
-    }
-    for (size_t i = 0; i < slots_.types.size(); i++) {
-        if (slots_.types[i]->is_Infer() && slots_.types[i] == type && slots_.typeInputs[i] != type) {
-            return slots_.typeInputs[i];
-        }
-    }
-    return MonomorphiserNop::monomorphType(sp, type, allowInfer);
-}
-
-auto CorrelateSolverResponseSlots::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const -> HIRConstGeneric {
-    for (size_t i = 0; i < slots_.values.size(); i++) {
-        if (slots_.values[i] == value && slots_.valueInputs[i] != value) {
-            return slots_.valueInputs[i].clone();
-        }
-    }
-    return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
-}
-
 DecanonicalizeSolverInfers::DecanonicalizeSolverInfers(HIRTypeInterner& types, const CanonicalizeTraitGoal& canonicalizer)
     : MonomorphiserNop(types)
     , canonicalizer_(canonicalizer)
@@ -11108,22 +10873,6 @@ auto NextTraitGoalEvaluator::ownSolverImpl(SolverImpl source) const -> const Sol
 
 auto NextTraitGoalEvaluator::monomorphSolverImpl(const SolverImpl& source, const Monomorphiser& monomorph) const -> const SolverImpl* {
     return ownSolverImpl(monomorphCandidateImpl(source, monomorph));
-}
-
-auto NextTraitGoalEvaluator::correlateSolverImplForRead(const SolverImpl& source, const SolverSlotValues& slots, const HIRType* type, const HIRPathParams& params) const -> const SolverImpl* {
-    CorrelateSolverResponseSlots correlate(crate.types, slots);
-    auto resolveInput = [&](const HIRType* input) {
-        const auto* infer = input->opt_Infer();
-        return infer && infer->index == ~0u ? input : resolve_.ivars.getType(input);
-    };
-    correlate.correlateType(resolveInput(type), source.getImplType(crate.types));
-    auto responseParams = source.getTraitParams(crate.types);
-    if (params.types.size() == responseParams.types.size()) {
-        for (size_t i = 0; i < params.types.size(); i++) {
-            correlate.correlateType(resolveInput(params.types[i]), responseParams.types[i]);
-        }
-    }
-    return monomorphSolverImpl(source, correlate);
 }
 
 auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations) const -> SolverResponse {

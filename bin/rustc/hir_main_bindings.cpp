@@ -133,7 +133,6 @@ namespace {
 
         ::SimplePatEnt deserialiseSimplepatent();
 
-        ::MacroPatEnt deserialiseMacropatent();
 
         ::MacroRulesArm deserialiseMacrorulesarm();
 
@@ -602,7 +601,7 @@ namespace {
 
         void serialise(const ::MacroRules& mac);
 
-        void serialise(const ::MacroPatEnt& pe);
+        void serialise(const ::MacroPatEnt& pe) = delete;
 
         void serialise(const ::SimplePatIfCheck& e);
 
@@ -1812,40 +1811,6 @@ auto HirDeserialiser::deserialiseSimplepatent() -> ::SimplePatEnt {
         default:
             BUG(Span(), StringView("Bad tag for MacroPatEnt - #") << static_cast<int>(tag));
     }
-}
-
-auto HirDeserialiser::deserialiseMacropatent() -> ::MacroPatEnt {
-    auto s = in.readIstring();
-    auto n = static_cast<unsigned int>(in.readCount());
-    auto type = static_cast<::MacroPatEnt::Type>(in.readTag());
-    ::MacroPatEnt rv(Span(), mv$(s), mv$(n), mv$(type));
-    switch (rv.type) {
-        case ::MacroPatEnt::PAT_TOKEN:
-            rv.tok = deserialiseToken();
-            break;
-        case ::MacroPatEnt::PAT_LOOP:
-            rv.tok = deserialiseToken();
-            rv.subpats = deserialiseVecC<::MacroPatEnt>([&]() {
-                return deserialiseMacropatent();
-            });
-            break;
-        case ::MacroPatEnt::PAT_TT:
-        case ::MacroPatEnt::PAT_PAT:
-        case ::MacroPatEnt::PAT_PAT_PARAM:
-        case ::MacroPatEnt::PAT_IDENT:
-        case ::MacroPatEnt::PAT_PATH:
-        case ::MacroPatEnt::PAT_TYPE:
-        case ::MacroPatEnt::PAT_EXPR:
-        case ::MacroPatEnt::PAT_STMT:
-        case ::MacroPatEnt::PAT_BLOCK:
-        case ::MacroPatEnt::PAT_META:
-        case ::MacroPatEnt::PAT_ITEM:
-        case ::MacroPatEnt::PAT_VIS:
-            break;
-        default:
-            BUG(Span(), StringView("Bad tag for MacroPatEnt - #") << static_cast<int>(rv.type) << StringView(" ") << rv.type);
-    }
-    return rv;
 }
 
 auto HirDeserialiser::deserialiseMacrorulesarm() -> ::MacroRulesArm {
@@ -3860,18 +3825,6 @@ auto HirSerialiser::serialise(const ::MacroRules& mac) -> void {
     out.writeBool(mac.localInnerMacros);
     serialiseVec(mac.rules);
     serialise(mac.hygiene);
-}
-
-auto HirSerialiser::serialise(const ::MacroPatEnt& pe) -> void {
-    out.writeString(pe.name);
-    out.writeCount(pe.nameIndex);
-    out.writeTag(static_cast<int>(pe.type));
-    if (pe.type == ::MacroPatEnt::PAT_TOKEN) {
-        serialise(pe.tok);
-    } else if (pe.type == ::MacroPatEnt::PAT_LOOP) {
-        serialise(pe.tok);
-        serialiseVec(pe.subpats);
-    }
 }
 
 auto HirSerialiser::serialise(const ::SimplePatIfCheck& e) -> void {

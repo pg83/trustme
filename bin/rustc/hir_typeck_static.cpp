@@ -1028,48 +1028,6 @@ const HIRType* StaticTraitResolve::replaceEqualities(const HIRType* input) const
     }
 }
 
-bool StaticTraitResolve::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, StaticTraitPathCallback& cb) const {
-    const auto& traitRef = crate.getTraitByPath(sp, pe.trait.path);
-    ASSERT_BUG(sp, traitRef.types.count(pe.item) != 0, StringView("Trait ") << pe.trait.path << StringView(" doesn't contain an associated type ") << pe.item);
-    const auto& atyDef = traitRef.types.find(pe.item)->second;
-
-    for (const auto& bound : atyDef.traitBounds) {
-        if (cb.visit(bound)) {
-            return true;
-        }
-    }
-    for (const auto& bound : traitRef.params.bounds) {
-        if (!bound.is_TraitBound()) {
-            continue;
-        }
-        const auto& be = bound.as_TraitBound();
-
-        if (!be.type->is_Path()) {
-            continue;
-        }
-        if (!be.type->as_Path().binding.is_Opaque()) {
-            continue;
-        }
-
-        const auto& beTypePe = be.type->as_Path().path.data.as_UfcsKnown();
-        if (beTypePe.type != crate.types.self()) {
-            continue;
-        }
-        if (beTypePe.trait.path != pe.trait.path) {
-            continue;
-        }
-        if (beTypePe.item != pe.item) {
-            continue;
-        }
-
-        if (cb.visit(be.trait)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRType* targetType, StaticNamedTraitCallback& callback) const {
     TRACE_FUNCTION_F(des << desParams << StringView(" from ") << traitPath << pp);
     if (pp.types.size() != traitPtr.params.types.size()) {

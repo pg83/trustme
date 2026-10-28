@@ -268,8 +268,6 @@ public:
 
     size_t size() const;
 
-    bool isParentOf(const ASTPath& x) const;
-
     void bindVariable(unsigned int slot);
 
     std::vector<ASTPathNode>& nodes();

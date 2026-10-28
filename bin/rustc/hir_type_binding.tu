@@ -46,9 +46,7 @@ generate(
         const HIRGenericParams* getGenerics() const;
         const HIRTraitMarkings* getTraitMarkings() const;
 
-        bool operator==(const HIRTypePathBinding& x) const;
-        bool operator!=(const HIRTypePathBinding& x) const {
-            return !(*this == x);
-        }
+        bool operator==(const HIRTypePathBinding& x) const = delete;
+        bool operator!=(const HIRTypePathBinding& x) const = delete;
     """,
 )

@@ -16,7 +16,6 @@ using namespace stl;
 
 namespace {
     bool exactPathParamsEqual(const HIRPathParams& a, const HIRPathParams& b);
-    bool exactGenericParamsEqual(const HIRGenericParams& a, const HIRGenericParams& b);
     bool exactTraitPathEqual(const HIRTraitPath& a, const HIRTraitPath& b);
 
     bool exactGenericRefEqual(const HIRGenericRef& a, const HIRGenericRef& b) {
@@ -85,47 +84,6 @@ namespace {
                 if (!exactTraitPathEqual(ati->second.traits[i], bti->second.traits[i])) {
                     return false;
                 }
-            }
-        }
-        return true;
-    }
-
-    bool exactGenericBoundEqual(const HIRGenericBound& a, const HIRGenericBound& b) {
-        if (a.tag() != b.tag()) {
-            return false;
-        }
-        switch (a.tag()) {
-            case HIRGenericBound::TAG_TraitBound: {
-                auto& ae = a.as_TraitBound();
-                auto& be = b.as_TraitBound();
-                return ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait) && ae.isTrivial == be.isTrivial;
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& ae = a.as_TypeEquality();
-                auto& be = b.as_TypeEquality();
-                return ae.type == be.type && ae.otherType == be.otherType;
-            }
-        }
-        UNREACHABLE();
-    }
-
-    bool exactGenericParamsEqual(const HIRGenericParams& a, const HIRGenericParams& b) {
-        if (a.types.size() != b.types.size() || a.values.size() != b.values.size() || a.bounds.size() != b.bounds.size()) {
-            return false;
-        }
-        for (size_t i = 0; i < a.types.size(); i++) {
-            if (a.types[i].name != b.types[i].name || a.types[i].defaultValue != b.types[i].defaultValue || a.types[i].isSized != b.types[i].isSized) {
-                return false;
-            }
-        }
-        for (size_t i = 0; i < a.values.size(); i++) {
-            if (a.values[i].name != b.values[i].name || a.values[i].type != b.values[i].type || !exactConstGenericEqual(a.values[i].defaultValue, b.values[i].defaultValue)) {
-                return false;
-            }
-        }
-        for (size_t i = 0; i < a.bounds.size(); i++) {
-            if (!exactGenericBoundEqual(a.bounds[i], b.bounds[i])) {
-                return false;
             }
         }
         return true;
@@ -2400,41 +2358,6 @@ HIRTypePathBinding HIRTypePathBinding::clone() const {
         }
     }
     BUG_ASSERT(!"Fell off end of clone_binding");
-    UNREACHABLE();
-}
-
-bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
-    if (this->tag() != x.tag()) {
-        return false;
-    }
-    switch ((*this).tag()) {
-        case HIRTypePathBinding::TAG_Unbound: {
-            return true;
-        }
-        case HIRTypePathBinding::TAG_Opaque: {
-            return true;
-        }
-        case HIRTypePathBinding::TAG_ExternType: {
-            const auto te = (*this).as_ExternType();
-            const auto xe = x.as_ExternType();
-            return te == xe;
-        }
-        case HIRTypePathBinding::TAG_Struct: {
-            const auto te = (*this).as_Struct();
-            const auto xe = x.as_Struct();
-            return te == xe;
-        }
-        case HIRTypePathBinding::TAG_Union: {
-            const auto te = (*this).as_Union();
-            const auto xe = x.as_Union();
-            return te == xe;
-        }
-        case HIRTypePathBinding::TAG_Enum: {
-            const auto te = (*this).as_Enum();
-            const auto xe = x.as_Enum();
-            return te == xe;
-        }
-    }
     UNREACHABLE();
 }
 

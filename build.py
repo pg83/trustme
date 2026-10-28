@@ -7469,6 +7469,23 @@ for _release, _dir, _prefix in (
 
 debug_trace_tests = []
 if not system_rustc_mode:
+    debug_dump_stems = (
+        "a_fragment_reaches_a_proc_macro_as_an_invisible_group",
+        "const_generic_coroutine_tait",
+        "macro_stmt_item_repetition",
+        "assert_message_types_and_patterns",
+        "try_block_keeps_macro_argument_question_mark",
+        "a_c_string_literal_parses_from_proc_macro_source_text",
+        "next_solver_canonical_const_value_slots",
+        "macro_negative_range_pattern_expr",
+        "const_eval_self_referential_static",
+        "macro_raw_lifetime",
+        "an_item_fragment_takes_a_const_impl",
+        "a_macro_in_a_struct_literals_path_arguments_is_expanded",
+        "macro_expr_fragment_starts",
+        "never_patterns",
+        "patterns_decide_their_scrutinee_one_at_a_time",
+    )
     for _stem in (
         "macro_clones_patterns", "macro_clones_items",
         "monomir_values_and_control_flow", "monomir_drop_and_dst",
@@ -7496,6 +7513,27 @@ if not system_rustc_mode:
         "generic_assert_repeated_and_hygienic_names",
         "simd_selection_and_lane_updates", "simd_fused_rounding",
         "indexed_closure_promotion",
+        "nested_tuple_field_origins", "serialized_assembly_operands",
+        "coroutine_assembly_live_values", "serialized_match_tables",
+        "external_enum_globs_and_root_aliases",
+        "an_interpolated_pattern_is_one_alternative_of_an_or_pattern",
+        "an_attribute_macro_on_an_inline_module_sees_its_items",
+        "associated_const_equality_bound",
+        "or_pattern_slice_prefix",
+        "macro_metavar_concat_string",
+        "a_turbofish_may_begin_with_a_negative_const_argument",
+        "opaque_associated_type_bound",
+        "macro_suffixed_literal_token",
+        "macro_split_shr_assign",
+        "macro_generated_extern_crate_order",
+        "macro_for_binder_default",
+        "macro_async_await_expr_fragment",
+        "a_captured_meta_reaches_a_proc_macro_as_its_tokens",
+        "transparent_macro_hygiene",
+        "rest_pattern_syntax",
+        "const_empty_slice_without_provenance",
+        "closure_array_pattern_length_in_goal",
+        *debug_dump_stems,
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"
@@ -7509,6 +7547,7 @@ if not system_rustc_mode:
             cmd=[
                 *TEST_TIMEOUT, "python3", "$(S)/tst/unit/test_debug_trace.py",
                 RUSTC_DEBUG, _src, LIBSTDS["1.90.0"].archive, _stamp,
+                *(["--dump"] if _stem in debug_dump_stems else []),
             ],
             deps=[rustc_debug, LIBSTDS["1.90.0"].node],
             env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", **TOOLCHAIN_ENV},

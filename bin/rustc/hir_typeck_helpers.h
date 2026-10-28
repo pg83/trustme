@@ -346,7 +346,6 @@ public:
 
     void markChange();
 
-    void compactIvars();
     bool applyDefault(unsigned int index);
 
     void printType(stl::ZeroCopyOutput& os, const HIRType* tr, LList<const HIRType*> stack = {}) const;

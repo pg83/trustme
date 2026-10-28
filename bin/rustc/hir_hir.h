@@ -953,7 +953,6 @@ public:
     bool functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const;
 
     const HIRStatic& getStaticByPath(const Span& sp, const HIRSimplePath& path) const;
-    HIRStatic& getStaticByPathMut(const Span& sp, const HIRSimplePath& path);
 
     const HIRConstant& getConstantByPath(const Span& sp, const HIRSimplePath& path) const;
     HIRConstant& getConstantByPathMut(const Span& sp, const HIRSimplePath& path);

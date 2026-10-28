@@ -1428,27 +1428,6 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
     BUG(sp, StringView("`static` path ") << path << StringView(" can't be found"));
 }
 
-HIRStatic& HIRCrate::getStaticByPathMut(const Span& sp, const HIRSimplePath& path) {
-    auto& m = getModByPathMut(sp, path, true);
-    auto it = m.valueItems.find(path.components().back());
-    if (it != m.valueItems.end()) {
-        ASSERT_BUG(sp, it->second->ent.is_Static(), StringView("`static` path ") << path << StringView(" didn't point to a static - ") << it->second->ent.tagStr());
-        return *it->second->ent.as_Static();
-    }
-    for (auto& e : m.inlineStatics) {
-        if (e.first == path.components().back()) {
-            return *e.second;
-        }
-    }
-    if (path.crateName() == crateName && path.components().size() == 1) {
-        auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) { return v.first == path.components().back(); });
-        if (i != newValues.end()) {
-            return *i->second->ent.as_Static();
-        }
-    }
-    BUG(sp, StringView("Could not find static ") << path);
-}
-
 void HIRCrate::postLoadUpdate(const RcString& name) {
     // TODO: Do a pass across m_hir that
 }

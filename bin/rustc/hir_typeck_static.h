@@ -34,24 +34,6 @@ struct StaticNamedTraitCb final: StaticNamedTraitCallback {
     }
 };
 
-struct StaticTraitPathCallback {
-    virtual bool visit(const HIRTraitPath& trait) = 0;
-};
-
-template <typename F>
-struct StaticTraitPathCb final: StaticTraitPathCallback {
-    F f;
-
-    explicit StaticTraitPathCb(F f)
-        : f(f)
-    {
-    }
-
-    bool visit(const HIRTraitPath& trait) override {
-        return f(trait);
-    }
-};
-
 #include "hir_typeck_static_tu.h"
 
 enum class OpaqueReveal {
@@ -239,14 +221,6 @@ public:
     }
 
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;
-    bool iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, StaticTraitPathCallback& cb) const;
-
-    template <typename F>
-    bool iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, F f) const {
-        StaticTraitPathCb<F> cb(f);
-        return iterateAtyBoundsCb(sp, pe, cb);
-    }
-
     bool typeIsCopy(const Span& sp, const HIRType* ty) const;
     bool typeIsClone(const Span& sp, const HIRType* ty) const;
     bool typeIsSized(const Span& sp, const HIRType* ty) const;
