@@ -387,7 +387,8 @@ class BuildContext:
         return self._configuration_uid(self.target, defines)
 
     def _host_configuration_uid(self) -> str:
-        return self._configuration_uid(self.host, {})
+        defines = dict(object.__getattribute__(self.flags, "_values"))
+        return self._configuration_uid(self.host, defines)
 
     def interface(self, *, cflags=(), cxxflags=(), cppflags=(), ldflags=(), enabled=True, name=None) -> Target:
         target = Target(
@@ -619,7 +620,12 @@ class BuildContext:
         return module
 
     def _invoke_graph(self, build_file: Path, target: str,
-                      env: dict[str, str]) -> str:
+                      env: dict[str, str], defines=None) -> str:
+        define_args = [
+            arg
+            for key, value in sorted((defines or {}).items())
+            for arg in ("-D", f"{key}={value}")
+        ]
         result = subprocess.run(
             [
                 sys.executable,
@@ -627,6 +633,7 @@ class BuildContext:
                 "-G",
                 "--target",
                 target,
+                *define_args,
                 "--build-file",
                 str(build_file),
             ],
@@ -803,7 +810,8 @@ class BuildContext:
                              extra_cppflags: Iterable[str] = (),
                              source_prefix: str | None = None,
                              build_prefix: str | None = None,
-                             index_primary: bool) -> ImportedGraph:
+                             index_primary: bool,
+                             defines=None) -> ImportedGraph:
         extras = (
             tuple(str(flag) for flag in extra_cflags),
             tuple(str(flag) for flag in extra_cxxflags),
@@ -816,6 +824,7 @@ class BuildContext:
             source_prefix,
             build_prefix,
             index_primary,
+            tuple(sorted((defines or {}).items())),
         )
         cached = self.imported_graphs.get(key)
         if cached is not None:
@@ -830,7 +839,7 @@ class BuildContext:
                 continue
             existing = env.get(variable, "")
             env[variable] = f"{existing} {shlex.join(values)}".strip() if existing else shlex.join(values)
-        encoded = self._invoke_graph(build_file, target, env)
+        encoded = self._invoke_graph(build_file, target, env, defines)
         if source_prefix is not None:
             assert build_prefix is not None
             encoded = encoded.replace(S, source_prefix).replace(B, build_prefix)
@@ -1091,6 +1100,7 @@ class BuildContext:
             extra_cxxflags=self.host_cxxflags,
             extra_cppflags=self.host_cppflags,
             index_primary=False,
+            defines=dict(object.__getattribute__(self.flags, "_values")),
         )
 
         roots: dict[Target, Node] = {}
