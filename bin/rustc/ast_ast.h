@@ -601,6 +601,8 @@ public:
     ASTImplDef(ASTImplDef&&) /*noexcept*/ = default;
     ASTImplDef& operator=(ASTImplDef&&) = default;
 
+    auto clone() const -> ASTImplDef;
+
     void setIsUnsafe() {
         isUnsafe_ = true;
     }
@@ -667,6 +669,8 @@ public:
     ASTImpl(ASTImplDef def);
     ~ASTImpl();
     ASTImpl& operator=(ASTImpl&&);
+
+    auto clone() const -> ASTImpl;
 
     void addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn, RcString sourceName = {});
     void addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type, RcString sourceName = {});
@@ -856,6 +860,9 @@ public:
     ~ASTModule();
     ASTModule(ASTModule&&);
     ASTModule& operator=(ASTModule&&);
+
+    auto clone() const -> ASTModule;
+    auto rebasePath(ASTAbsolutePath path) -> void;
 
     bool isAnon() const {
         return myPath.nodes.length() > 0 && myPath.nodes.back().c_str()[0] == '#';

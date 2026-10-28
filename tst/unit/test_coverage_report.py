@@ -46,6 +46,20 @@ class CoverageReportTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "no instrumented lines"):
             report.check_floor(["SF:empty.cpp\nLF:10\nLH:10\n"], 0)
 
+    def test_variants_union_lines_and_preserve_uncovered_code(self):
+        records = report.union_lines([
+            "SF:a.cpp\nFN:1,release\nDA:2,1\nDA:3,0\nDA:4,0\nLF:90\nLH:90\n",
+            "SF:a.cpp\nFN:1,debug\nDA:2,3\nDA:3,7\nDA:5,0\nDA:6,1\n",
+            "SF:b.cpp\nDA:1,0\n",
+        ])
+        self.assertEqual(records, [
+            "SF:a.cpp\nDA:2,4\nDA:3,7\nDA:4,0\nDA:5,0\nDA:6,1\nLF:5\nLH:3\nend_of_record\n",
+            "SF:b.cpp\nDA:1,0\nLF:1\nLH:0\nend_of_record\n",
+        ])
+        report.check_floor(records, 50)
+        with self.assertRaisesRegex(RuntimeError, "50.00% is below 90.00%"):
+            report.check_floor(records, 90)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -182,11 +182,8 @@ public:
         return statements[ofs];
     }
 
-    bool isUsed() const;
-
     bool overlaps(const MIRValueLifetime& x) const;
 
-    void unify(const MIRValueLifetime& x);
 };
 
 struct MIRValueLifetimes {
@@ -782,6 +779,6 @@ public:
     virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
 };
 
-MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const stl::Vector<bool>* mask = nullptr);
+MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn);
 
 HIRPath MIRPinNewUnchecked(const HIRType* pinTy);

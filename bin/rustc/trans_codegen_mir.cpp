@@ -59,7 +59,6 @@ namespace {
         void emitType(const HIRType* ty) override;
 
         // TODO: Move this to a more common location
-        MetadataType metadataType(const HIRType* ty) const;
 
         void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override;
 
@@ -204,68 +203,6 @@ auto CodeGeneratorMonoMir::emitType(const HIRType* ty) -> void {
     }
 
     mirRes = nullptr;
-}
-
-auto CodeGeneratorMonoMir::metadataType(const HIRType* ty) const -> MetadataType {
-    if ((ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str) || ty->is_Slice()) {
-        return MetadataType::Slice;
-    } else if (ty->is_TraitObject()) {
-        return MetadataType::TraitObject;
-    } else if (ty->is_Path()) {
-        const auto& te = ty->as_Path();
-        switch (te.binding.tag()) {
-            break;
-            case HIRTypePathBinding::TAG_Struct: {
-                const auto tpb = te.binding.as_Struct();
-                {
-                    switch (tpb->structMarkings.dstType) {
-                        case HIRStructMarkings::DstType::None:
-                            return MetadataType::None;
-                        case HIRStructMarkings::DstType::Possible:
-                        case HIRStructMarkings::DstType::Projection: {
-                            // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
-                            const auto& path = ty->as_Path().path.data.as_Generic();
-                            const auto& str = *ty->as_Path().binding.as_Struct();
-                            auto monomorph = [&](const auto& tpl) {
-                                return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.params, nullptr));
-                            };
-                            switch (str.data.tag()) {
-                                case HIRStructData::TAG_Unit: {
-                                    MIR_BUG(*mirRes, StringView("Unit-like struct with DstType::Possible"));
-                                    break;
-                                }
-                                case HIRStructData::TAG_Tuple: {
-                                    auto& se = str.data.as_Tuple();
-                                    return metadataType(monomorph(se.back().ent));
-                                }
-                                case HIRStructData::TAG_Named: {
-                                    auto& se = str.data.as_Named();
-                                    return metadataType(monomorph(se.back().ty));
-                                }
-                            }
-                            return MetadataType::None;
-                        }
-                        case HIRStructMarkings::DstType::Slice:
-                            return MetadataType::Slice;
-                        case HIRStructMarkings::DstType::TraitObject:
-                            return MetadataType::TraitObject;
-                    }
-                    UNREACHABLE();
-                }
-            } break;
-            case HIRTypePathBinding::TAG_Union: {
-                return MetadataType::None;
-            }
-            case HIRTypePathBinding::TAG_Enum: {
-                return MetadataType::None;
-            }
-            default:
-                MIR_BUG(*mirRes, StringView("Unbound/opaque path in trans - ") << ty);
-        }
-        UNREACHABLE();
-    } else {
-        return MetadataType::None;
-    }
 }
 
 auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) -> void {

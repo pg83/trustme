@@ -11,7 +11,10 @@
 /rustc.debug
 /rustc_chaos
 /rustc_coverage
+/rustc_debug_coverage
 /coverage
+/coverage_release
+/coverage_debug
 /cargo
 /std_src
 /libstd

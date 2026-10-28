@@ -5293,6 +5293,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
     if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_ITEM) {
         GET_TOK(tok, lex);
         auto rv = tok.takeFragItem();
+        if (auto* module = rv.data.opt_Module()) {
+            module->rebasePath(modPath + rv.name);
+        }
         for (auto& mi : metaItems.items) {
             rv.attrs.items.push_back(mv$(mi));
         }

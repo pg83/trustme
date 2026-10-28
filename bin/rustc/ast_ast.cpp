@@ -43,6 +43,34 @@ ASTImpl::~ASTImpl() = default;
 ASTImpl::ASTImpl(ASTImpl&&) = default;
 ASTImpl& ASTImpl::operator=(ASTImpl&&) = default;
 
+auto ASTImplDef::clone() const -> ASTImplDef {
+    auto result = ASTImplDef(params_.clone(), trait_, type_ ? type_->clone() : nullptr);
+    result.isUnsafe_ = isUnsafe_;
+    result.isConst_ = isConst_;
+    return result;
+}
+
+auto ASTImpl::clone() const -> ASTImpl {
+    auto result = ASTImpl(def_.clone());
+    result.lintLevels = lintLevels;
+    for (const auto& item : items_) {
+        const auto& data = *item.data;
+        if (const auto* function = data.opt_Function()) {
+            result.addFunction(item.sp, item.attrs.clone(), item.vis, item.isSpecialisable, item.name, function->clone(), item.sourceName);
+        } else if (const auto* type = data.opt_Type()) {
+            result.addType(item.sp, item.attrs.clone(), item.vis, item.isSpecialisable, item.name, type->params().clone(), type->type()->clone(), item.sourceName);
+        } else if (const auto* value = data.opt_Static()) {
+            result.addStatic(item.sp, item.attrs.clone(), item.vis, item.isSpecialisable, item.name, value->clone(), item.sourceName);
+        } else if (const auto* invocation = data.opt_MacroInv()) {
+            result.addMacroInvocation(invocation->clone());
+            result.items_.back().attrs = item.attrs.clone();
+        } else {
+            BUG(item.sp, StringView("Unexpected impl item in clone: ") << data.tagStr());
+        }
+    }
+    return result;
+}
+
 ASTStructItem ASTStructItem::clone() const {
     ASTStructItem rv(attrs.clone(), vis, name, type->clone(), defaultValue ? defaultValue->clone() : nullptr);
     rv.nameIsRaw = nameIsRaw;
@@ -265,7 +293,14 @@ void ASTExternBlock::addItem(ASTNamed<ASTItem> namedItem) {
 }
 
 ASTExternBlock ASTExternBlock::clone() const {
-    TODO(Span(), StringView("Clone an extern block"));
+    auto result = ASTExternBlock(abi_);
+    result.isUnsafe_ = isUnsafe_;
+    for (const auto& item : items_) {
+        auto cloned = ASTNamed<ASTItem>(item.span, item.attrs.clone(), item.vis, item.name, item.data.clone());
+        cloned.cachedCfg = item.cachedCfg;
+        result.addItem(std::move(cloned));
+    }
+    return result;
 }
 
 ASTGlobalAsm ASTGlobalAsm::clone() const {
@@ -298,6 +333,37 @@ ASTModule::ASTModule(ASTAbsolutePath path)
 ASTModule::~ASTModule() = default;
 ASTModule::ASTModule(ASTModule&&) = default;
 ASTModule& ASTModule::operator=(ASTModule&&) = default;
+
+auto ASTModule::clone() const -> ASTModule {
+    /* Item fragments are copied before expansion. Resolution indexes belong
+     * to the destination module and are rebuilt there. */
+    ASSERT_BUG(Span(), indexPopulated == 0 && macros_.empty() && macroImports.empty() && itemImports.empty(), StringView("Cloning an expanded module"));
+    auto result = ASTModule(myPath);
+    result.fileInfo = fileInfo;
+    result.insertPrelude = insertPrelude;
+    result.lintLevels = lintLevels;
+    for (const auto& item : items) {
+        auto cloned = ASTNamed<ASTItem>(item->span, item->attrs.clone(), item->vis, item->name, item->data.clone());
+        cloned.cachedCfg = item->cachedCfg;
+        result.addItem(std::move(cloned));
+    }
+    for (const auto& module : anonModules) {
+        *result.addAnon() = module->clone();
+    }
+    return result;
+}
+
+auto ASTModule::rebasePath(ASTAbsolutePath path) -> void {
+    myPath = std::move(path);
+    for (auto& item : items) {
+        if (auto* module = item->data.opt_Module()) {
+            module->rebasePath(myPath + item->name);
+        }
+    }
+    for (size_t index = 0; index < anonModules.size(); index++) {
+        anonModules[index]->rebasePath(myPath + RcString::newInterned(FMT(StringView("#") << index)));
+    }
+}
 
 std::shared_ptr<ASTModule> ASTModule::addAnon() {
     auto rv = std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT(StringView("#") << anonModules.size()))));
@@ -346,8 +412,7 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e);
         }
         case ASTItem::TAG_MacroInv: {
-            TODO(Span(), StringView("Clone on Item::MacroInv"));
-            break;
+            return ASTItem(as_MacroInv().clone());
         }
         case ASTItem::TAG_Macro: {
             TODO(Span(), StringView("Clone on Item::Macro"));
@@ -358,24 +423,20 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e.clone());
         }
         case ASTItem::TAG_ExternBlock: {
-            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
-            break;
+            return ASTItem(as_ExternBlock().clone());
         }
         case ASTItem::TAG_GlobalAsm: {
             auto& e = (*this).as_GlobalAsm();
             return ASTItem(e.clone());
         }
         case ASTItem::TAG_Impl: {
-            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
-            break;
+            return ASTItem(as_Impl().clone());
         }
         case ASTItem::TAG_NegImpl: {
-            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
-            break;
+            return ASTItem(as_NegImpl().clone());
         }
         case ASTItem::TAG_Module: {
-            TODO(Span(), StringView("Clone on Item::") << this->tagStr());
-            break;
+            return ASTItem(as_Module().clone());
         }
         case ASTItem::TAG_Crate: {
             auto& e = (*this).as_Crate();

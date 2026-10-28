@@ -9011,7 +9011,7 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
         os << path;
     });
     MIRTypeResolve mirResolve{sp, resolve, pathCallback, retTy, args, fcn};
-    auto segmentLifetimes = MIRHelperGetLifetimes(mirResolve, fcn, false);
+    auto segmentLifetimes = MIRHelperGetLifetimes(mirResolve, fcn);
     for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
         auto& state = generatorState.states[i];
         ASSERT_BUG(sp, state.suspensionBlock < fcn.blocks.size(), StringView("Coroutine state ") << i << StringView(" has no suspension block"));
@@ -9057,7 +9057,7 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
         ASSERT_BUG(sp, foundReturn, StringView("Coroutine suspension path from BB") << state.suspensionBlock << StringView(" does not return"));
     }
 
-    auto lifetimes = MIRHelperGetLifetimes(mirResolve, fcn, false);
+    auto lifetimes = MIRHelperGetLifetimes(mirResolve, fcn);
 
     for (const auto block : bridgedReturnBlocks) {
         fcn.blocks[block].terminator = MIRTerminator::make_Return({});

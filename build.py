@@ -64,6 +64,7 @@ if coverage_mode and system_rustc_mode:
     raise RuntimeError("-Dcoverage measures trustme rustc and is incompatible with -Dsystem_rustc")
 RUSTC = "$(B)/bin/rustc_coverage" if coverage_mode else "$(B)/bin/rustc"
 RUSTC_CHAOS = "$(B)/bin/rustc_coverage" if coverage_mode else "$(B)/bin/rustc_chaos"
+RUSTC_DEBUG = "$(B)/bin/rustc_debug_coverage" if coverage_mode else "$(B)/bin/rustc.debug"
 
 build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 
@@ -269,9 +270,19 @@ else:
         cxxflags=coverage_flags,
         ldflags=["-lzstd", "-fprofile-instr-generate", "-Wl,--wrap=abort"],
     )
+    rustc_debug_coverage = program(
+        srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs, "$(S)/tst/unit/coverage_abort.cpp"],
+        name="rustc_debug_coverage",
+        output="$(B)/bin/rustc_debug_coverage",
+        deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        cppflags=["-DTRUSTME_DEBUG=1"],
+        cxxflags=coverage_flags,
+        ldflags=["-lzstd", "-fprofile-instr-generate", "-Wl,--wrap=abort"],
+    )
     if coverage_mode:
         rustc = rustc_coverage
         rustc_chaos = rustc_coverage
+        rustc_debug = rustc_debug_coverage
 
     # The production compiler uses ThinLTO, which can hide static storage by
     # internalising or deleting symbols.  Build the same translation units as
@@ -7455,6 +7466,32 @@ for _release, _dir, _prefix in (
         unit_tests.append(_target)
         rust_unit_tests.append(_target)
 
+debug_trace_tests = []
+if not system_rustc_mode:
+    for _stem in (
+        "macro_clones_patterns", "macro_clones_items",
+        "monomir_values_and_control_flow", "monomir_drop_and_dst",
+        "monomir_executable_coroutine", "generic_assert_capture",
+        "const_integer_overflow_intrinsics", "derive_field_variants",
+    ):
+        _src = "$(S)/tst/unit/test_" + _stem + ".rs"
+        _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"
+        _target = command(
+            name="unit_debug_trace_" + _stem,
+            inputs=[_src, "$(S)/tst/unit/test_debug_trace.py", "$(S)/tst/unit/run_one.py", *unit_aux, *TESTS_LIB],
+            outputs=[_stamp],
+            cmd=[
+                *TEST_TIMEOUT, "python3", "$(S)/tst/unit/test_debug_trace.py",
+                RUSTC_DEBUG, _src, LIBSTDS["1.90.0"].archive, _stamp,
+            ],
+            deps=[rustc_debug, LIBSTDS["1.90.0"].node],
+            env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", **TOOLCHAIN_ENV},
+            descr="UT",
+            color="green",
+        )
+        debug_trace_tests.append(_target)
+        unit_tests.append(_target)
+
 # Compile-time performance regressions are deliberately separate from the
 # normal test groups: they are valid programs, but expensive enough to run only
 # when performance is being measured.
@@ -8069,7 +8106,9 @@ if coverage_mode:
     # Processes write separate raw profiles; the test's last command collapses
     # them into its one declared output. No process or test shares a profile.
     coverage_profiles = []
-    for _test in [*unit_tests, *style]:
+    debug_profiles = []
+    coverage_tests = [test for test in unit_tests if test is not rustc_ut_run]
+    for _test in [*coverage_tests, *style]:
         _raw_dir = f"$(B)/coverage/raw/{_test.name}"
         _profile = f"$(B)/coverage/profiles/{_test.name}.profdata"
         _test.inputs.append("$(S)/dev/coverage_profile.py")
@@ -8080,15 +8119,54 @@ if coverage_mode:
             "python3", "$(S)/dev/coverage_profile.py",
             "--output", _profile, _raw_dir,
         ])
-        coverage_profiles.append(_profile)
+        (debug_profiles if _test in debug_trace_tests else coverage_profiles).append(_profile)
 
     coverage_sources = [
         _source for _source in RUSTC_CPP_SRC
         if not _source.endswith("_ut.cpp") and not _source.endswith("/tagged_union_sample.cpp")
     ] + build.glob("$(S)/bin/rustc/*.h") + build.glob("$(S)/bin/rustc/*.inc")
+    coverage_release = command(
+        name="coverage_release",
+        inputs=["$(S)/dev/coverage.py", *coverage_sources, *coverage_profiles],
+        outputs=[
+            "$(B)/coverage/release/coverage.profdata",
+            "$(B)/coverage/release/coverage.info",
+            "$(B)/coverage/release/summary.txt",
+        ],
+        cmd=[
+            "python3", "$(S)/dev/coverage.py",
+            "--rustc", RUSTC,
+            "--source-root", ".",
+            "--output", "$(B)/coverage/release",
+            *coverage_profiles,
+        ],
+        deps=[rustc, *[test for test in coverage_tests if test not in debug_trace_tests], *style],
+        cwd="$(S)",
+        descr="CV",
+        color="cyan",
+    )
+    coverage_debug = command(
+        name="coverage_debug",
+        inputs=["$(S)/dev/coverage.py", *coverage_sources, *debug_profiles],
+        outputs=[
+            "$(B)/coverage/debug/coverage.profdata",
+            "$(B)/coverage/debug/coverage.info",
+            "$(B)/coverage/debug/summary.txt",
+        ],
+        cmd=[
+            "python3", "$(S)/dev/coverage.py",
+            "--rustc", RUSTC_DEBUG,
+            "--source-root", ".", "--output", "$(B)/coverage/debug",
+            *debug_profiles,
+        ],
+        deps=[rustc_debug, *debug_trace_tests],
+        cwd="$(S)",
+        descr="CV",
+        color="cyan",
+    )
     coverage = command(
         name="coverage",
-        inputs=["$(S)/dev/coverage.py", *coverage_sources, *coverage_profiles],
+        inputs=["$(S)/dev/coverage.py", *coverage_sources],
         outputs=[
             "$(B)/coverage/coverage.profdata",
             "$(B)/coverage/coverage.info",
@@ -8096,12 +8174,11 @@ if coverage_mode:
         ],
         cmd=[
             "python3", "$(S)/dev/coverage.py",
-            "--rustc", RUSTC,
-            "--source-root", ".",
-            "--output", "$(B)/coverage",
-            *coverage_profiles,
+            "--reports", "$(B)/coverage/release/coverage.info", "$(B)/coverage/debug/coverage.info",
+            "--source-root", ".", "--output", "$(B)/coverage",
+            "$(B)/coverage/release/coverage.profdata", "$(B)/coverage/debug/coverage.profdata",
         ],
-        deps=[rustc, *unit_tests, *style],
+        deps=[coverage_release, coverage_debug],
         cwd="$(S)",
         descr="CV",
         color="cyan",

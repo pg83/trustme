@@ -87,13 +87,19 @@ These checks also work for `//@ crate-type: lib` units.
 ./build -Dcoverage=1 coverage
 ```
 
-The separate `rustc_coverage` binary is always instrumented and built without
-ThinLTO. The coverage configuration runs unit nodes against it and gives every
-unit node its own profile output. The final `coverage` node depends on all unit
-nodes, merges their profiles and writes LCOV and a per-file summary under
-`.build/coverage/`.
+The separate `rustc_coverage` and `rustc_debug_coverage` binaries are instrumented
+and built without ThinLTO. The debug variant enables the production compiler's
+`TRUSTME_DEBUG` traces. CLI regressions check both the Rust program's behaviour
+and the trace's parser/codegen stage boundaries. Every test node has its own
+profile output. `coverage_release` and `coverage_debug` export each compiler's
+own profiles under `.build/coverage/release/` and `.build/coverage/debug/`.
+`coverage` unions their line records and writes LCOV and a per-file summary
+under `.build/coverage/`. Each source line counts once, including lines present
+only in one variant. Function and branch records remain in the separate
+reports: combining their different control-flow mappings in LLVM can lose data.
 Only production sources in `bin/rustc/` count; tests, dependencies and generated
-sources are excluded.
+sources are excluded. The C++ unit runner and `_ut.cpp` tests are excluded from
+the coverage graph: only paths reached by compiler invocations count.
 
 Line coverage, the LCOV totals and `summary.txt` all count the exported `DA`
 records. The coverage executable saves its counters before deliberate

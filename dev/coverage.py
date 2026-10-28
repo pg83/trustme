@@ -97,6 +97,27 @@ def check_floor(records, minimum):
         raise RuntimeError(f"line coverage {coverage:.2f}% is below {minimum:.2f}%")
 
 
+def union_lines(records):
+    """Count each source line once across independently exported variants."""
+    sources = {}
+    for record in records:
+        lines = record.splitlines()
+        name = next(line[3:] for line in lines if line.startswith("SF:"))
+        counts = sources.setdefault(name, {})
+        for line in lines:
+            if line.startswith("DA:"):
+                number, hits, *_ = line[3:].split(",")
+                number = int(number)
+                counts[number] = counts.get(number, 0) + int(hits)
+    result = []
+    for name, counts in sorted(sources.items()):
+        lines = [f"SF:{name}"]
+        lines.extend(f"DA:{number},{hits}" for number, hits in sorted(counts.items()))
+        lines.extend((f"LF:{len(counts)}", f"LH:{sum(hits > 0 for hits in counts.values())}"))
+        result.append("\n".join(lines) + "\nend_of_record\n")
+    return result
+
+
 def write_summary(records, output):
     rows = []
     for record in records:
@@ -117,7 +138,10 @@ def write_summary(records, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--rustc", required=True, type=Path)
+    export = parser.add_mutually_exclusive_group(required=True)
+    export.add_argument("--rustc", type=Path)
+    export.add_argument("--reports", nargs="+", type=Path,
+                        help="union line coverage from independently exported compiler variants")
     parser.add_argument("--objects", nargs="*", default=[], type=Path)
     parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -143,12 +167,19 @@ def main():
     profile = args.output / "coverage.profdata"
     merge_profiles(root, profiles, profile)
 
-    objects = [str(args.rustc)]
-    for path in args.objects:
-        objects.extend(["-object", str(path)])
-    relative_sources = [path.relative_to(root).as_posix() for path in sources]
-    options = [*objects, f"-instr-profile={profile}", *relative_sources]
-    records = export_lcov(root, sources, options, args.output / "coverage.info")
+    if args.reports:
+        records = union_lines([
+            record.strip() for path in args.reports
+            for record in path.read_text().split("end_of_record") if record.strip()
+        ])
+        (args.output / "coverage.info").write_text("".join(records))
+    else:
+        objects = [str(args.rustc)]
+        for path in args.objects:
+            objects.extend(["-object", str(path)])
+        relative_sources = [path.relative_to(root).as_posix() for path in sources]
+        options = [*objects, f"-instr-profile={profile}", *relative_sources]
+        records = export_lcov(root, sources, options, args.output / "coverage.info")
 
     print("coverage: writing summaries", flush=True)
     summary_path = args.output / "summary.txt"

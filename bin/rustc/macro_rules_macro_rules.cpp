@@ -1559,6 +1559,13 @@ namespace {
                     return false;
                 }
                 lex.consumeIf(TOK_RWORD_CONST);
+                if (lex.next() == TOK_EXCLAM) {
+                    auto afterBang = lex.clone();
+                    afterBang.consume();
+                    if (isTokenPath(afterBang.next())) {
+                        lex.consume();
+                    }
+                }
                 if (!consumeType(lex)) {
                     return false;
                 }
