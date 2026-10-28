@@ -2641,7 +2641,11 @@ namespace {
             }
             case TypeData::TAG_Path: {
                 auto& e = type->data.as_Path();
-                ReplaceDelegatedSelf(*e, replacementName);
+                if (const auto* binding = e->bindings.type.binding.opt_TypeParameter(); binding && binding->slot == GENERICSelf) {
+                    type->data = TypeData::make_Generic({replacementName, ~0u});
+                } else {
+                    ReplaceDelegatedSelf(*e, replacementName);
+                }
                 break;
             }
             case TypeData::TAG_TraitObject: {

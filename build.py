@@ -7409,7 +7409,8 @@ unit_tests.append(command(
 ))
 unit_tests.append(command(
     name="unit_coverage_report",
-    inputs=["$(S)/tst/unit/test_coverage_report.py", "$(S)/dev/coverage.py"],
+    inputs=["$(S)/tst/unit/test_coverage_report.py", "$(S)/dev/coverage.py",
+            "$(S)/dev/coverage_branches.py", "$(S)/dev/comment_gate.py"],
     outputs=["$(B)/tst/unit/coverage_report.stamp"],
     cmd=[
         ["python3", "$(S)/tst/unit/test_coverage_report.py"],
@@ -7480,12 +7481,18 @@ if not system_rustc_mode:
         "proc_macro_pattern_roundtrip", "proc_macro_type_roundtrip",
         "specialization_nested_shapes", "specialization_inherited_nested",
         "repeated_impl_parameter_shapes",
+        "emulated_i128_arithmetic", "emulated_i128_intrinsics",
+        "delegation_external_type_shapes", "delegation_self_in_nested_types",
+        "repeated_impl_numeric_inference",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"
         _target = command(
             name="unit_debug_trace_" + _stem,
-            inputs=[_src, "$(S)/tst/unit/test_debug_trace.py", "$(S)/tst/unit/run_one.py", *unit_aux, *TESTS_LIB],
+            inputs=[_src, "$(S)/tst/unit/test_debug_trace.py", "$(S)/tst/unit/run_one.py", *unit_aux, *TESTS_LIB,
+                    *["$(S)/tst/unit/" + _input for _input in re.findall(
+                        r"^//@\s*input:\s*(\S+)\s*$",
+                        Path(__file__).parent.joinpath("tst/unit/test_" + _stem + ".rs").read_text(), re.M)]],
             outputs=[_stamp],
             cmd=[
                 *TEST_TIMEOUT, "python3", "$(S)/tst/unit/test_debug_trace.py",

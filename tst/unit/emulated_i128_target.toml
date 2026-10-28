@@ -1,0 +1,17 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+
+[arch]
+name = "x86_64"
+pointer-bits = 64
+is-big-endian = false
+has-atomic-u64 = true
+has-atomic-ptr = true
+alignments = { u16 = 2, u32 = 4, u64 = 8, u128 = 16, f32 = 4, f64 = 8, ptr = 8 }
+
+[backend.c]
+variant = "gnu"
+emulate-i128 = true
+compiler-opts = ["-fwrapv", "-fno-strict-aliasing"]

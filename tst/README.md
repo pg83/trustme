@@ -108,6 +108,18 @@ Line coverage, the LCOV totals and `summary.txt` all count the exported `DA`
 records. The coverage executable saves its counters before deliberate
 `abort()` calls as well, so rejected input and fault diagnostics are measured.
 
+To select the next Rust regression, rank completely uncovered braced `if`,
+`else`, and `case` bodies by their number of instrumented lines:
+
+```
+python3 dev/coverage_branches.py .build/coverage/coverage.info --limit 30
+```
+
+Nested bodies count only once when their enclosing branch is wholly uncovered.
+The condition and boundary lines are excluded because LCOV can attribute them
+to the preceding branch. Use `--source-revision COMMIT` when the report belongs
+to an earlier source revision, and `--json PATH` to save the complete ranking.
+
 ### CLI fault tests
 
 `WireBoard::chaos` holds the compiler's pool-allocated fault interface.
