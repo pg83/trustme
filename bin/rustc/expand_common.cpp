@@ -1436,7 +1436,7 @@ namespace {
                 }
             }
 
-            if (es.crate.preludePath != ASTPath()) {
+            if (!es.crate.preludePath.cls.is_Invalid()) {
                 if (mod.insertPrelude && !mod.isAnon()) {
                     DEBUG(StringView("> Adding custom prelude ") << es.crate.preludePath);
                     mod.addItem(Span(), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, mod.path()), "", ASTUseItem{Span(), true, ::makeVec1(ASTUseItem::Ent{Span(), es.crate.preludePath, ""})}, {});
@@ -2179,7 +2179,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             }
             if (!rv.is_None()) {
                 const auto inStdPrelude = [&]() {
-                    return crate.preludePath != ASTPath() && !ResolveLookupMacro(miSpan, *wb.settings, crate, macMod.path(), crate.preludePath + name, nullptr).is_None();
+                    return !crate.preludePath.cls.is_Invalid() && !ResolveLookupMacro(miSpan, *wb.settings, crate, macMod.path(), crate.preludePath + name, nullptr).is_None();
                 };
                 if (rvPrivate && !inStdPrelude()) {
                     auto level = wb.settings->lintLevel(RcString::newInterned("private_macro_use"), CfgLintLevel::Deny);
@@ -2296,7 +2296,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     }
     if (stdCrateShortname != "") {
         ASSERT_BUG(Span(), stdCrateName != "", StringView("`") << stdCrateShortname << StringView("` not loaded?"));
-        if (crate.preludePath == ASTPath()) {
+        if (crate.preludePath.cls.is_Invalid()) {
             switch (crate.edition) {
                 case ASTEdition::Rust2015:
                 case ASTEdition::Rust2018:

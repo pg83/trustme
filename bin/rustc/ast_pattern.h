@@ -158,5 +158,3 @@ struct ASTStructPatternEntry {
     RcString name;
     ASTPattern pat;
 };
-
-Ordering ord(const ASTPattern& a, const ASTPattern& b);

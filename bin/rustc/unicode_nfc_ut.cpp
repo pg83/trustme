@@ -8,14 +8,11 @@ STD_TEST_SUITE(UnicodeNfc) {
     STD_TEST(testAsciiIsUntouched) {
         STD_INSIST(unicodeNormaliseNfc("") == "");
         STD_INSIST(unicodeNormaliseNfc("plain_ascii") == "plain_ascii");
-        STD_INSIST(unicodeIsNfc("plain_ascii"));
     }
 
     STD_TEST(testCombiningMarkComposes) {
         STD_INSIST(unicodeNormaliseNfc("R\xC3\xA9sum\x65\xCC\x81") == "R\xC3\xA9sum\xC3\xA9");
         STD_INSIST(unicodeNormaliseNfc("R\xC3\xA9sum\xC3\xA9") == "R\xC3\xA9sum\xC3\xA9");
-        STD_INSIST(!unicodeIsNfc("\x65\xCC\x81"));
-        STD_INSIST(unicodeIsNfc("\xC3\xA9"));
     }
 
     STD_TEST(testHiraganaVoicedMarkComposes) {

@@ -1459,7 +1459,7 @@ namespace {
                     const auto& implTrait = derivedImpl.def().trait().ent;
                     auto& bounds = derivedImpl.def().params().bounds;
                     for (size_t i = item.params().bounds.size(); i < bounds.size(); i++) {
-                        if (auto* bound = bounds[i].opt_IsTrait(); bound && bound->trait == implTrait) {
+                        if (auto* bound = bounds[i].opt_IsTrait(); bound && bound->trait.sameLookupPath(implTrait)) {
                             bound->constness = ASTBoundConstness::Maybe;
                         }
                     }

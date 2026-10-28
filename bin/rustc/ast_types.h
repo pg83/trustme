@@ -67,8 +67,6 @@ struct TypeFunction {
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
-
-    Ordering ord(const TypeFunction& x) const;
 };
 
 struct TypeTraitPath {
@@ -83,8 +81,6 @@ struct TypeTraitPath {
     ~TypeTraitPath();
     TypeTraitPath(TypeTraitPath&&);
     TypeTraitPath(const TypeTraitPath&);
-
-    Ordering ord(const TypeTraitPath& x) const;
 };
 
 struct TypeErasedType {
@@ -214,16 +210,6 @@ struct ASTType {
         }
     }
 
-    Ordering ord(const ASTType& x) const;
-
-    bool operator==(const ASTType& x) const {
-        return ord(x) == OrdEqual;
-    }
-
-    bool operator!=(const ASTType& x) const {
-        return ord(x) != OrdEqual;
-    }
-
     void print(stl::ZeroCopyOutput& os, bool isDebug = false) const;
 
     PrettyPrintType printPretty() const {
@@ -250,4 +236,4 @@ ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
 ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
 ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, stl::Vector<ASTLifetimeRef> lifetimes);
 
-Ordering ord(ASTType* a, ASTType* b);
+Ordering ord(ASTType* a, ASTType* b) = delete;

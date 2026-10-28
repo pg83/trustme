@@ -318,9 +318,6 @@ namespace {
         return rv;
     }
 
-    void MacroInitDefaults() {
-    }
-
     bool tokenIsLiteral(eTokenType type) {
         switch (type) {
             case TOK_INTEGER:

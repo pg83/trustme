@@ -35,10 +35,6 @@ namespace {
         return a.path == b.path && exactPathParamsEqual(a.params, b.params);
     }
 
-    bool exactOptionalGenericParamsEqual(const std::unique_ptr<HIRGenericParams>& a, const std::unique_ptr<HIRGenericParams>& b) {
-        return (!a && !b) || (a && b && exactGenericParamsEqual(*a, *b));
-    }
-
     bool exactPathEqual(const HIRPath& a, const HIRPath& b) {
         if (a.data.tag() != b.data.tag()) {
             return false;

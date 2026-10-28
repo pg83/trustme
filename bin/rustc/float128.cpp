@@ -332,58 +332,6 @@ namespace {
         out += digits;
     }
 
-    static std::string formatScientific(const Unpacked& value, int precision) {
-        std::string out;
-        if (value.negative) {
-            out.push_back('-');
-        }
-        if (value.kind == Kind::Zero) {
-            out.push_back('0');
-            if (precision > 0) {
-                out.push_back('.');
-                out.append(static_cast<size_t>(precision), '0');
-            }
-            appendExponent(out, 0);
-            return out;
-        }
-        i32 decimalExponent = 0;
-        const std::string digits = decimalDigits(value, precision + 1, decimalExponent);
-        out.push_back(digits[0]);
-        if (precision > 0) {
-            out.push_back('.');
-            out.append(digits, 1, std::string::npos);
-        }
-        appendExponent(out, decimalExponent);
-        return out;
-    }
-
-    static std::string formatFixed(const Unpacked& value, int precision) {
-        std::string out;
-        if (value.negative) {
-            out.push_back('-');
-        }
-        std::string digits;
-        if (value.kind != Kind::Zero) {
-            digits = digitsAt(value, -static_cast<i64>(precision));
-        }
-        if (static_cast<int>(digits.size()) <= precision) {
-            out.push_back('0');
-            if (precision > 0) {
-                out.push_back('.');
-                out.append(static_cast<size_t>(precision) - digits.size(), '0');
-                out += digits;
-            }
-            return out;
-        }
-        const size_t whole = digits.size() - static_cast<size_t>(precision);
-        out.append(digits, 0, whole);
-        if (precision > 0) {
-            out.push_back('.');
-            out.append(digits, whole, std::string::npos);
-        }
-        return out;
-    }
-
     static std::string formatDefault(const Unpacked& value, int precision) {
         const int significant = precision < 1 ? 1 : precision;
         std::string out;
@@ -1173,11 +1121,11 @@ auto BigUint::toDecimal() const -> std::string {
     return std::string(reversed.rbegin(), reversed.rend());
 }
 
-FormattedFloat128 formatFloat128(Float128 value, FloatFormat format, int precision) {
-    return {value, format, precision};
+FormattedFloat128 formatFloat128(Float128 value, int precision) {
+    return {value, precision};
 }
 
-static void outputFloat128(ZeroCopyOutput& os, Float128 value, FloatFormat format, int precision) {
+static void outputFloat128(ZeroCopyOutput& os, Float128 value, int precision) {
     const auto unpacked = unpack(value.bitsHi(), value.bitsLo());
     if (unpacked.kind == Kind::NotANumber) {
         os << (unpacked.negative ? "-nan" : "nan");
@@ -1187,27 +1135,15 @@ static void outputFloat128(ZeroCopyOutput& os, Float128 value, FloatFormat forma
         os << (unpacked.negative ? "-inf" : "inf");
         return;
     }
-    std::string text;
-    switch (format) {
-        case FloatFormat::Scientific:
-            text = formatScientific(unpacked, precision);
-            break;
-        case FloatFormat::Fixed:
-            text = formatFixed(unpacked, precision);
-            break;
-        case FloatFormat::Default:
-            text = formatDefault(unpacked, precision);
-            break;
-    }
-    os << text;
+    os << formatDefault(unpacked, precision);
 }
 
 template <>
 void stl::output<ZeroCopyOutput, Float128>(ZeroCopyOutput& os, Float128 value) {
-    outputFloat128(os, value, FloatFormat::Default, 6);
+    outputFloat128(os, value, 6);
 }
 
 template <>
 void stl::output<ZeroCopyOutput, FormattedFloat128>(ZeroCopyOutput& os, FormattedFloat128 value) {
-    outputFloat128(os, value.value, value.format, value.precision);
+    outputFloat128(os, value.value, value.precision);
 }

@@ -113,8 +113,6 @@ struct ASTPathParams {
     bool isEmpty() const {
         return entries.empty() && !isRtn;
     }
-
-    Ordering ord(const ASTPathParams& x) const;
 };
 
 class ASTPathNode {
@@ -148,12 +146,7 @@ public:
         return params_;
     }
 
-    Ordering ord(const ASTPathNode& x) const;
     void printPretty(stl::ZeroCopyOutput& os, bool isTypeContext) const;
-
-    bool operator==(const ASTPathNode& x) const {
-        return ord(x) == OrdEqual;
-    }
 };
 
 #include "ast_path_class_tu.h"
@@ -285,19 +278,7 @@ public:
         return ((ASTPath*)this)->nodes();
     }
 
-    Ordering ord(const ASTPath& x) const;
-
-    bool operator==(const ASTPath& x) const {
-        return ord(x) == OrdEqual;
-    }
-
-    bool operator!=(const ASTPath& x) const {
-        return ord(x) != OrdEqual;
-    }
-
-    bool operator<(const ASTPath& x) const {
-        return ord(x) != OrdLess;
-    }
+    bool sameLookupPath(const ASTPath& x) const;
 
     void printPretty(stl::ZeroCopyOutput& os, bool isTypeContext, bool isDebug = false) const;
 

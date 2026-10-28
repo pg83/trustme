@@ -58,16 +58,9 @@ public:
 
 };
 
-enum class FloatFormat {
-    Default,
-    Fixed,
-    Scientific,
-};
-
 struct FormattedFloat128 {
     Float128 value;
-    FloatFormat format;
     int precision;
 };
 
-FormattedFloat128 formatFloat128(Float128 value, FloatFormat format, int precision);
+FormattedFloat128 formatFloat128(Float128 value, int precision);

@@ -71,11 +71,6 @@ void MIRDump(ZeroCopyOutput& sink, HIRCrate& crate) {
     tv.visitCrate(crate);
 }
 
-void MIRDumpFcn(ZeroCopyOutput& sink, const MIRFunction& fcn, unsigned int il) {
-    MirDumper md{sink, il};
-    md.dumpMir(fcn);
-}
-
 MirDumper::MirDumper(ZeroCopyOutput& os, unsigned int il)
     : os(os)
     , indentLevel(il)

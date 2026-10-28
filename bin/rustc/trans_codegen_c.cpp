@@ -9350,7 +9350,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << StringView(")[i] ");
             of << StringView("= ((");
             emitParam(e.args.at(0));
-            of << StringView(") >> i) != 0");
+            of << StringView(") >> i) & 1");
             of << StringView("? ((");
             valInfo.emitValTy(*this);
             of << StringView("*)&");
@@ -9488,7 +9488,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << StringView(")[i] ");
             of << StringView("= ");
             of << StringView("__builtin_");
-            of << StringView("fma(");
+            of << StringView(info.itemSize == 4 ? "fmaf(" : "fma(");
             of << StringView(" ((");
             info.emitValTy(*this);
             of << StringView("*)&");

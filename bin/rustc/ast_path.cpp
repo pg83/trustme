@@ -31,12 +31,6 @@ ASTPathParams::ASTPathParams(const ASTPathParams& x)
     }
 }
 
-Ordering ASTPathParams::ord(const ASTPathParams& x) const {
-    ORD(isParen, x.isParen);
-    ORD(isRtn, x.isRtn);
-    return ::ord(entries, x.entries);
-}
-
 ASTPathParamEnt ASTPathParamEnt::clone() const {
     switch ((*this).tag()) {
         case ASTPathParamEnt::TAG_Null: {
@@ -66,55 +60,6 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
         case ASTPathParamEnt::TAG_AssociatedTyBound: {
             auto& v = (*this).as_AssociatedTyBound();
             return std::make_pair(v.first, v.second);
-        }
-    }
-    UNREACHABLE();
-}
-
-Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
-    if (this->tag() != x.tag()) {
-        return ::ord(static_cast<int>(this->tag()), static_cast<int>(x.tag()));
-    }
-
-    switch ((*this).tag()) {
-        case ASTPathParamEnt::TAG_Null: {
-            return ::OrdEqual;
-        }
-        case ASTPathParamEnt::TAG_Lifetime: {
-            auto& v1 = (*this).as_Lifetime();
-            auto& v2 = x.as_Lifetime();
-            return ::ord(v1, v2);
-        }
-        case ASTPathParamEnt::TAG_Type: {
-            const auto v1 = (*this).as_Type();
-            const auto v2 = x.as_Type();
-            return ::ord(v1, v2);
-        }
-        case ASTPathParamEnt::TAG_Value: {
-            const auto v1 = (*this).as_Value();
-            const auto v2 = x.as_Value();
-            return ::ord((uintptr_t)v1, (uintptr_t)v2);
-        }
-        case ASTPathParamEnt::TAG_AssociatedTyEqual: {
-            auto& v1 = (*this).as_AssociatedTyEqual();
-            auto& v2 = x.as_AssociatedTyEqual();
-            return ::ord(v1, v2);
-        }
-        case ASTPathParamEnt::TAG_AssociatedValueEqual: {
-            auto& v1 = (*this).as_AssociatedValueEqual();
-            auto& v2 = x.as_AssociatedValueEqual();
-            ORD(v1.first, v2.first);
-            return OrdEqual;
-        }
-        case ASTPathParamEnt::TAG_AssociatedTyBound: {
-            auto& v1 = (*this).as_AssociatedTyBound();
-            auto& v2 = x.as_AssociatedTyBound();
-            ORD(v1.first, v2.first);
-            ORD(v1.second.size(), v2.second.size());
-            for (size_t i = 0; i < v1.second.size(); i++) {
-                ORD(v1.second[i], v2.second[i]);
-            }
-            return ::OrdEqual;
         }
     }
     UNREACHABLE();
@@ -176,19 +121,6 @@ ASTPathNode::ASTPathNode(Ident::Hygiene hygiene, RcString name, ASTPathParams ar
     : ident_(mv$(hygiene), mv$(name))
     , params_(mv$(args))
 {
-}
-
-Ordering ASTPathNode::ord(const ASTPathNode& x) const {
-    Ordering rv;
-    rv = ::ord(hygienicName(), x.hygienicName());
-    if (rv != OrdEqual) {
-        return rv;
-    }
-    rv = params_.ord(x.params_);
-    if (rv != OrdEqual) {
-        return rv;
-    }
-    return OrdEqual;
 }
 
 void ASTPathNode::printPretty(ZeroCopyOutput& os, bool isTypeContext) const {
@@ -303,65 +235,21 @@ ASTPath& ASTPath::operator+=(const ASTPath& other) {
     return *this;
 }
 
-Ordering ASTPath::ord(const ASTPath& x) const {
-    Ordering rv;
-
-    rv = ::ord((unsigned)cls.tag(), (unsigned)x.cls.tag());
-    if (rv != OrdEqual) {
-        return rv;
+bool ASTPath::sameLookupPath(const ASTPath& x) const {
+    const auto& left = cls.as_Absolute();
+    const auto& right = x.cls.as_Absolute();
+    if (left.crate != right.crate || left.nodes.size() != right.nodes.size()) {
+        return false;
     }
-
-    switch (cls.tag()) {
-        case ASTPath::Class::TAG_Invalid: {
-            return OrdEqual;
-        }
-        case ASTPath::Class::TAG_Local: {
-            auto& ent = cls.as_Local();
-            auto& xEnt = x.cls.as_Local();
-            return ::ord(ent.name, xEnt.name);
-        }
-        case ASTPath::Class::TAG_Relative: {
-            auto& ent = cls.as_Relative();
-            auto& xEnt = x.cls.as_Relative();
-            return ::ord(ent.nodes, xEnt.nodes);
-        }
-        case ASTPath::Class::TAG_Self: {
-            auto& ent = cls.as_Self();
-            auto& xEnt = x.cls.as_Self();
-            return ::ord(ent.nodes, xEnt.nodes);
-        }
-        case ASTPath::Class::TAG_Super: {
-            auto& ent = cls.as_Super();
-            auto& xEnt = x.cls.as_Super();
-            return ::ord(ent.nodes, xEnt.nodes);
-        }
-        case ASTPath::Class::TAG_Absolute: {
-            auto& ent = cls.as_Absolute();
-            auto& xEnt = x.cls.as_Absolute();
-            rv = ::ord(ent.crate, xEnt.crate);
-            if (rv != OrdEqual) {
-                return rv;
-            }
-            return ::ord(ent.nodes, xEnt.nodes);
-            break;
-        }
-        case ASTPath::Class::TAG_UFCS: {
-            auto& ent = cls.as_UFCS();
-            auto& xEnt = x.cls.as_UFCS();
-            rv = ent.type->ord(*xEnt.type);
-            if (rv != OrdEqual) {
-                return rv;
-            }
-            rv = ent.trait->ord(*xEnt.trait);
-            if (rv != OrdEqual) {
-                return rv;
-            }
-            return ::ord(ent.nodes, xEnt.nodes);
-            break;
+    for (size_t i = 0; i < left.nodes.size(); i++) {
+        const auto& a = left.nodes[i];
+        const auto& b = right.nodes[i];
+        BUG_ASSERT(a.args().entries.empty() && b.args().entries.empty());
+        if (a.hygienicName() != b.hygienicName() || a.args().isParen != b.args().isParen || a.args().isRtn != b.args().isRtn) {
+            return false;
         }
     }
-
-    return OrdEqual;
+    return true;
 }
 
 void ASTPath::printPretty(ZeroCopyOutput& os, bool isTypeContext, bool isDebug) const {

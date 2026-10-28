@@ -226,7 +226,3 @@ std::string unicodeNormaliseNfc(const std::string& text) {
     }
     return out;
 }
-
-bool unicodeIsNfc(const std::string& text) {
-    return isAscii(text) || unicodeNormaliseNfc(text) == text;
-}

@@ -61,7 +61,7 @@ std::string formatFloatValueForToken(FloatValue value) {
     std::string rv;
     for (int precision = 1; precision <= 36; precision++) {
         StringBuilder out;
-        out << formatFloat128(value, FloatFormat::Default, precision);
+        out << formatFloat128(value, precision);
         rv.assign(static_cast<const char*>(out.data()), out.length());
         if (parseFloatValue(rv.c_str()) == value) {
             break;

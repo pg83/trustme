@@ -272,9 +272,9 @@ namespace {
                     if (t->data.is_Path() && t->data.as_Path()->isTrivial()) {
                         auto p = t->data.as_Path()->cls.as_Relative();
                         auto newPath = context.lookupOpt(sp, p.nodes[0].name(), p.hygiene, Context::LookupMode::Type);
-                        if (newPath == ASTPath()) {
+                        if (newPath.cls.is_Invalid()) {
                             auto newPath = context.lookupOpt(sp, p.nodes[0].name(), p.hygiene, Context::LookupMode::Constant);
-                            if (newPath != ASTPath()) {
+                            if (!newPath.cls.is_Invalid()) {
                                 ent = ASTPathParamEnt::make_Value(makeAstExprNode<ASTExprNodeNamedValue>(context.typePool(), std::move(newPath)));
                                 auto _h = context.enterRootblock();
                                 ResolveAbsoluteExprNode(context, *ent.as_Value());
@@ -349,7 +349,7 @@ namespace {
 
         const auto& ufcs = path.cls.as_UFCS();
         if (ufcs.nodes.size() == 0) {
-            if (mode == Context::LookupMode::Type && (!ufcs.trait || *ufcs.trait == ASTPath())) {
+            if (mode == Context::LookupMode::Type && (!ufcs.trait || ufcs.trait->cls.is_Invalid())) {
                 return;
             }
 
@@ -1221,7 +1221,7 @@ namespace {
 
         DEBUG(StringView("Replace ") << path << StringView(" with ") << tmp);
         auto args = mv$(path.nodes().back().args());
-        if (tmp != path) {
+        if (!tmp.sameLookupPath(path)) {
             DEBUG(StringView("- Recurse"));
             ResolveAbsolutePathBindAbsolute(context, sp, mode, tmp);
         }
@@ -1464,7 +1464,7 @@ namespace {
                 auto& e = path.cls.as_UFCS();
                 DEBUG(StringView("- UFCS"));
                 ResolveAbsoluteType(context, e.type);
-                if (e.trait && *e.trait != ASTPath()) {
+                if (e.trait && !e.trait->cls.is_Invalid()) {
                     ResolveAbsolutePath(context, sp, Context::LookupMode::Type, *e.trait);
                 }
 
@@ -3535,10 +3535,10 @@ namespace {
             }
         }
 
-        bool wasImport = (ir != mod.path() + name);
+        bool wasImport = (!ir.sameLookupPath(mod.path() + name));
         if (list.count(name) > 0) {
             auto& e = list.at(name);
-            if (e.path == ir) {
+            if (e.path.sameLookupPath(ir)) {
                 e.fromPrelude = e.fromPrelude && fromPrelude;
 
                 if (!e.vis.contains(vis)) {
@@ -4398,7 +4398,7 @@ namespace {
                     }
                     if (found && found->ref.is_MacroRules()) {
                         DEBUG(StringView("in ") << mod->path() << StringView(" ") << node.name() << StringView(" imported using: ") << path << StringView(" = ") << found->path);
-                        BUG_ASSERT(path != found->path);
+                        BUG_ASSERT(!path.sameLookupPath(found->path));
                         path = found->path;
                         path.bindings.macro.set(found->path, ASTPathBindingMacro::make_MacroRules({nullptr, found->ref.as_MacroRules()}));
                         DEBUG(StringView("macro_export? -> ") << path);

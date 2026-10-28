@@ -343,7 +343,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
             os << StringView(" const");
         }
         printParams(i.def().params());
-        if (i.def().trait().ent != ASTPath()) {
+        if (!i.def().trait().ent.cls.is_Invalid()) {
             os << StringView(" ") << i.def().trait().ent << StringView(" for");
         }
         os << StringView(" ") << i.def().type() << StringView("\n");
@@ -981,11 +981,6 @@ void DumpRust(const char* filename, const ASTCrate& crate) {
     os.finish();
 }
 
-void DumpASTNode(ZeroCopyOutput& os, const ASTExprNode& node) {
-    RustPrinter printer(os);
-    node.clone()->visit(printer);
-}
-
 RustPrinter::RustPrinter(ZeroCopyOutput& os)
     : os(os)
     , indentLevel(0)
@@ -1572,19 +1567,19 @@ auto RustPrinter::visit(ASTExprNodeFloat& n) -> void {
 auto RustPrinter::printFloatLiteral(enum eCoreType datatype, FloatValue value) -> void {
     switch (datatype) {
         case CORETYPE_ANY:
-            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
+            os << formatFloat128(value, std::numeric_limits<double>::max_digits10 + 1);
             break;
         case CORETYPE_F16:
         case CORETYPE_F32:
-            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<float>::max_digits10 + 1);
+            os << formatFloat128(value, std::numeric_limits<float>::max_digits10 + 1);
             os << StringView("_") << coretypeName(datatype);
             break;
         case CORETYPE_F64:
-            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
+            os << formatFloat128(value, std::numeric_limits<double>::max_digits10 + 1);
             os << StringView("_") << coretypeName(datatype);
             break;
         case CORETYPE_F128:
-            os << formatFloat128(value, FloatFormat::Default, std::numeric_limits<double>::max_digits10 + 1);
+            os << formatFloat128(value, std::numeric_limits<double>::max_digits10 + 1);
             os << StringView("_") << coretypeName(datatype);
             break;
         default:

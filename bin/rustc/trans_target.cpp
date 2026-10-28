@@ -44,12 +44,6 @@ namespace {
 
     using TransmuteByteSet = std::bitset<TRANSMUTE_BYTE_VALUES>;
 
-    void appendReverse(Vector<size_t>& output, const Vector<size_t>& input) {
-        for (size_t i = input.length(); i > 0; i--) {
-            output.pushBack(input[i - 1]);
-        }
-    }
-
     struct Ent {
         unsigned int field;
         size_t size;

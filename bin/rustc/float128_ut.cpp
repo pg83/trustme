@@ -59,12 +59,6 @@ namespace {
         return std::string(static_cast<const char*>(out.data()), out.length());
     }
 
-    static std::string render(Float128 value, FloatFormat format, int precision) {
-        StringBuilder out;
-        out << formatFloat128(value, format, precision);
-        return std::string(static_cast<const char*>(out.data()), out.length());
-    }
-
     static double doubleFromBits(u64 bits) {
         double v;
         std::memcpy(&v, &bits, sizeof(v));
@@ -305,11 +299,5 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(render(Float128::infinity(false)) == "inf");
         STD_INSIST(render(Float128::infinity(true)) == "-inf");
         STD_INSIST(render(Float128::quietNan()) == "nan");
-        STD_INSIST(render(Float128(1.0) / Float128(3.0), FloatFormat::Scientific, 18) == "3.333333333333333333e-01");
-        STD_INSIST(render(Float128(static_cast<double>(1.0f / 3.0f)), FloatFormat::Scientific, 10) == "3.3333334327e-01");
-        STD_INSIST(render(Float128(0.996), FloatFormat::Fixed, 2) == "1.00");
-        STD_INSIST(render(Float128(0.5), FloatFormat::Fixed, 0) == "0");
-        STD_INSIST(render(Float128(1.5), FloatFormat::Fixed, 0) == "2");
-        STD_INSIST(render(Float128(), FloatFormat::Scientific, 6) == "0.000000e+00");
     }
 }

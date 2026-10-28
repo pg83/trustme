@@ -2373,7 +2373,18 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeNamedValue& node) -> void {
     }
     const auto& name = node.path.asTrivial();
     for (const auto& capture : captures) {
-        if (capture.path == node.path) {
+        if (capture.path.cls.tag() != node.path.cls.tag()) {
+            continue;
+        }
+        if (node.path.cls.is_Local()) {
+            if (capture.path.asTrivial() == name) {
+                return;
+            }
+            continue;
+        }
+        const auto& a = capture.path.nodes().front();
+        const auto& b = node.path.nodes().front();
+        if (a.name() == b.name() && capture.path.cls.as_Relative().hygiene == node.path.cls.as_Relative().hygiene) {
             return;
         }
     }

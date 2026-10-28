@@ -7492,6 +7492,10 @@ if not system_rustc_mode:
         "large_array_partial_move_drop", "async_drop_enum_fields",
         "proc_macro_opaque_type_roundtrip", "monomir_tail_calls",
         "pattern_type_repeated_parameter", "large_array_drop_state_merges",
+        "lookup_paths_through_glob_aliases", "cpuid_assembly_register_forms",
+        "generic_assert_repeated_and_hygienic_names",
+        "simd_selection_and_lane_updates", "simd_fused_rounding",
+        "indexed_closure_promotion",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"
