@@ -31,6 +31,8 @@ IGNORED_PREFIXES = (
     "switch.table.", "constinit",
     # AddressSanitizer's own per-global and per-unit bookkeeping.
     "__odr_asan_gen_",
+    # LLVM source coverage's counters and per-unit profile records.
+    "__profc_", "__profd_", "__profvp_", "__llvm_prf_", "__llvm_profile_",
 )
 IGNORED_NAMES = frozenset((
     # Standard-library inline constants emitted into users of the containers
