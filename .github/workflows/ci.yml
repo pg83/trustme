@@ -65,8 +65,9 @@ jobs:
                 done
               ) &
               monitor=$!
-              trap 'kill "$monitor" 2>/dev/null || true' EXIT
+              trap "kill $monitor 2>/dev/null || true" EXIT
               ./build -B .build-ci -j "$(nproc)" -Dcoverage=1 coverage
+              test -s .build-ci/coverage/coverage.info
             '
 
       - name: Summarize coverage
