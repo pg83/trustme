@@ -98,8 +98,8 @@ own profiles under `.build/coverage/release/` and `.build/coverage/debug/`.
 under `.build/coverage/`. Each source line counts once, including lines present
 only in one variant. Function and branch records remain in the separate
 reports: combining their different control-flow mappings in LLVM can lose data.
-The ordinary report includes both the local CLI regressions and the positive
-Rust UI compile corpus; every case must pass its existing adapter.
+The ordinary report includes only the local CLI regressions; external test
+corpora are not included in the coverage graph.
 Only production sources in `bin/rustc/` count; tests, dependencies and generated
 sources are excluded. The C++ unit runner and `_ut.cpp` tests are excluded from
 the coverage graph: only paths reached by compiler invocations count.

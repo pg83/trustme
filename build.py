@@ -8110,7 +8110,7 @@ if coverage_mode:
     # them into its one declared output. No process or test shares a profile.
     coverage_profiles = []
     debug_profiles = []
-    coverage_tests = [test for test in unit_tests if test is not rustc_ut_run] + rust_ui_compile_tests
+    coverage_tests = [test for test in unit_tests if test is not rustc_ut_run]
     for _test in [*coverage_tests, *style]:
         _raw_dir = f"$(B)/coverage/raw/{_test.name}"
         _profile = f"$(B)/coverage/profiles/{_test.name}.profdata"
