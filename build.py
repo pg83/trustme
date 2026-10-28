@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import types
 import re
 from pathlib import Path
@@ -59,7 +60,12 @@ def parse_test_partition():
 
 test_partition = parse_test_partition()
 system_rustc_mode = bool(build.flags.system_rustc)
-coverage_mode = bool(build.flags.coverage)
+# The runner loads host tools in a child graph without forwarding -D flags.
+# That graph inherits the environment, so coverage reaches only the host build
+# of this project without changing the runner's treatment of other flags.
+if build.flags.coverage:
+    os.environ["TRUSTME_COVERAGE"] = "1"
+coverage_mode = bool(build.flags.coverage or os.environ.get("TRUSTME_COVERAGE"))
 if coverage_mode and system_rustc_mode:
     raise RuntimeError("-Dcoverage measures trustme rustc and is incompatible with -Dsystem_rustc")
 
