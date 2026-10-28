@@ -8061,8 +8061,6 @@ if coverage_mode:
             "$(B)/coverage/coverage.profdata",
             "$(B)/coverage/coverage.info",
             "$(B)/coverage/summary.txt",
-            "$(B)/coverage/functions.txt",
-            "$(B)/coverage/show.txt",
         ],
         cmd=[
             "python3", "$(S)/dev/coverage.py",

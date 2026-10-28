@@ -99,8 +99,6 @@ jobs:
           path: |
             .build-ci/coverage/coverage.info
             .build-ci/coverage/summary.txt
-            .build-ci/coverage/functions.txt
-            .build-ci/coverage/show.txt
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

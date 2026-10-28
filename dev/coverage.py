@@ -129,9 +129,6 @@ def main():
     print("coverage: writing summaries", flush=True)
     summary_path = args.output / "summary.txt"
     run_to_file(["llvm-cov", "report", *options], root, summary_path)
-    run_to_file(["llvm-cov", "report", "-show-functions", *options], root, args.output / "functions.txt")
-    print("coverage: writing line report", flush=True)
-    run_to_file(["llvm-cov", "show", "-show-branches=count", *options], root, args.output / "show.txt")
 
     print(summary_path.read_text(), end="")
     check_floor(records, args.minimum)

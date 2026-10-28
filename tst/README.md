@@ -84,7 +84,7 @@ These are heavy and only run when asked for, never as part of the default
 The separate `rustc_coverage` binary is always instrumented and built without
 ThinLTO. The coverage configuration runs unit nodes against it and gives every
 unit node its own profile output. The final `coverage` node depends on all unit
-nodes, merges their profiles and writes LCOV, per-file and per-function
-summaries, and a line/branch report under `.build/coverage/`.
+nodes, merges their profiles and writes LCOV and a per-file summary under
+`.build/coverage/`.
 Only production sources in `bin/rustc/` count; tests, dependencies and generated
 sources are excluded.
