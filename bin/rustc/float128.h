@@ -28,7 +28,7 @@ public:
     explicit operator float() const;
     explicit operator double() const;
 
-    explicit operator i64() const;
+    explicit operator i64() const = delete;
     explicit operator u64() const;
 
     Float128 operator-() const;

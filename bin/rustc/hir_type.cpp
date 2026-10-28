@@ -2208,9 +2208,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
                     return l->matchTestGenericsFuzz(sp, r, resolvePlaceholder, *this);
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& l = te.inner.as_Alias();
-                    auto& r = xe.inner.as_Alias();
-                    return l.inner->path == r.inner->path ? l.params.matchTestGenericsFuzz(sp, r.params, resolvePlaceholder, *this) : HIRCompare::Unequal;
+                    UNREACHABLE();
                 }
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& l = te.inner.as_Fcn();

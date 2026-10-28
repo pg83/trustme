@@ -168,11 +168,9 @@ def main() -> None:
     for bits, v in values:
         d = f64_bits(v, v < 0)
         f = f32_bits(v, v < 0)
-        as_i64 = max(min(trunc_fraction(v), 2 ** 63 - 1), -(2 ** 63))
         as_u64 = max(min(trunc_fraction(v), 2 ** 64 - 1), 0)
-        i64_text = "INT64_MIN" if as_i64 == -(2 ** 63) else f"INT64_C({as_i64})"
         print(f"    {{{hi_lo(bits)}, 0x{d:016x}ull, 0x{f:08x}u, "
-              f"{i64_text}, UINT64_C({as_u64})}},")
+              f"UINT64_C({as_u64})}},")
     print("};")
     print()
 

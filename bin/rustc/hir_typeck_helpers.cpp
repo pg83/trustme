@@ -1959,45 +1959,10 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, const HIRType* type, bool so
     auto& rootIvar = ivars.at(rootIndex);
 
     DEBUG(StringView("set_ivar_to(") << slot << StringView(" { ") << rootIvar.type << StringView(" }, ") << type << StringView(")"));
-    if (const auto* lE = type->opt_Infer(); lE && !isAliasInputInfer(lE->index)) {
-        BUG_ASSERT(lE->index != slot);
-        if (lE->tyClass != HIRInferClass::None) {
-            switch ((*rootIvar.type).tag()) {
-                case HIRType::TAG_Primitive: {
-                    auto& e = (*rootIvar.type).as_Primitive();
-                    checkTypeClassPrimitive(sp, type, lE->tyClass, e);
-                    break;
-                }
-                case HIRType::TAG_Pattern: {
-                    auto& e = (*rootIvar.type).as_Pattern();
-                    const auto* primitive = e.inner->opt_Primitive();
-                    if (!primitive) {
-                        ERROR(sp, E0000, StringView("Type unificiation of literal with invalid pattern type - ") << rootIvar.type);
-                    }
-                    checkTypeClassPrimitive(sp, type, lE->tyClass, *primitive);
-                    break;
-                }
-                case HIRType::TAG_Infer: {
-                    auto& e = (*rootIvar.type).as_Infer();
-                    if (e.tyClass != HIRInferClass::None && e.tyClass != lE->tyClass) {
-                        ERROR(sp, E0000, StringView("Unifying types with mismatching literal classes - ") << type << StringView(" := ") << rootIvar.type);
-                    }
-                    break;
-                }
-                default: {
-                    ERROR(sp, E0000, StringView("Type unificiation of literal with invalid type - ") << rootIvar.type);
-                    break;
-                }
-            }
-        }
-
-        DEBUG(StringView("Set IVar ") << lE->index << StringView(" = @") << slot);
-        const auto rightIndex = this->rootIvarIndex(lE->index);
-        auto& rIvar = ivars.at(rightIndex);
-        this->journalMutation(JournalEntry::Kind::TypeAlias, rightIndex, rIvar.type);
-        rIvar.alias = slot;
-        rIvar.type = nullptr;
-    } else if (rootIvar.type == type) {
+    /* Live inference variables are joined by ivarUnify. This entry point binds
+       a variable to a structural type or a rigid alias input. */
+    BUG_ASSERT(!type->is_Infer() || isAliasInputInfer(type->as_Infer().index));
+    if (rootIvar.type == type) {
         return;
     } else {
         // TODO: Avoid needing to clone in all cases?

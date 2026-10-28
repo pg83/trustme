@@ -24,7 +24,6 @@ namespace {
         u64 hi, lo;
         u64 doubleBits;
         u32 floatBits;
-        i64 asInt64;
         u64 asUint64;
     };
 
@@ -98,7 +97,6 @@ STD_TEST_SUITE(Float128Vectors) {
             const auto value = Float128::fromBits(v.hi, v.lo);
             STD_INSIST(bitsFromDouble(static_cast<double>(value)) == v.doubleBits);
             STD_INSIST(bitsFromFloat(static_cast<float>(value)) == v.floatBits);
-            STD_INSIST(static_cast<i64>(value) == v.asInt64);
             STD_INSIST(static_cast<u64>(value) == v.asUint64);
         }
     }
@@ -257,17 +255,10 @@ STD_TEST_SUITE(Float128Specials) {
     }
 
     STD_TEST(testIntegerSaturation) {
-        STD_INSIST(static_cast<i64>(Float128::quietNan()) == 0);
         STD_INSIST(static_cast<u64>(Float128::quietNan()) == 0);
-        STD_INSIST(static_cast<i64>(Float128::infinity(false)) == INT64_MAX);
-        STD_INSIST(static_cast<i64>(Float128::infinity(true)) == INT64_MIN);
         STD_INSIST(static_cast<u64>(Float128::infinity(false)) == UINT64_MAX);
         STD_INSIST(static_cast<u64>(Float128::infinity(true)) == 0);
         STD_INSIST(static_cast<u64>(Float128(-1.5)) == 0);
-        STD_INSIST(static_cast<i64>(Float128(-1.5)) == -1);
-        STD_INSIST(static_cast<i64>(Float128(9.4e18)) == INT64_MAX);
-        STD_INSIST(static_cast<i64>(Float128(-9.3e18)) == INT64_MIN);
-        STD_INSIST(static_cast<i64>(Float128(-9223372036854775808.0)) == INT64_MIN);
     }
 
     STD_TEST(testNarrowingEdges) {

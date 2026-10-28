@@ -515,30 +515,6 @@ Float128::operator double() const {
     return result;
 }
 
-Float128::operator i64() const {
-    const auto value = unpack(hi, lo);
-    switch (value.kind) {
-        case Kind::Zero:
-        case Kind::NotANumber:
-            return 0;
-        case Kind::Infinity:
-            return value.negative ? INT64_MIN : INT64_MAX;
-        case Kind::Finite:
-            break;
-    }
-    if (value.exponent < 0) {
-        return 0;
-    }
-    if (value.exponent >= 63) {
-        if (value.negative && value.exponent == 63 && value.significand == implicitBit) {
-            return INT64_MIN;
-        }
-        return value.negative ? INT64_MIN : INT64_MAX;
-    }
-    const u64 magnitude = static_cast<u64>(value.significand >> (significandBits - value.exponent));
-    return value.negative ? -static_cast<i64>(magnitude) : static_cast<i64>(magnitude);
-}
-
 Float128::operator u64() const {
     const auto value = unpack(hi, lo);
     switch (value.kind) {
