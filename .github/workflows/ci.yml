@@ -58,7 +58,7 @@ jobs:
               export CXX="$(command -v clang++)"
               export LDFLAGS="-fuse-ld=lld"
               (
-                while sleep 60; do
+                while sleep 15; do
                   date -u
                   df -h /workspace
                   free -m

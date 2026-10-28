@@ -29,7 +29,9 @@ def merge_profiles(root, profiles, output):
     work.mkdir(exist_ok=True)
     generation = profiles
     round_index = 0
+    print(f"coverage: merging {len(profiles)} profiles", flush=True)
     while len(generation) > 1:
+        print(f"coverage: merge round {round_index}, {len(generation)} inputs", flush=True)
         merged = []
         for start in range(0, len(generation), 8):
             target = work / f"{round_index}-{start // 8}.profdata"
@@ -45,6 +47,7 @@ def merge_profiles(root, profiles, output):
 
 
 def export_lcov(root, sources, options, output):
+    print("coverage: exporting LCOV", flush=True)
     trace = run_output(["llvm-cov", "export", "-format=lcov", *options], root)
     wanted = set(sources)
     records = []
@@ -118,10 +121,12 @@ def main():
     options = [*objects, f"-instr-profile={profile}", *relative_sources]
     records = export_lcov(root, sources, options, args.output / "coverage.info")
 
+    print("coverage: writing summaries", flush=True)
     summary = run_output(["llvm-cov", "report", *options], root)
     (args.output / "summary.txt").write_text(summary)
     functions = run_output(["llvm-cov", "report", "-show-functions", *options], root)
     (args.output / "functions.txt").write_text(functions)
+    print("coverage: writing line report", flush=True)
     show = run_output(["llvm-cov", "show", "-show-branches=count", *options], root)
     (args.output / "show.txt").write_text(show)
 
