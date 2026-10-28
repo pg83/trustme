@@ -81,7 +81,8 @@ CLI units that emit compiler output without a runnable binary use
 `//@ compile-only`. They can verify that output with repeated
 `//@ output-contains: .mir expected text` directives: the suffix names a file
 next to the requested compiler output, and the remaining text must occur in it.
-These checks also work for `//@ crate-type: lib` units.
+The suffix can also name a stage dump, such as `_1_ast.rs`, `_2_hir.rs`, or
+`_3_mir.rs`. These checks also work for runnable and `//@ crate-type: lib` units.
 
 ```
 ./build -Dcoverage=1 coverage
@@ -97,6 +98,8 @@ own profiles under `.build/coverage/release/` and `.build/coverage/debug/`.
 under `.build/coverage/`. Each source line counts once, including lines present
 only in one variant. Function and branch records remain in the separate
 reports: combining their different control-flow mappings in LLVM can lose data.
+The ordinary report includes both the local CLI regressions and the positive
+Rust UI compile corpus; every case must pass its existing adapter.
 Only production sources in `bin/rustc/` count; tests, dependencies and generated
 sources are excluded. The C++ unit runner and `_ut.cpp` tests are excluded from
 the coverage graph: only paths reached by compiler invocations count.

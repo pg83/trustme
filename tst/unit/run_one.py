@@ -28,7 +28,7 @@ def main() -> int:
     test_harness = "//@ test-harness" in source_text
     compile_only = bool(re.search(r"^//@\s*compile-only\s*$", source_text, re.MULTILINE))
     output_checks = re.findall(
-        r"^//@\s*output-contains:\s*(\.[a-z]+)\s+(.+)$", source_text, re.MULTILINE
+        r"^//@\s*output-contains:\s*((?:_[1-3]_[a-z]+)?\.[a-z]+)\s+(.+)$", source_text, re.MULTILINE
     )
     if compile_only and test_harness:
         raise RuntimeError("compile-only units cannot be test harnesses")

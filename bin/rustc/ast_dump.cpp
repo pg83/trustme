@@ -256,6 +256,27 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         handleStruct(e);
     }
 
+    for (const auto& item : mod.items) {
+        const auto* value = item->data.opt_Union();
+        if (!value) {
+            continue;
+        }
+        os << StringView("\n");
+        printAttrs(item->attrs);
+        os << indent() << item->vis << StringView("union ") << item->name;
+        printParams(value->params());
+        os << StringView("\n");
+        printBounds(value->params());
+        os << indent() << StringView("{\n");
+        incIndent();
+        for (const auto& field : value->variants) {
+            printAttrs(field.attrs);
+            os << indent() << field.vis << field.name << StringView(": ") << field.type->printPretty() << StringView(",\n");
+        }
+        decIndent();
+        os << indent() << StringView("}\n");
+    }
+
     for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Enum()) {

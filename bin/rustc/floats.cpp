@@ -83,53 +83,6 @@ F16::F16(FloatValue value)
 {
 }
 
-F16::F16(float f) {
-    union {
-        float f;
-        u32 i;
-    } c;
-
-    c.f = f;
-    const auto sign = static_cast<u16>((c.i >> 16) & 0x8000);
-    const auto exponent = static_cast<int>((c.i >> 23) & 0xFF) - 127;
-    auto mantissa = c.i & 0x7FFFFF;
-
-    if (exponent == 128) {
-        if (mantissa == 0) {
-            v = sign | 0x7C00;
-        } else {
-            auto payload = static_cast<u16>(mantissa >> 13);
-            v = sign | 0x7C00 | payload | (payload == 0);
-        }
-    } else if (exponent > 15) {
-        v = sign | 0x7C00;
-    } else if (exponent >= -14) {
-        auto rounded = mantissa + 0xFFF + ((mantissa >> 13) & 1);
-        auto halfExponent = exponent + 15;
-        if (rounded & 0x800000) {
-            rounded = 0;
-            halfExponent++;
-        }
-        if (halfExponent >= 31) {
-            v = sign | 0x7C00;
-        } else {
-            v = sign | static_cast<u16>(halfExponent << 10) | static_cast<u16>(rounded >> 13);
-        }
-    } else if (exponent < -25) {
-        v = sign;
-    } else {
-        mantissa |= 0x800000;
-        const auto shift = static_cast<unsigned>(-exponent - 1);
-        auto halfMantissa = mantissa >> shift;
-        const auto remainder = mantissa & ((u32(1) << shift) - 1);
-        const auto halfway = u32(1) << (shift - 1);
-        if (remainder > halfway || (remainder == halfway && (halfMantissa & 1))) {
-            halfMantissa++;
-        }
-        v = sign | static_cast<u16>(halfMantissa);
-    }
-}
-
 F16::operator float() const {
     union {
         float f;

@@ -2755,7 +2755,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     MIR_ASSERT(state, val != 0, StringView("`assume` failed"));
                 } else if (te->name == "assert_inhabited") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    // TODO: Determine if the type is inhabited (i.e. isn't diverge)
                     bool isUninhabited = resolve.typeIsImpossible(state.sp, ty);
                     MIR_ASSERT(state, !isUninhabited, StringView("assert_inhabited ") << ty << StringView(" failed"));
                 } else if (te->name == "const_eval_select") {

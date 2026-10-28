@@ -1243,9 +1243,9 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    // TODO: Check all variants? Or just one?
-                    TODO(sp, StringView("type_is_impossible for union ") << ty);
-                    break;
+                    /* A union's layout permits uninitialised storage, even
+                     * when every field has an uninhabited type. */
+                    return false;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
                     return false;
@@ -1254,23 +1254,26 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
             return true;
         }
         case HIRType::TAG_Borrow: {
-            auto& e = (*ty).as_Borrow();
-            return typeIsImpossible(sp, e.inner);
+            /* The layout assertion checks the pointer, not its pointee.
+             * Recursing here also loops on self-referential structs. */
+            return false;
         }
         case HIRType::TAG_Pointer: {
             return false;
         }
         case HIRType::TAG_Function: {
-            // TODO: Check all arguments?
-            return true;
+            return false;
         }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
-            return typeIsImpossible(sp, e.inner);
+            auto size = e.size.clone();
+            if (!size.is_Known()) {
+                evaluateArraySize(sp, size);
+            }
+            return size.is_Known() && size.as_Known() != 0 && typeIsImpossible(sp, e.inner);
         }
         case HIRType::TAG_Slice: {
-            auto& e = (*ty).as_Slice();
-            return typeIsImpossible(sp, e.inner);
+            return false;
         }
         case HIRType::TAG_Pattern: {
             auto& e = (*ty).as_Pattern();

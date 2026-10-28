@@ -7473,6 +7473,9 @@ if not system_rustc_mode:
         "monomir_values_and_control_flow", "monomir_drop_and_dst",
         "monomir_executable_coroutine", "generic_assert_capture",
         "const_integer_overflow_intrinsics", "derive_field_variants",
+        "const_assert_inhabited", "async_gen", "llvm_asm_operands",
+        "inline_asm_label", "union_field_and_erased_ordering",
+        "specialization_repeated_type_parameter",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"
@@ -8107,7 +8110,7 @@ if coverage_mode:
     # them into its one declared output. No process or test shares a profile.
     coverage_profiles = []
     debug_profiles = []
-    coverage_tests = [test for test in unit_tests if test is not rustc_ut_run]
+    coverage_tests = [test for test in unit_tests if test is not rustc_ut_run] + rust_ui_compile_tests
     for _test in [*coverage_tests, *style]:
         _raw_dir = f"$(B)/coverage/raw/{_test.name}"
         _profile = f"$(B)/coverage/profiles/{_test.name}.profdata"

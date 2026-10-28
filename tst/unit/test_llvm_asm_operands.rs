@@ -1,3 +1,7 @@
+//@ compile-flags: -Zdump-ast -Zdump-hir -Zdump-mir
+//@ output-contains: _1_ast.rs movq $2, $0; movq $3, $1
+//@ output-contains: _2_hir.rs llvm_asm!()
+//@ output-contains: _3_mir.rs movq
 #![feature(rustc_attrs)]
 
 #[rustc_builtin_macro]

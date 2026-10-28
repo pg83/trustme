@@ -963,32 +963,6 @@ void HIRPublicity::fmt(ZeroCopyOutput& out) const {
     }
 }
 
-const HIRType* HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const {
-    HIRTypeDataFunctionPointer ft;
-    ft.isUnsafe = this->unsafe;
-    ft.isVariadic = this->variadic;
-    ft.abi = this->abi;
-    ft.rettype = ms.monomorphType(sp, this->returnType);
-    ft.argTypes.grow(this->fixedArgCount());
-    for (size_t i = 0; i < this->fixedArgCount(); i++) {
-        ft.argTypes.pushBack(ms.monomorphType(sp, this->args[i].second));
-    }
-    return ms.typeInterner().function(std::move(ft));
-}
-
-const HIRType* fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, const HIRType* retTy, const tTupleFields& fields) {
-    HIRTypeDataFunctionPointer ft;
-    ft.isUnsafe = false;
-    ft.isVariadic = false;
-    ft.abi = RcString::newInterned(ABI_RUST);
-    ft.rettype = std::move(retTy);
-    ft.argTypes.grow(fields.size());
-    for (const auto& fld : fields) {
-        ft.argTypes.pushBack(ms.monomorphType(sp, fld.ent));
-    }
-    return ms.typeInterner().function(std::move(ft));
-}
-
 size_t HIREnum::findVariant(const RcString& name) const {
     if (data.is_Value()) {
         const auto& e = data.as_Value();

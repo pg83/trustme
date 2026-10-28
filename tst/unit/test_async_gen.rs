@@ -1,4 +1,8 @@
 //@ edition: 2024
+//@ compile-flags: -Zdump-ast -Zdump-hir -Zdump-mir
+//@ output-contains: _1_ast.rs gen
+//@ output-contains: _2_hir.rs counted
+//@ output-contains: _3_mir.rs poll_next
 // `async gen` is a coroutine that both awaits and yields: it is an
 // AsyncIterator, and it is fused once its body has run out.
 #![feature(gen_blocks, async_iterator)]

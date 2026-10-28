@@ -1,3 +1,8 @@
+//@ compile-flags: -Zdump-ast -Zdump-hir -Zdump-mir
+//@ output-contains: _1_ast.rs deref!(
+//@ output-contains: _1_ast.rs box
+//@ output-contains: _2_hir.rs Choice
+//@ output-contains: _3_mir.rs main
 #![feature(box_patterns, deref_patterns, guard_patterns)]
 #![allow(incomplete_features)]
 

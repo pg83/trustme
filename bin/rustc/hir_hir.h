@@ -234,7 +234,6 @@ public:
         return args.size() - hasNamedVariadic;
     }
 
-    const HIRType* makePtrTy(const Span& sp, const Monomorphiser& ms) const;
 };
 
 struct HIRTypeAlias {
@@ -258,8 +257,6 @@ struct HIRStructField {
 };
 
 typedef std::vector<HIRStructField> tStructFields;
-
-const HIRType* fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, const HIRType* retTy, const tTupleFields& types);
 
 struct HIRTraitMarkings {
     bool hasADeref = false;

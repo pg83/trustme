@@ -1,3 +1,9 @@
+//@ compile-flags: -Zdump-ast -Zdump-hir -Zdump-mir
+//@ output-contains: _1_ast.rs union Pair
+//@ output-contains: _1_ast.rs value: u64,
+//@ output-contains: _1_ast.rs halves: ( u32, u32, ),
+//@ output-contains: _2_hir.rs Pair
+//@ output-contains: _3_mir.rs cloneable
 // A closure may capture a union field, and an erased type may take part in the
 // coercion ordering that picks a target type.
 use std::fmt::Debug;

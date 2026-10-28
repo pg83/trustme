@@ -2,6 +2,7 @@
 """Merge per-unit LLVM profiles and report production rustc coverage."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import shutil
 import subprocess
@@ -41,15 +42,18 @@ def merge_profiles(root, profiles, output):
     print(f"coverage: merging {len(profiles)} profiles", flush=True)
     while len(generation) > 1:
         print(f"coverage: merge round {round_index}, {len(generation)} inputs", flush=True)
-        merged = []
-        for start in range(0, len(generation), 8):
+        def merge_group(start):
             target = work / f"{round_index}-{start // 8}.profdata"
             subprocess.run([
                 "llvm-profdata", "merge", "-sparse",
                 *map(str, generation[start:start + 8]),
                 "-o", str(target),
             ], cwd=root, check=True)
-            merged.append(target)
+            return target
+        # Limit both fan-in and concurrent LLVM processes: the corpus now
+        # includes thousands of CLI compilations, each with a full profile.
+        with ThreadPoolExecutor(max_workers=4) as workers:
+            merged = list(workers.map(merge_group, range(0, len(generation), 8)))
         generation = merged
         round_index += 1
     shutil.copyfile(generation[0], output)
