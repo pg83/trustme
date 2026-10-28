@@ -47,8 +47,8 @@ def branches(source):
                 pairs[stack.pop()] = index
     for index, (token, start) in enumerate(ts):
         opening = index + 1
-        if token == "if":
-            if opening < len(ts) and ts[opening][0] == "constexpr":
+        if token in ("if", "switch", "for", "while"):
+            if token == "if" and opening < len(ts) and ts[opening][0] == "constexpr":
                 opening += 1
             if opening not in pairs or ts[opening][0] != "(":
                 continue
@@ -61,7 +61,7 @@ def branches(source):
             if opening >= len(ts) or ts[opening][0] != ":":
                 continue
             opening += 1
-        elif token != "else":
+        elif token not in ("else", "do"):
             continue
         if opening not in pairs or ts[opening][0] != "{":
             continue

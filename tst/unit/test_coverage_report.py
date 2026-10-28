@@ -29,8 +29,20 @@ class CoverageReportTest(unittest.TestCase):
         '''
         conditions = [source[start:opening].strip()
                       for start, opening, _, _ in coverage_branches.branches(source)]
-        self.assertEqual(conditions, ["if (ready)", "if (inner)", "else",
+        self.assertEqual(conditions, ["if (ready)", "if (inner)", "else", "switch (value)",
                                      "case Kind::One:", "default:"])
+
+    def test_loop_headers_handle_nested_parentheses(self):
+        source = '''for (auto item : values(filter())) { use(item); }
+        for (int i = 0; i < limit(); ++i) { step(i); }
+        while (next(value)) { use(value); }
+        do { step(); } while (again());
+        '''
+        conditions = [source[start:opening].strip()
+                      for start, opening, _, _ in coverage_branches.branches(source)]
+        self.assertEqual(conditions, ["for (auto item : values(filter()))",
+                                     "for (int i = 0; i < limit(); ++i)",
+                                     "while (next(value))", "do"])
 
     def test_rank_uses_uncovered_body_lines_without_counting_nested_branches_twice(self):
         with tempfile.TemporaryDirectory() as directory:

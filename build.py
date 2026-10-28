@@ -7485,6 +7485,9 @@ if not system_rustc_mode:
         "delegation_external_type_shapes", "delegation_self_in_nested_types",
         "repeated_impl_numeric_inference",
         "transmutability_value_and_reference_paths",
+        "specialization_three_distinct_providers", "const_string_and_byte_slice_patterns",
+        "tail_call_branch_targets", "asm_branch_operands",
+        "trait_alias_associated_constraints", "duplicate_match_tables", "cfg_escaped_string_value",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"

@@ -33,19 +33,7 @@ namespace {
 
         Vector<const HIRType*> selfTypes;
 
-        typedef std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
-        tTraitImports traits;
-
         TypecheckVisitor(const WireBoard& wb, HIRCrate& crate);
-
-        struct ModTraitsGuard {
-            TypecheckVisitor* v;
-            tTraitImports oldImports;
-
-            ~ModTraitsGuard();
-        };
-
-        ModTraitsGuard pushModTraits(const HIRModule& mod);
 
         static bool traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRType* type, const HIRTraitPath& trait);
 
@@ -59,31 +47,13 @@ namespace {
 
         void visitGenericPath(HIRGenericPath& p, PathContext pc) override;
 
-        bool locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc, const HIRType* tr, const HIRGenericParams& params, HIRPath::Data& pd);
-
-        static HIRPath::Data getUfcsKnown(HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPath, const HIRTrait& trait);
-
-        static bool locateItemInTrait(HIRVisitor::PathContext pc, const HIRTrait& trait, HIRPath::Data& pd);
-
-        bool locateInTraitAndSet(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
-
-        bool setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
-
-        bool locateInTraitImplAndSet(HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
-
-        HIRGenericPath makeGenericPath(HIRSimplePath sp, const HIRTrait& trait);
-
         HIRGenericPath getCurrentTraitGp() const;
-
-        void visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathContext pc);
 
         void visitExpr(HIRExprPtr& exp) override;
 
         void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override;
 
         void visitParams(HIRGenericParams& params) override;
-
-        void visitModule(HIRItemPath p, HIRModule& mod) override;
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override;
 
@@ -208,17 +178,6 @@ TypecheckVisitor::TypecheckVisitor(const WireBoard& wb, HIRCrate& crate)
     , crate(crate)
     , resolve_(wb)
 {
-}
-
-auto TypecheckVisitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
-    Span sp;
-    DEBUG(StringView(""));
-    auto rv = ModTraitsGuard{this, mv$(this->traits)};
-    for (const auto& traitPath : mod.traits) {
-        DEBUG(StringView("- ") << traitPath);
-        traits.push_back(std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
-    }
-    return rv;
 }
 
 auto TypecheckVisitor::traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRType* type, const HIRTraitPath& trait) -> bool {
@@ -449,28 +408,6 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
     }
 
     return crate.types.intern(mv$(data));
-
-    if (const auto* e = ty->opt_Path()) {
-        switch (e->path.data.tag()) {
-            case HIRPath::Data::TAG_Generic: {
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsUnknown: {
-                TODO(sp, StringView("Should UfcsKnown be encountered here?"));
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsInherent: {
-                TRACE_FUNCTION_FR(StringView("UfcsInherent - ") << ty, ty);
-                ty = resolve_.expandAssociatedTypes(sp, ty);
-                break;
-            }
-            case HIRPath::Data::TAG_UfcsKnown: {
-                TRACE_FUNCTION_FR(StringView("UfcsKnown - ") << ty, ty);
-                ty = resolve_.expandAssociatedTypes(sp, ty);
-                break;
-            }
-        }
-    }
 }
 
 auto TypecheckVisitor::visitGenericPath(HIRGenericPath& p, PathContext pc) -> void {
@@ -485,97 +422,6 @@ auto TypecheckVisitor::visitGenericPath(HIRGenericPath& p, PathContext pc) -> vo
     HIRVisitor::visitGenericPath(p, pc);
 }
 
-auto TypecheckVisitor::locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc, const HIRType* tr, const HIRGenericParams& params, HIRPath::Data& pd) -> bool {
-    for (const auto& b : params.bounds) {
-        if (b.is_TraitBound()) {
-            auto& e = b.as_TraitBound();
-            DEBUG(StringView("- ") << e.type << StringView(" : ") << e.trait.path);
-            if (e.type == tr) {
-                DEBUG(StringView(" - Match"));
-                if (locateInTraitAndSet(sp, pc, e.trait.path, this->crate.getTraitByPath(sp, e.trait.path.path), pd)) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-auto TypecheckVisitor::getUfcsKnown(HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPath, const HIRTrait& trait) -> HIRPath::Data {
-    return HIRPath::Data::make_UfcsKnown({mv$(e.type), mv$(traitPath), mv$(e.item), mv$(e.params)});
-}
-
-auto TypecheckVisitor::locateItemInTrait(HIRVisitor::PathContext pc, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
-    const auto& e = pd.as_UfcsUnknown();
-
-    switch (pc) {
-        case HIRVisitor::PathContext::VALUE:
-            if (trait.values.find(e.item) != trait.values.end()) {
-                return true;
-            }
-            break;
-        case HIRVisitor::PathContext::TRAIT:
-            break;
-        case HIRVisitor::PathContext::TYPE:
-            if (trait.types.find(e.item) != trait.types.end()) {
-                return true;
-            }
-            break;
-    }
-    return false;
-}
-
-auto TypecheckVisitor::locateInTraitAndSet(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
-    if (locateItemInTrait(pc, trait, pd)) {
-        pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(traitPath.path, trait), trait);
-        return true;
-    }
-    for (const auto& pt : trait.allParentTraits) {
-        if (locateItemInTrait(pc, *pt.traitPtr, pd)) {
-            pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(traitPath.path, trait), trait);
-            return true;
-        }
-    }
-    return false;
-}
-
-auto TypecheckVisitor::setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
-    auto& e = pd.as_UfcsUnknown();
-    const auto& type = e.type;
-    return resolve_.probeImplMayApply(Span(), traitPath.path, traitPath.params, type, [&](SolverMayApply probe) {
-        if (probe.effects.certainty == SolverCertainty::NoSolution) {
-            return false;
-        }
-        pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);
-        return true;
-    });
-}
-
-auto TypecheckVisitor::locateInTraitImplAndSet(HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
-    auto& e = pd.as_UfcsUnknown();
-    if (this->locateItemInTrait(pc, trait, pd)) {
-        return this->setFromImpl(traitPath, trait, pd);
-        DEBUG(StringView("- Item ") << e.item << StringView(" not in trait ") << traitPath.path);
-    }
-
-    for (const auto& pt : trait.allParentTraits) {
-        if (this->locateItemInTrait(pc, *pt.traitPtr, pd)) {
-            // TODO: Monomorphise params?
-            return setFromImpl(pt.path, *pt.traitPtr, pd);
-        } else {
-        }
-    }
-    return false;
-}
-
-auto TypecheckVisitor::makeGenericPath(HIRSimplePath sp, const HIRTrait& trait) -> HIRGenericPath {
-    HIRPathParamsBuilder params;
-    for (unsigned int i = 0; i < trait.params.types.size(); i++) {
-        params.types.push_back(crate.types.generic(trait.params.types[i].name, i));
-    }
-    return HIRGenericPath(mv$(sp), HIRPathParams(mv$(params)));
-}
-
 auto TypecheckVisitor::getCurrentTraitGp() const -> HIRGenericPath {
     BUG_ASSERT(currentTraitPath_);
     BUG_ASSERT(currentTrait);
@@ -584,93 +430,6 @@ auto TypecheckVisitor::getCurrentTraitGp() const -> HIRGenericPath {
         params.types.push_back(crate.types.generic(currentTrait->params.types[i].name, i));
     }
     return HIRGenericPath(currentTraitPath_->getSimplePath(), HIRPathParams(mv$(params)));
-}
-
-auto TypecheckVisitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathContext pc) -> void {
-    TRACE_FUNCTION_FR(StringView("UfcsUnknown - p=") << p, p);
-    auto& e = p.data.as_UfcsUnknown();
-
-    e.type = this->visitType(e.type);
-    this->visitPathParams(e.params);
-
-    if (!(e.type->is_Path() && e.type->as_Path().path.data.is_Generic())) {
-        if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
-            return;
-        }
-        if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
-            return;
-        }
-    }
-
-    if (const auto* te = e.type->opt_Generic()) {
-        // - TODO: This could be encoded by a `Self: Trait` bound in the generics, but that may have knock-on issues?
-        if (te->name == "Self" && currentTrait) {
-            auto traitPath = this->getCurrentTraitGp();
-            if (this->locateInTraitAndSet(sp, pc, traitPath, *currentTrait, p.data)) {
-                return;
-            }
-        }
-        ERROR(sp, E0000, StringView("Failed to find impl with '") << e.item << StringView("' for ") << e.type);
-        return;
-    } else {
-        if (this->crate.findTypeImpls(e.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-            DEBUG(StringView("- matched inherent impl ") << e.type);
-            switch (pc) {
-                case HIRVisitor::PathContext::VALUE:
-                    if (impl.methods.find(e.item) == impl.methods.end()) {
-                        return false;
-                    }
-                    break;
-                case HIRVisitor::PathContext::TRAIT:
-                    return false;
-                case HIRVisitor::PathContext::TYPE:
-                    if (impl.types.find(e.item) == impl.types.end()) {
-                        return false;
-                    }
-                    break;
-            }
-
-            return true;
-        })) {
-            auto newData = HIRPath::Data::make_UfcsInherent({mv$(e.type), mv$(e.item), mv$(e.params)});
-            p.data = mv$(newData);
-            DEBUG(StringView("- Resolved, replace with ") << p);
-            return;
-        }
-        for (const auto& traitInfo : traits) {
-            const auto& trait = *traitInfo.second;
-
-            switch (pc) {
-                case HIRVisitor::PathContext::VALUE:
-                    if (trait.values.find(e.item) == trait.values.end()) {
-                        continue;
-                    }
-                    break;
-                case HIRVisitor::PathContext::TRAIT:
-                case HIRVisitor::PathContext::TYPE:
-                    if (trait.types.find(e.item) == trait.types.end()) {
-                        continue;
-                    }
-                    break;
-            }
-
-            DEBUG(StringView("- Trying trait ") << *traitInfo.first);
-            HIRPathParamsBuilder traitParams;
-            for (unsigned int i = 0; i < trait.params.types.size(); i++) {
-                traitParams.types.push_back(crate.types.infer());
-            }
-            auto traitPath = HIRGenericPath(*traitInfo.first, HIRPathParams(mv$(traitParams)));
-
-            // TODO: Search supertraits
-            // TODO: Should impls be searched first, or item names?
-
-            if (this->locateInTraitImplAndSet(pc, mv$(traitPath), trait, p.data)) {
-                return;
-            }
-        }
-    }
-
-    ERROR(sp, E0000, StringView("Failed to find impl with '") << e.item << StringView("' for ") << e.type << StringView(" (in ") << p << StringView(")"));
 }
 
 auto TypecheckVisitor::visitExpr(HIRExprPtr& exp) -> void {
@@ -739,11 +498,6 @@ auto TypecheckVisitor::visitParams(HIRGenericParams& params) -> void {
     for (auto& type : mutRange(params.wellFormedTypes)) {
         type = this->visitType(type);
     }
-}
-
-auto TypecheckVisitor::visitModule(HIRItemPath p, HIRModule& mod) -> void {
-    auto _ = this->pushModTraits(mod);
-    HIRVisitor::visitModule(p, mod);
 }
 
 auto TypecheckVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
@@ -1094,8 +848,4 @@ auto TypecheckVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     }
     checkingFunctionSignature = false;
     HIRVisitor::visitFunction(p, item);
-}
-
-TypecheckVisitor::ModTraitsGuard::~ModTraitsGuard() {
-    this->v->traits = mv$(this->oldImports);
 }

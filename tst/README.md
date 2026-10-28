@@ -109,7 +109,8 @@ records. The coverage executable saves its counters before deliberate
 `abort()` calls as well, so rejected input and fault diagnostics are measured.
 
 To select the next Rust regression, rank completely uncovered braced `if`,
-`else`, and `case` bodies by their number of instrumented lines:
+`else`, `switch`, `case`, `default`, `for`, `while`, and `do` bodies by their
+number of instrumented lines:
 
 ```
 python3 dev/coverage_branches.py .build/coverage/coverage.info --limit 30

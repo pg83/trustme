@@ -278,7 +278,6 @@ public:
     void markValueAssigned(const Span& sp, const MIRLValue& val);
 
     void raiseTemporaries(const Span& sp, const MIRLValue& val, const ScopeHandle& scope, bool toAbove = false);
-    void raiseTemporaries(const Span& sp, const MIRRValue& rval, const ScopeHandle& scope, bool toAbove = false);
 
     class SaveCodeProto {
         friend class MirBuilder;

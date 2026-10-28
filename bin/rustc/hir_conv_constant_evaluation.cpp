@@ -1351,15 +1351,16 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                         auto vr = localState.getLval(p.as_LValue());
                         auto ptr = vr.readPtr(localState.state);
                         this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
-                        this->data = ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
-                        MIR_ASSERT(localState.state, this->data, StringView("Invalid pointer ") << p << StringView(" : ") << vr << StringView(" = ") << ptr.second << StringView(" @ ") << ptr.first << StringView("+") << this->len);
+                        this->data = this->len ? ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true) : nullptr;
+                        MIR_ASSERT(localState.state, this->len == 0 || this->data, StringView("Invalid pointer ") << p << StringView(" : ") << vr << StringView(" = ") << ptr.second << StringView(" @ ") << ptr.first << StringView("+") << this->len);
                         this->reloc = std::move(ptr.second);
                     }
                 };
 
                 auto ptrL = P(localState, valL);
                 auto ptrR = P(localState, valR);
-                int cmp = memcmp(ptrL.data, ptrR.data, std::min(ptrL.len, ptrL.len));
+                const auto length = std::min(ptrL.len, ptrR.len);
+                int cmp = length ? memcmp(ptrL.data, ptrR.data, length) : 0;
                 if (cmp == 0) {
                     if (ptrL.len != ptrR.len) {
                         cmp = ptrL.len < ptrR.len ? -1 : 1;
@@ -2308,10 +2309,26 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             auto lit = localState.getLval(e.val);
 
             unsigned targetIdx = ~0u;
+            const auto matchBytes = [&](const auto& values) {
+                const auto* array = ty->as_Borrow().inner->opt_Array();
+                const size_t length = array ? array->size.as_Known() : lit.slice(TargetGetPointerBits() / 8).readUsize(state);
+                const auto* data = length ? pointerBytes(localState, lit.readPtr(state), length, "match").extReadBytes(state, length) : nullptr;
+                for (size_t i = 0; i < values.size(); i++) {
+                    if (length == values[i].length() && (length == 0 || memcmp(data, values[i].data(), length) == 0)) {
+                        targetIdx = i;
+                        break;
+                    }
+                }
+            };
             switch (e.values.tag()) {
-                default:
-                    MIR_TODO(state, StringView("SwitchValue - ") << e.values.tagStr());
+                case MIRSwitchValues::TAG_String: {
+                    matchBytes(e.values.as_String());
                     break;
+                }
+                case MIRSwitchValues::TAG_ByteString: {
+                    matchBytes(e.values.as_ByteString());
+                    break;
+                }
                 case MIRSwitchValues::TAG_Unsigned: {
                     auto& vals = e.values.as_Unsigned();
                     auto v = lit.readUint(state, ti.bits);
