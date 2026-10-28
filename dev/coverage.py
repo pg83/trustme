@@ -63,7 +63,7 @@ def check_floor(records, minimum):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rustc", required=True, type=Path)
-    parser.add_argument("--objects", required=True, nargs="+", type=Path)
+    parser.add_argument("--objects", nargs="*", default=[], type=Path)
     parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--minimum", type=float, default=0.0)

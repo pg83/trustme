@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import types
 import re
 from pathlib import Path
@@ -60,14 +59,10 @@ def parse_test_partition():
 
 test_partition = parse_test_partition()
 system_rustc_mode = bool(build.flags.system_rustc)
-# The runner loads host tools in a child graph without forwarding -D flags.
-# That graph inherits the environment, so coverage reaches only the host build
-# of this project without changing the runner's treatment of other flags.
-if build.flags.coverage:
-    os.environ["TRUSTME_COVERAGE"] = "1"
-coverage_mode = bool(build.flags.coverage or (os.environ.get("TRUSTME_COVERAGE") and not system_rustc_mode))
-if build.flags.coverage and system_rustc_mode:
+coverage_mode = bool(build.flags.coverage)
+if coverage_mode and system_rustc_mode:
     raise RuntimeError("-Dcoverage measures trustme rustc and is incompatible with -Dsystem_rustc")
+RUSTC = "$(B)/bin/rustc_coverage" if coverage_mode else "$(B)/bin/rustc"
 
 build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 
@@ -76,18 +71,13 @@ build.cxxflags += [
     "-O2",
     "-g",
 ]
-if coverage_mode:
-    coverage_flags = [
-        "-fprofile-instr-generate",
-        "-fcoverage-mapping",
-        "-ffile-prefix-map=$(S)=.",
-        "-fcoverage-prefix-map=$(S)=.",
-        "-fcoverage-compilation-dir=.",
-    ]
-    build.cxxflags += coverage_flags
-    build.ldflags += ["-fprofile-instr-generate"]
-
-rustc_lto_flags = [] if coverage_mode else ["-flto=thin"]
+coverage_flags = [
+    "-fprofile-instr-generate",
+    "-fcoverage-mapping",
+    "-ffile-prefix-map=$(S)=.",
+    "-fcoverage-prefix-map=$(S)=.",
+    "-fcoverage-compilation-dir=.",
+]
 
 # Keep the platform library in the same imported build graph as its consumers:
 # libstd owns its source discovery and compile flags, while the parent graph
@@ -120,10 +110,6 @@ platform_libstd_lto = import_build(
     namespace="ext/libstd-lto",
 )
 platform_libstd_lto.name = "platform_libstd_lto"
-
-# Coverage uses ordinary objects so llvm-cov sees code that ThinLTO could
-# internalise or remove, and the matching non-LTO platform library.
-rustc_platform_libstd = platform_libstd if coverage_mode else platform_libstd_lto
 
 RUSTC_CPP_SRC = build.glob("$(S)/bin/rustc/*.cpp")
 SRC = RUSTC_CPP_SRC
@@ -231,11 +217,11 @@ if system_rustc_mode:
         name="rustc",
         local=True,
         inputs=["$(S)/tst/system_rustc.py"],
-        outputs=["$(B)/bin/rustc"],
+        outputs=[RUSTC],
         cmd=[
             "python3", "$(S)/tst/system_rustc.py", "launcher",
             build.flags.system_rustc, build.flags.system_linker,
-            "$(B)/bin/rustc",
+            RUSTC,
         ],
         descr="SR",
         color="cyan",
@@ -249,20 +235,31 @@ else:
         # (thin _tu.h, out-of-line accessors) and leaves cross-TU inlining
         # to LTO; measured ~23% faster libcore compiles. The LTO flavour of
         # the platform library joins in so ObjPool inlines too.
-        deps=[rustc_platform_libstd, codegen_c_prelude, unicode_nfc_tables],
-        cxxflags=rustc_lto_flags,
-        ldflags=["-lzstd", *rustc_lto_flags],
+        deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
+        cxxflags=["-flto=thin"],
+        ldflags=["-lzstd", "-flto=thin"],
     )
 
     rustc_debug = program(
         srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
         name="rustc.debug",
         output="$(B)/bin/rustc.debug",
-        deps=[rustc_platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
         cppflags=["-DTRUSTME_DEBUG=1"],
-        cxxflags=rustc_lto_flags,
-        ldflags=["-lzstd", *rustc_lto_flags],
+        cxxflags=["-flto=thin"],
+        ldflags=["-lzstd", "-flto=thin"],
     )
+
+    rustc_coverage = program(
+        srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
+        name="rustc_coverage",
+        output="$(B)/bin/rustc_coverage",
+        deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        cxxflags=coverage_flags,
+        ldflags=["-lzstd", "-fprofile-instr-generate"],
+    )
+    if coverage_mode:
+        rustc = rustc_coverage
 
     # The production compiler uses ThinLTO, which can hide static storage by
     # internalising or deleting symbols.  Build the same translation units as
@@ -406,7 +403,7 @@ cargo_test = command(
 # as `./build resvg` directly.
 
 TOOLCHAIN_ENV = {
-    "RUSTC": "$(B)/bin/rustc",
+    "RUSTC": RUSTC,
     "CARGO": "$(B)/bin/cargo",
 }
 SYSTEM_TEST_ENV = {"TRUSTME_SYSTEM_RUSTC": "1"} if system_rustc_mode else {}
@@ -588,7 +585,7 @@ if system_rustc_mode:
         ],
         deps=[LIBSTDS["1.90.0"].source, rustc],
         env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", 
-            "RUSTC": "$(B)/bin/rustc",
+            "RUSTC": RUSTC,
             "CARGO": build.flags.system_cargo,
         },
         descr="SD",
@@ -6521,7 +6518,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_no_windows_support.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/test_no_core_main_without_start.rs",
         "$(B)/tst/unit/no_windows_support.stamp",
     ],
@@ -6541,7 +6538,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_mir_opt_level.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/mir_opt_level_input.rs",
         "$(B)/tst/unit/mir_opt_level.stamp",
     ],
@@ -6571,7 +6568,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_codegen_options.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/mir_opt_level_input.rs",
         "$(S)/tst/unit/codegen_options_cfg.rs",
         "$(S)/tst/unit/codegen_options_link.rs",
@@ -6603,7 +6600,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_local_inner_macros_metadata.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/local_inner_macros_producer.rs",
         "$(S)/tst/unit/local_inner_macros_consumer.rs",
         LIBSTDS["1.90.0"].archive,
@@ -6626,7 +6623,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_qualified_extern_macro_2015.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/qualified_extern_macro_2015_producer.rs",
         "$(S)/tst/unit/qualified_extern_macro_2015_consumer.rs",
         LIBSTDS["1.90.0"].archive,
@@ -6649,7 +6646,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_generic_default_projection_metadata.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/generic_default_projection_metadata_producer.rs",
         "$(S)/tst/unit/generic_default_projection_metadata_consumer.rs",
         LIBSTDS["1.90.0"].archive,
@@ -6672,7 +6669,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_forward_closure_rpit_metadata.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/forward_closure_rpit_metadata_producer.rs",
         "$(S)/tst/unit/forward_closure_rpit_metadata_consumer.rs",
         LIBSTDS["1.90.0"].archive,
@@ -6695,7 +6692,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_const_borrow_offset_metadata.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/const_borrow_offset_producer.rs",
         "$(S)/tst/unit/const_borrow_offset_consumer.rs",
         LIBSTDS["1.90.0"].archive,
@@ -6718,7 +6715,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_inline_markings_metadata.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/inline_markings_producer.rs",
         "$(S)/tst/unit/test_inline_markings_metadata.rs",
         LIBSTDS["1.90.0"].archive,
@@ -6740,7 +6737,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_closure_inline_marking.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/closure_inline_marking_input.rs",
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/closure_inline_marking.stamp",
@@ -6761,7 +6758,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_attribute_targets.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/attribute_targets_input.rs",
         "$(B)/tst/unit/attribute_targets.stamp",
     ],
@@ -6777,7 +6774,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_the_version_override_reaches_every_version_report.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(B)/tst/unit/the_version_override_reaches_every_version_report.stamp",
     ],
     deps=[rustc],
@@ -6792,7 +6789,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_a_crate_root_named_without_a_directory.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(B)/tst/unit/a_crate_root_named_without_a_directory.stamp",
     ],
     deps=[rustc],
@@ -6807,7 +6804,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_a_module_block_in_a_non_mod_rs_file_owns_its_directory.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(B)/tst/unit/a_module_block_in_a_non_mod_rs_file_owns_its_directory.stamp",
     ],
     deps=[rustc],
@@ -6822,7 +6819,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_an_empty_path_attribute_names_the_module_directory.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(B)/tst/unit/an_empty_path_attribute_names_the_module_directory.stamp",
     ],
     deps=[rustc],
@@ -6841,7 +6838,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_trait_object_supertrait_binding.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/trait_object_supertrait_binding_input.rs",
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/trait_object_supertrait_binding.stamp",
@@ -6862,7 +6859,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_driver_lint_cfg_options.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/driver_lint_cfg_input.rs",
         "$(B)/tst/unit/driver_lint_cfg_options.stamp",
     ],
@@ -7227,7 +7224,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_extern_c_zst_argument.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/test_extern_c_zst_argument.rs",
         "$(S)/tst/unit/extern_c_zst_argument.c",
         LIBSTDS["1.90.0"].archive,
@@ -7250,7 +7247,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_native_link_search.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(S)/tst/unit/test_native_link_search.rs",
         "$(S)/tst/unit/native_link_search.c",
         LIBSTDS["1.90.0"].archive,
@@ -7268,7 +7265,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_emit_llvm_ir.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/emit_llvm_ir_driver.stamp",
     ],
@@ -7284,7 +7281,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_proc_macro_found_by_its_metadata.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/proc_macro_metadata_driver.stamp",
     ],
@@ -7300,7 +7297,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_out_dir_is_created.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/out_dir_driver.stamp",
     ],
@@ -7316,7 +7313,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_error_format.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/error_format_driver.stamp",
     ],
@@ -7332,7 +7329,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_print_file_names.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/print_file_names_driver.stamp",
     ],
@@ -7348,7 +7345,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_a_constant_table_is_read_from_memory.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         LIBSTDS["1.90.0"].archive,
         "$(B)/tst/unit/a_constant_table_is_read_from_memory.stamp",
     ],
@@ -7364,7 +7361,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_unrecognized_option.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(B)/tst/unit/unrecognized_option_driver.stamp",
     ],
     deps=[rustc],
@@ -7379,7 +7376,7 @@ unit_tests.append(command(
     cmd=[
         *TEST_TIMEOUT,
         "python3", "$(S)/tst/unit/test_print_cfg.py",
-        "$(B)/bin/rustc",
+        RUSTC,
         "$(B)/tst/unit/print_cfg_driver.stamp",
     ],
     deps=[rustc],
@@ -7415,7 +7412,7 @@ for _release, _dir, _prefix in (
             deps=[LIBSTDS[_release].node, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
             env={
                 "RUSTC_OVERRIDE_VERSION_STRING": _release,
-                "RUSTC": "$(B)/bin/rustc",
+                "RUSTC": RUSTC,
                 **SYSTEM_TEST_ENV,
                 **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
                    if _uses_rust_lib_dependencies else {}),
@@ -7443,7 +7440,7 @@ for _src in build.glob("$(S)/tst/perf/test_*.rs"):
             "$(B)/tst/perf/" + _stem + ".stamp",
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC, **SYSTEM_TEST_ENV},
         descr="PF",
         color="cyan",
     ))
@@ -7481,7 +7478,7 @@ for _case in rust_1_90_cases:
             "$(B)/tst/rust_1_90/" + _case + ".stamp",
         ],
         deps=[LIBSTDS["1.90.0"].node, rust_test_helpers, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC, **SYSTEM_TEST_ENV},
         descr="RP",
         color="green",
     ))
@@ -7513,7 +7510,7 @@ for _index, _case in enumerate(rust_ui_compile_cases):
             "$(S)/tst/rust_ui_compile/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="UC",
         color="green",
     ))
@@ -7552,7 +7549,7 @@ for _case in gccrs_cases:
             "$(B)/tst/gccrs/" + _case + ".stamp",
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="GX",
         color="green",
     ))
@@ -7588,7 +7585,7 @@ for _index, _case in enumerate(gccrs_compile_cases):
             "$(S)/tst/gccrs_compile/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="GC",
         color="green",
     ))
@@ -7619,7 +7616,7 @@ for _case in rust_quiz_cases:
             "$(B)/tst/rust_quiz/" + _case + ".stamp",
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="RQ",
         color="green",
     ))
@@ -7651,7 +7648,7 @@ for _index, (_case, _mode) in enumerate(rustlings_cases):
             "$(S)/tst/rustlings/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="RL",
         color="green",
     ))
@@ -7683,7 +7680,7 @@ for _index, (_case, _origin, _edition) in enumerate(rust_by_example_cases):
             "$(S)/tst/rust_by_example/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="BE",
         color="green",
     ))
@@ -7721,7 +7718,7 @@ for _index, (_case, _root, _mode, _edition) in enumerate(rust_book_cases):
             "$(S)/tst/rust_book/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="BK",
         color="green",
     ))
@@ -7757,7 +7754,7 @@ for _index, (_slug, _crate, _edition, _count) in enumerate(exercism_rust_cases):
             "$(S)/tst/exercism_rust/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="EX",
         color="green",
     ))
@@ -7789,7 +7786,7 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(rust_reference_cases)
             "$(S)/tst/rust_reference/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="RF",
         color="green",
     ))
@@ -7821,7 +7818,7 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(nomicon_cases):
             "$(S)/tst/nomicon/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="NM",
         color="green",
     ))
@@ -7853,7 +7850,7 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(async_book_cases):
             "$(S)/tst/async_book/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="AB",
         color="green",
     ))
@@ -7924,7 +7921,7 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
             "$(B)/tst/rust-lib-dependencies.tar", _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rust_lib_dependencies, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="LT",
         color="green",
     )
@@ -7967,7 +7964,7 @@ for _case, _origin, _edition, _mode in rust_doctest_cases:
             _origin, _src, _edition, _mode, LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="DT",
         color="green",
     ))
@@ -8002,7 +7999,7 @@ for _index, (_stem, _seed) in enumerate(rustsmith_cases):
             "$(S)/tst/rustsmith/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="RS",
         color="green",
     ))
@@ -8031,7 +8028,7 @@ for _index, _case in enumerate(miri_cases):
             "$(S)/tst/miri/upstream", LIBSTDS["1.90.0"].archive, _stamp,
         ],
         deps=[LIBSTDS["1.90.0"].node, rustc],
-        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC_OVERRIDE_VERSION_STRING": "1.90.0", "RUSTC": RUSTC},
         descr="MI",
         color="green",
     ))
@@ -8069,13 +8066,12 @@ if coverage_mode:
         ],
         cmd=[
             "python3", "$(S)/dev/coverage.py",
-            "--rustc", "$(B)/bin/rustc",
-            "--objects", "$(B)/tst/unit/rustc_storage_objects.a",
+            "--rustc", RUSTC,
             "--source-root", ".",
             "--output", "$(B)/coverage",
             *coverage_profiles,
         ],
-        deps=[rustc, rustc_storage_objects, *unit_tests, *style],
+        deps=[rustc, *unit_tests, *style],
         cwd="$(S)",
         descr="CV",
         color="cyan",
