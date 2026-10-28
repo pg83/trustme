@@ -68,25 +68,27 @@ jobs:
               trap "kill $monitor 2>/dev/null || true" EXIT
               ./build -B .build-ci -j "$(nproc)" -Dcoverage=1 coverage
               test -s .build-ci/coverage/coverage.info
+              mkdir -p coverage-artifact
+              cp -L .build-ci/coverage/coverage.info .build-ci/coverage/summary.txt coverage-artifact/
             '
 
       - name: Summarize coverage
-        if: ${{ !cancelled() && hashFiles('.build-ci/coverage/summary.txt') != '' }}
+        if: ${{ !cancelled() && hashFiles('coverage-artifact/summary.txt') != '' }}
         run: |
           {
             echo "## Coverage"
             echo
             echo '```text'
-            cat .build-ci/coverage/summary.txt
+            cat coverage-artifact/summary.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage to Codecov
-        if: ${{ !cancelled() && hashFiles('.build-ci/coverage/coverage.info') != '' }}
+        if: ${{ !cancelled() && hashFiles('coverage-artifact/coverage.info') != '' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           use_oidc: true
-          files: .build-ci/coverage/coverage.info
+          files: coverage-artifact/coverage.info
           disable_search: true
           fail_ci_if_error: true
           name: linux-clang-unit
@@ -97,8 +99,8 @@ jobs:
         with:
           name: coverage
           path: |
-            .build-ci/coverage/coverage.info
-            .build-ci/coverage/summary.txt
+            coverage-artifact/coverage.info
+            coverage-artifact/summary.txt
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
