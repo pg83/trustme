@@ -1,5 +1,5 @@
 //@ compile-flags: -Cemit-cpp-only
-//@ crate-type: rlib
+//@ crate-type: lib
 #![allow(dead_code)]
 
 global_asm!(".text\n.global metadata_asm_symbol\nmetadata_asm_symbol:");

@@ -3776,7 +3776,7 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
             auto& e = defaultVar->data.as_Tuple();
             std::vector<ASTExprNode*> vals;
             for (const auto& fld : e.items) {
-                addFieldBoundFromTy(enm.params(), boundTys, fld.type);
+                addFieldBound(boundTys, fld.type);
                 vals.push_back(this->defaultCall(*type->pool, opts.coreName));
             }
             node = NEWNODE(CallPath, std::move(varPath), mv$(vals));
@@ -3788,7 +3788,7 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
             for (const auto& fld : e.fields) {
                 if (fld.defaultValue) {
                 } else {
-                    addFieldBoundFromTy(enm.params(), boundTys, fld.type);
+                    addFieldBound(boundTys, fld.type);
                     vals.push_back({{}, fld.name, this->defaultCall(*type->pool, opts.coreName)});
                 }
             }

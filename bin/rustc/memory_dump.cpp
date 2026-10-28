@@ -118,7 +118,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
                     continue;
                 }
 
-                if (e.name == StringView("[vvar]")) {
+                if (e.name == StringView("[vvar]") || e.name == StringView("[vvar_vclock]")) {
                     continue;
                 }
 

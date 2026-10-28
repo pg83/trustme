@@ -9,6 +9,9 @@
 # convenience root symlinks the build engine publishes for built targets
 /rustc
 /rustc.debug
+/rustc_chaos
+/rustc_coverage
+/coverage
 /cargo
 /std_src
 /libstd

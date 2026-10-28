@@ -63,6 +63,7 @@ coverage_mode = bool(build.flags.coverage)
 if coverage_mode and system_rustc_mode:
     raise RuntimeError("-Dcoverage measures trustme rustc and is incompatible with -Dsystem_rustc")
 RUSTC = "$(B)/bin/rustc_coverage" if coverage_mode else "$(B)/bin/rustc"
+RUSTC_CHAOS = "$(B)/bin/rustc_coverage" if coverage_mode else "$(B)/bin/rustc_chaos"
 
 build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 
@@ -250,16 +251,27 @@ else:
         ldflags=["-lzstd", "-flto=thin"],
     )
 
+    chaos_sources = [*[compiler_source(source) for source in SRC], *tu_compiler_srcs, "$(S)/tst/unit/chaos_monkey.cpp"]
+    rustc_chaos = program(
+        srcs=chaos_sources,
+        name="rustc_chaos",
+        output="$(B)/bin/rustc_chaos",
+        deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        cppflags=["-DTRUSTME_FOR_TESTS=1"],
+        ldflags=["-lzstd"],
+    )
     rustc_coverage = program(
-        srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
+        srcs=[*chaos_sources, "$(S)/tst/unit/coverage_abort.cpp"],
         name="rustc_coverage",
         output="$(B)/bin/rustc_coverage",
         deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        cppflags=["-DTRUSTME_FOR_TESTS=1"],
         cxxflags=coverage_flags,
-        ldflags=["-lzstd", "-fprofile-instr-generate"],
+        ldflags=["-lzstd", "-fprofile-instr-generate", "-Wl,--wrap=abort"],
     )
     if coverage_mode:
         rustc = rustc_coverage
+        rustc_chaos = rustc_coverage
 
     # The production compiler uses ThinLTO, which can hide static storage by
     # internalising or deleting symbols.  Build the same translation units as
@@ -7384,6 +7396,17 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_coverage_report",
+    inputs=["$(S)/tst/unit/test_coverage_report.py", "$(S)/dev/coverage.py"],
+    outputs=["$(B)/tst/unit/coverage_report.stamp"],
+    cmd=[
+        ["python3", "$(S)/tst/unit/test_coverage_report.py"],
+        ["touch", "$(B)/tst/unit/coverage_report.stamp"],
+    ],
+    descr="UT",
+    color="green",
+))
 rust_unit_tests = []
 # Files a unit test pulls in with `#[path]`, which are inputs of every unit
 # node because the node cannot tell which test names them.
@@ -7398,21 +7421,30 @@ for _release, _dir, _prefix in (
 ):
     for _src in build.glob(f"$(S)/{_dir}/test_*.rs"):
         _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
+        _source_text = Path(__file__).parent.joinpath(_dir, "test_" + _stem + ".rs").read_text()
+        _chaos_test = re.search(r"^//@\s*chaos:", _source_text, re.M) is not None
+        if _chaos_test and system_rustc_mode:
+            continue
+        _extra_inputs = [
+            "$(S)/" + _dir + "/" + _input
+            for _input in re.findall(r"^//@\s*input:\s*(\S+)\s*$", _source_text, re.M)
+        ]
         _stamp = f"$(B)/{_dir}/{_stem}.stamp"
         _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
         _target = command(
             name=_prefix + _stem,
-            inputs=[_src, "$(S)/tst/unit/run_one.py"] + unit_aux + TESTS_LIB,
+            inputs=[_src, "$(S)/tst/unit/run_one.py"] + unit_aux + TESTS_LIB + _extra_inputs,
             outputs=[_stamp],
             cmd=[
                 *TEST_TIMEOUT,
                 "python3", "$(S)/tst/unit/run_one.py",
                 _src, LIBSTDS[_release].archive, _stamp,
             ],
-            deps=[LIBSTDS[_release].node, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
+            deps=[LIBSTDS[_release].node, rustc] + ([rustc_chaos] if _chaos_test else []) + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
             env={
                 "RUSTC_OVERRIDE_VERSION_STRING": _release,
                 "RUSTC": RUSTC,
+                **({"RUSTC_CHAOS": RUSTC_CHAOS} if _chaos_test else {}),
                 **SYSTEM_TEST_ENV,
                 **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
                    if _uses_rust_lib_dependencies else {}),

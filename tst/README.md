@@ -88,3 +88,32 @@ nodes, merges their profiles and writes LCOV and a per-file summary under
 `.build/coverage/`.
 Only production sources in `bin/rustc/` count; tests, dependencies and generated
 sources are excluded.
+
+Line coverage, the LCOV totals and `summary.txt` all count the exported `DA`
+records. The coverage executable saves its counters before deliberate
+`abort()` calls as well, so rejected input and fault diagnostics are measured.
+
+### CLI fault tests
+
+`WireBoard::chaos` holds the compiler's pool-allocated fault interface.
+Ordinary `rustc` uses an idle implementation; `rustc_chaos` and `rustc_coverage`
+can read deterministic
+`TRUSTME_CHAOS=name@skip,...` scripts. Each rule passes `skip` calls, fails the
+next one once, and prints `CHAOS name`. The script implementation lives in
+`tst/unit/` and does not count as production coverage.
+
+An ordinary Rust unit can request a fault:
+
+```rust
+//@ chaos: backend-spawn@0
+//@ compile-fail: system returned -1
+//@ crate-type: lib
+pub fn answer() -> u32 { 42 }
+```
+
+Run it with `./build unit_chaos_backend_spawn`, or add `-Dcoverage=1` to collect
+its profile. Auxiliary crates are built without the fault; the runner arms it
+only for the main compiler invocation and requires both the fault marker and
+the expected diagnostic. System-rustc mode excludes these compiler-specific
+tests. Extra fixtures are declared with `//@ input: name`; compile flags can
+use `$DIR` for the directory containing the test.

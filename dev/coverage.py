@@ -22,9 +22,13 @@ def run_output(command, cwd):
     return subprocess.check_output(command, cwd=cwd, text=True)
 
 
-def run_to_file(command, cwd, output):
-    with output.open("w") as stream:
-        subprocess.run(command, cwd=cwd, stdout=stream, check=True)
+def line_counts(record):
+    counts = {}
+    for line in record.splitlines():
+        if line.startswith("DA:"):
+            number, hits, *_ = line[3:].split(",")
+            counts[int(number)] = counts.get(int(number), 0) + int(hits)
+    return sum(hits > 0 for hits in counts.values()), len(counts)
 
 
 def merge_profiles(root, profiles, output):
@@ -67,6 +71,12 @@ def export_lcov(root, sources, options, output):
             path = path.resolve()
             if path in wanted:
                 lines[index] = "SF:" + path.relative_to(root).as_posix()
+                # LLVM's summary can count lines absent from its DA records,
+                # especially in macro expansions. Codecov consumes DA: keep
+                # the exported totals and our local gate on that same basis.
+                hit, total = line_counts("\n".join(lines))
+                lines = [line for line in lines if not line.startswith(("LF:", "LH:"))]
+                lines.extend((f"LF:{total}", f"LH:{hit}"))
                 records.append("\n".join(lines) + "\nend_of_record\n")
             break
     if not records:
@@ -76,19 +86,33 @@ def export_lcov(root, sources, options, output):
 
 
 def check_floor(records, minimum):
-    found = 0
-    total = 0
-    for line in "".join(records).splitlines():
-        if line.startswith("LF:"):
-            total += int(line[3:])
-        elif line.startswith("LH:"):
-            found += int(line[3:])
+    counts = [line_counts(record) for record in records]
+    found = sum(hit for hit, _ in counts)
+    total = sum(lines for _, lines in counts)
     coverage = 100.0 * found / total if total else 0.0
     print(f"line coverage: {found}/{total} = {coverage:.2f}%")
     if not total:
         raise RuntimeError("coverage export contains no instrumented lines")
     if coverage < minimum:
         raise RuntimeError(f"line coverage {coverage:.2f}% is below {minimum:.2f}%")
+
+
+def write_summary(records, output):
+    rows = []
+    for record in records:
+        name = next(line[3:] for line in record.splitlines() if line.startswith("SF:"))
+        hit, total = line_counts(record)
+        rows.append((name, hit, total))
+    width = max(len(name) for name, _, _ in rows)
+    with output.open("w") as stream:
+        stream.write(f"{'Source':<{width}} {'Lines':>8} {'Hit':>8} {'Missed':>8} {'Coverage':>9}\n")
+        for name, hit, total in sorted(rows):
+            percent = f"{100 * hit / total:.2f}%" if total else "-"
+            stream.write(f"{name:<{width}} {total:>8} {hit:>8} {total - hit:>8} {percent:>9}\n")
+        hit = sum(row[1] for row in rows)
+        total = sum(row[2] for row in rows)
+        percent = f"{100 * hit / total:.2f}%" if total else "-"
+        stream.write(f"{'TOTAL':<{width}} {total:>8} {hit:>8} {total - hit:>8} {percent:>9}\n")
 
 
 def main():
@@ -128,7 +152,7 @@ def main():
 
     print("coverage: writing summaries", flush=True)
     summary_path = args.output / "summary.txt"
-    run_to_file(["llvm-cov", "report", *options], root, summary_path)
+    write_summary(records, summary_path)
 
     print(summary_path.read_text(), end="")
     check_floor(records, args.minimum)

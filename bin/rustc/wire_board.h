@@ -12,6 +12,7 @@ struct HIRTypeInterner;
 class HIRInherentCache;
 class ExpandRegistry;
 class LangItems;
+struct ChaosMonkey;
 struct Settings;
 struct TargetSpec;
 struct NextSolverCrateCache;
@@ -30,6 +31,8 @@ struct WireBoard {
     explicit WireBoard(stl::ObjPool* pool);
 
     stl::ObjPool* pool = nullptr;
+
+    ChaosMonkey* chaos = nullptr;
 
     stl::ObjPool* astPool = nullptr;
 

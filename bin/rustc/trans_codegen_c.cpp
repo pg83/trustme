@@ -1,5 +1,7 @@
 #include "trans_codegen_c.h"
 
+#include "chaos_monkey.h"
+
 #include "output.h"
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -782,14 +784,14 @@ auto CodeGeneratorC::openLiteralBlob() -> void {
         return;
     }
     const auto path = outfilePath + ".blob";
-    literalBlob = fopen(path.c_str(), "wb");
+    literalBlob = wb_.chaos->fail(ChaosFault::LiteralOpen) ? nullptr : fopen(path.c_str(), "wb");
     ASSERT_BUG(Span(), literalBlob, StringView("Failed to open `") << path << StringView("` for writing"));
 }
 
 auto CodeGeneratorC::appendLiteralBlob(const EncodedLiteral& encoded) -> size_t {
     openLiteralBlob();
     const size_t offset = literalBlobSize;
-    const size_t written = fwrite(encoded.bytes.data(), 1, encoded.bytes.length(), literalBlob);
+    const size_t written = wb_.chaos->fail(ChaosFault::LiteralWrite) ? 0 : fwrite(encoded.bytes.data(), 1, encoded.bytes.length(), literalBlob);
     ASSERT_BUG(Span(), written == encoded.bytes.length(), StringView("Failed to write literal blob for `") << outfilePath << StringView("`"));
     literalBlobSize += written;
     return offset;
@@ -797,8 +799,12 @@ auto CodeGeneratorC::appendLiteralBlob(const EncodedLiteral& encoded) -> size_t 
 
 auto CodeGeneratorC::closeLiteralBlob() -> void {
     if (literalBlob) {
-        ASSERT_BUG(Span(), fclose(literalBlob) == 0, StringView("Failed to close literal blob for `") << outfilePath << StringView("`"));
+        int result = fclose(literalBlob);
         literalBlob = nullptr;
+        if (wb_.chaos->fail(ChaosFault::LiteralClose)) {
+            result = EOF;
+        }
+        ASSERT_BUG(Span(), result == 0, StringView("Failed to close literal blob for `") << outfilePath << StringView("`"));
     }
 }
 
@@ -1399,7 +1405,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         buildCommand << commandText << endL;
         buildCommand.finish();
     } else {
-        int ec = system(commandText.c_str());
+        int ec = wb_.chaos->fail(ChaosFault::BackendSpawn) ? -1 : wb_.chaos->fail(ChaosFault::BackendExit) ? 256 : system(commandText.c_str());
         if (ec == -1) {
             sysE << StringView("C Compiler failed to execute (system returned -1)") << endL;
             perror("system");

@@ -1,0 +1,4 @@
+[target]
+arch = "x86_64"
+[arch]
+name = "other"

@@ -1,5 +1,7 @@
 #include "expand_proc_macro.h"
 
+#include "chaos_monkey.h"
+
 #include "common.h"
 #include "synext.h"
 #include "ast_ast.h"
@@ -102,6 +104,7 @@ namespace {
     };
 
     struct ProcMacroInv: public TokenStream {
+        ChaosMonkey& chaos;
         Span parentSpan;
         Span thisSpan;
         const HIRProcMacro& procMacroDesc;
@@ -158,7 +161,7 @@ namespace {
         ObjPool::Ref fragmentPool = ObjPool::fromMemory();
         Vector<const Token*> fragments;
 
-        ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc);
+        ProcMacroInv(ObjPool& pool, ChaosMonkey& chaos, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc);
         ProcMacroInv(const ProcMacroInv&) = delete;
         ProcMacroInv(ProcMacroInv&&) = default;
         ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -370,7 +373,7 @@ namespace {
             ERROR(sp, E0000, StringView("Unable to find referenced proc macro ") << macPath);
         }
 
-        auto rv = ProcMacroInv(*crate.pool, wb.id, sp, extCrate.hir->edition, extCrate, *pmp);
+        auto rv = ProcMacroInv(*crate.pool, *wb.chaos, wb.id, sp, extCrate.hir->edition, extCrate, *pmp);
         rv.parseState().crate = &crate;
         rv.parseState().wb = &wb;
 
@@ -508,14 +511,14 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
 }
 
 namespace {
-    void startProcMacroServer(const Span& sp, const ASTExternCrate& server) {
+    void startProcMacroServer(const Span& sp, ChaosMonkey& chaos, const ASTExternCrate& server) {
         const auto* executable = server.procMacroFilename != "" ? server.procMacroFilename.c_str() : server.filename.c_str();
         int stdinPipes[2];
-        if (pipe2(stdinPipes, O_CLOEXEC) != 0) {
+        if (chaos.fail(ChaosFault::ProcMacroPipe) || pipe2(stdinPipes, O_CLOEXEC) != 0) {
             BUG(sp, StringView("Unable to create stdin pipe pair for proc macro, ") << strerror(errno));
         }
         int stdoutPipes[2];
-        if (pipe2(stdoutPipes, O_CLOEXEC) != 0) {
+        if (chaos.fail(ChaosFault::ProcMacroPipe) || pipe2(stdoutPipes, O_CLOEXEC) != 0) {
             BUG(sp, StringView("Unable to create stdout pipe pair for proc macro, ") << strerror(errno));
         }
 
@@ -532,7 +535,7 @@ namespace {
         executableArg.append(executable, strlen(executable) + 1);
         char* argv[2] = {executableArg.mutData(), nullptr};
         DEBUG(argv[0]);
-        int rv = posix_spawn(&server.procMacroServerPid, executable, &file_actions, nullptr, argv, environ);
+        int rv = chaos.fail(ChaosFault::ProcMacroSpawn) ? EIO : posix_spawn(&server.procMacroServerPid, executable, &file_actions, nullptr, argv, environ);
         if (rv != 0) {
             BUG(sp, StringView("Error in posix_spawn - ") << rv << StringView(" - can't start `") << executable << StringView("`"));
         }
@@ -564,8 +567,9 @@ void ExpandStopProcMacroServers(const ASTCrate& crate) {
     }
 }
 
-ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc)
+ProcMacroInv::ProcMacroInv(ObjPool& pool, ChaosMonkey& chaos, u32& id, const Span& sp, ASTEdition edition, const ASTExternCrate& server, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
+    , chaos(chaos)
     , pool(pool)
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name, true))
@@ -574,7 +578,7 @@ ProcMacroInv::ProcMacroInv(ObjPool& pool, u32& id, const Span& sp, ASTEdition ed
 {
     markProcMacroExpansion();
     if (server.procMacroServerPid == 0) {
-        startProcMacroServer(sp, server);
+        startProcMacroServer(sp, chaos, server);
     }
     this->handles.server = &server;
     this->handles.childStdin = server.procMacroServerStdin;
@@ -655,7 +659,7 @@ void ProcMacroInv::sendBytesRaw(const void* val, size_t size) {
     if (dumpFileOut) {
         dumpFileOut->write(val, size);
     }
-    if (write(this->handles.childStdin, val, size) != static_cast<ssize_t>(size)) {
+    if (chaos.fail(ChaosFault::ProcMacroWrite) || write(this->handles.childStdin, val, size) != static_cast<ssize_t>(size)) {
         BUG(parentSpan, StringView("Error writing to child, ") << strerror(errno));
     }
 }
@@ -697,7 +701,7 @@ void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
     u8* val = reinterpret_cast<u8*>(outVoid);
     size_t ofs = 0, rem = len;
     while (rem > 0) {
-        auto n = read(this->handles.childStdout, &val[ofs], rem);
+        auto n = chaos.fail(ChaosFault::ProcMacroRead) ? -1 : chaos.fail(ChaosFault::ProcMacroEof) ? 0 : read(this->handles.childStdout, &val[ofs], rem);
         if (n == 0) {
             BUG(this->thisSpan, StringView("Unexpected EOF while reading from child process"));
         }

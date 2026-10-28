@@ -37,6 +37,8 @@ def main() -> int:
     compile_flags = (
         shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
     )
+    compile_flags = [flag.replace("$DIR", os.path.dirname(src)) for flag in compile_flags]
+    chaos_match = re.search(r"^//@\s*chaos:\s*(\S+)\s*$", source_text, re.MULTILINE)
     crate_type_match = re.search(
         r"^//@\s*crate-type:\s*([a-z_]+)\s*$", source_text, re.MULTILINE
     )
@@ -52,6 +54,7 @@ def main() -> int:
     with lib.workdir() as work:
         env = dict(os.environ)
         env.pop("TRUSTME_SYSTEM_RUSTC", None)
+        env.pop("TRUSTME_CHAOS", None)
         env.setdefault("CC", "cc")
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
@@ -110,6 +113,9 @@ def main() -> int:
             )
             dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
+        if chaos_match:
+            rustc = lib.require_env("RUSTC_CHAOS")
+            env["TRUSTME_CHAOS"] = chaos_match.group(1)
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
         command = lib.wrap_gdb(
             [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
@@ -128,6 +134,11 @@ def main() -> int:
                 raise RuntimeError(
                     f"compile-fail unit did not emit expected diagnostic: {expected!r}"
                 )
+            if chaos_match:
+                for rule in chaos_match.group(1).split(","):
+                    marker = ("CHAOS " + rule.split("@", 1)[0] + "\n").encode()
+                    if marker not in result.stderr:
+                        raise RuntimeError(f"compiler did not exercise requested fault: {rule}")
         else:
             lib.run(command, env=env)
         if expected_failure:

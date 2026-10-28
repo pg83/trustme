@@ -1,3 +1,5 @@
+//@ test-harness
+
 #![allow(dead_code)]
 #![warn(unused_imports)]
 #![doc = "crate documentation"]
@@ -60,5 +62,9 @@ mod tests {
     #[test]
     fn attribute_unit() {
         assert_eq!(super::compute(1), 2);
+        assert_eq!(super::exported_function(), 4);
+        assert_eq!(exported_macro!(3), 4);
+        assert_eq!(super::Record::default().value, 0);
+        assert_eq!(std::mem::align_of::<super::Aligned>(), 16);
     }
 }
