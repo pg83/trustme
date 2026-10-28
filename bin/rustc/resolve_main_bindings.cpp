@@ -6174,14 +6174,13 @@ auto Context::pushVar(const Span& sp, const Ident& name) -> unsigned int {
         ERROR(sp, E0000, StringView("Duplicate definition of `") << name << StringView("` in pattern arm"));
     }
     if (alreadyDefined) {
-        if (!nameContext.back().is_VarBlock()) {
-            BUG(sp, StringView("resolve/absolute.cpp - Context::push_var - No block"));
-        }
-        auto& vb = nameContext.back().as_VarBlock();
-        for (const auto& v : ::reverse(vb.variables)) {
-            if (v.first == name) {
-                DEBUG(StringView("Arm defined var @ ") << blockLevel << StringView(": #") << v.second << StringView(" ") << name);
-                return v.second;
+        if (!nameContext.empty() && nameContext.back().is_VarBlock()) {
+            auto& vb = nameContext.back().as_VarBlock();
+            for (const auto& v : ::reverse(vb.variables)) {
+                if (v.first == name) {
+                    DEBUG(StringView("Arm defined var @ ") << blockLevel << StringView(": #") << v.second << StringView(" ") << name);
+                    return v.second;
+                }
             }
         }
         ERROR(sp, E0000, StringView("Mismatched bindings in pattern (`") << name << StringView("` wasn't in the first arm)"));

@@ -38,3 +38,48 @@ fn captures_consumed_local() {
     let value = CopyDebug(1);
     assert!(consume(value));
 }
+
+#[should_panic(expected = "  needle = 3\n")]
+#[test]
+fn captures_method_argument() {
+    let values = [1, 2];
+    let needle = 3;
+    assert!(values.contains(&needle));
+}
+
+#[should_panic(expected = "  value = 4\n")]
+#[test]
+fn captures_call_object_argument() {
+    let predicate = |x: i32| x == 0;
+    let value = 4;
+    assert!((predicate)(value));
+}
+
+#[should_panic(expected = "  index = 1\n")]
+#[test]
+fn captures_array_index_and_cast() {
+    let index = 1;
+    let value = 2u8;
+    assert!([value as u32, 3u32][index] == 0);
+}
+
+#[should_panic(expected = "  value = 5\n")]
+#[test]
+fn captures_tuple_and_struct_fields() {
+    let value = 5;
+    assert!((CopyDebug(value), value) == (CopyDebug(0), 0));
+}
+
+#[should_panic(expected = "  value = 6\n")]
+#[test]
+fn captures_if_condition() {
+    let value = 6;
+    assert!(if value > 0 { false } else { true });
+}
+
+#[should_panic(expected = "  value = 7\n")]
+#[test]
+fn captures_match_scrutinee() {
+    let value = 7;
+    assert!(match value { 0 => true, _ => false });
+}

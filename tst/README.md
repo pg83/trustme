@@ -77,6 +77,12 @@ These are heavy and only run when asked for, never as part of the default
 
 ## compiler coverage
 
+CLI units that emit compiler output without a runnable binary use
+`//@ compile-only`. They can verify that output with repeated
+`//@ output-contains: .mir expected text` directives: the suffix names a file
+next to the requested compiler output, and the remaining text must occur in it.
+These checks also work for `//@ crate-type: lib` units.
+
 ```
 ./build -Dcoverage=1 coverage
 ```

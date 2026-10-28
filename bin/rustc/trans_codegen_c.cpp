@@ -6005,7 +6005,7 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
             of << *it;
         }
     }
-    of << (emitAttSyntax ? ".intel_syntax noprefix; " : "") << StringView("\"");
+    of << (emitAttSyntax ? "; .intel_syntax noprefix; " : "") << StringView("\"");
     of << StringView(": ");
     for (unsigned int i = 0; i < e.outputs.size(); i++) {
         const auto& v = e.outputs[i];

@@ -2,7 +2,7 @@
 """Compile one tst/unit/test_*.rs against a prebuilt libstd, then write a stamp.
 Each unit test is its own graph node — a self-contained regression for one
 compiler fix. Binaries and test harnesses must exit 0; `//@ crate-type: lib`
-units are compile-only.
+units are compile-only, as are units with `//@ compile-only`.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -26,6 +26,12 @@ def main() -> int:
     source_text = open(src, encoding="utf-8", errors="surrogateescape").read()
     system_rustc = os.environ.get("TRUSTME_SYSTEM_RUSTC") == "1"
     test_harness = "//@ test-harness" in source_text
+    compile_only = bool(re.search(r"^//@\s*compile-only\s*$", source_text, re.MULTILINE))
+    output_checks = re.findall(
+        r"^//@\s*output-contains:\s*(\.[a-z]+)\s+(.+)$", source_text, re.MULTILINE
+    )
+    if compile_only and test_harness:
+        raise RuntimeError("compile-only units cannot be test harnesses")
     compile_fail_match = re.search(
         r"^//@\s*compile-fail:\s*(.+)$", source_text, re.MULTILINE
     )
@@ -145,13 +151,17 @@ def main() -> int:
             os.makedirs(os.path.dirname(stamp), exist_ok=True)
             open(stamp, "w").close()
             return 0
+        for suffix, expected in output_checks:
+            with open(binary + suffix, encoding="utf-8") as output:
+                if expected not in output.read():
+                    raise RuntimeError(f"compiler output {suffix} does not contain {expected!r}")
         if test_harness:
             listing = subprocess.run([binary, "--list"], env=env,
                                      stdout=subprocess.PIPE, timeout=60,
                                      check=True)
             if b": test" not in listing.stdout:
                 raise RuntimeError("test harness contains no tests")
-        if test_harness or crate_type == "bin":
+        if test_harness or (crate_type == "bin" and not compile_only):
             lib.run([binary], env=env, timeout=60)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)

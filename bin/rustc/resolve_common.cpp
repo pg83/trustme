@@ -348,7 +348,9 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 }
                 i += 1;
             }
-            ASSERT_BUG(sp, i <= baseNodes.size(), StringView(""));
+            if (i > baseNodes.size()) {
+                ERROR(sp, E0000, StringView("Too many `super` components"));
+            }
             const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
             return getModuleAst(startMod, path, 0, ignoreLast, outPath);
         }
