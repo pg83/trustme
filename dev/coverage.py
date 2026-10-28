@@ -22,6 +22,11 @@ def run_output(command, cwd):
     return subprocess.check_output(command, cwd=cwd, text=True)
 
 
+def run_to_file(command, cwd, output):
+    with output.open("w") as stream:
+        subprocess.run(command, cwd=cwd, stdout=stream, check=True)
+
+
 def merge_profiles(root, profiles, output):
     # A single invocation with the whole unit corpus has a large and useless
     # memory spike. Merge bounded groups until one profile remains.
@@ -122,15 +127,13 @@ def main():
     records = export_lcov(root, sources, options, args.output / "coverage.info")
 
     print("coverage: writing summaries", flush=True)
-    summary = run_output(["llvm-cov", "report", *options], root)
-    (args.output / "summary.txt").write_text(summary)
-    functions = run_output(["llvm-cov", "report", "-show-functions", *options], root)
-    (args.output / "functions.txt").write_text(functions)
+    summary_path = args.output / "summary.txt"
+    run_to_file(["llvm-cov", "report", *options], root, summary_path)
+    run_to_file(["llvm-cov", "report", "-show-functions", *options], root, args.output / "functions.txt")
     print("coverage: writing line report", flush=True)
-    show = run_output(["llvm-cov", "show", "-show-branches=count", *options], root)
-    (args.output / "show.txt").write_text(show)
+    run_to_file(["llvm-cov", "show", "-show-branches=count", *options], root, args.output / "show.txt")
 
-    print(summary, end="")
+    print(summary_path.read_text(), end="")
     check_floor(records, args.minimum)
 
 
