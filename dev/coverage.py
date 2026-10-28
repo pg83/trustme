@@ -3,6 +3,7 @@
 
 import argparse
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -19,6 +20,28 @@ def source_files(root):
 
 def run_output(command, cwd):
     return subprocess.check_output(command, cwd=cwd, text=True)
+
+
+def merge_profiles(root, profiles, output):
+    # A single invocation with the whole unit corpus has a large and useless
+    # memory spike. Merge bounded groups until one profile remains.
+    work = output.parent / "merge-work"
+    work.mkdir(exist_ok=True)
+    generation = profiles
+    round_index = 0
+    while len(generation) > 1:
+        merged = []
+        for start in range(0, len(generation), 8):
+            target = work / f"{round_index}-{start // 8}.profdata"
+            subprocess.run([
+                "llvm-profdata", "merge", "-sparse",
+                *map(str, generation[start:start + 8]),
+                "-o", str(target),
+            ], cwd=root, check=True)
+            merged.append(target)
+        generation = merged
+        round_index += 1
+    shutil.copyfile(generation[0], output)
 
 
 def export_lcov(root, sources, options, output):
@@ -86,10 +109,7 @@ def main():
 
     args.output.mkdir(parents=True, exist_ok=True)
     profile = args.output / "coverage.profdata"
-    subprocess.run([
-        "llvm-profdata", "merge", "-sparse", *map(str, profiles),
-        "-o", str(profile),
-    ], cwd=root, check=True)
+    merge_profiles(root, profiles, profile)
 
     objects = [str(args.rustc)]
     for path in args.objects:
