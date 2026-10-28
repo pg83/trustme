@@ -7488,6 +7488,10 @@ if not system_rustc_mode:
         "specialization_three_distinct_providers", "const_string_and_byte_slice_patterns",
         "tail_call_branch_targets", "asm_branch_operands",
         "trait_alias_associated_constraints", "duplicate_match_tables", "cfg_escaped_string_value",
+        "slice_projection_intrinsic", "guarded_float_pattern_ranges", "const_float_literal_intrinsics",
+        "large_array_partial_move_drop", "async_drop_enum_fields",
+        "proc_macro_opaque_type_roundtrip", "monomir_tail_calls",
+        "pattern_type_repeated_parameter", "large_array_drop_state_merges",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"

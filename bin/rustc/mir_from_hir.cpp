@@ -1915,23 +1915,16 @@ namespace {
                                     auto& re = rule.as_ValueRange();
                                     auto succBb = builder.newBbUnlinked();
 
-                                    if (re.first.as_Float().v == -std::numeric_limits<double>::infinity()) {
-                                    } else {
-                                        auto testBb2 = builder.newBbUnlinked();
-                                        auto testLtVal = MIRParam(MIRConstant::make_Float({re.first.as_Float().v, te}));
-                                        auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
-                                        builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
-                                        builder.setCurBlock(testBb2);
-                                    }
+                                    auto testBb2 = builder.newBbUnlinked();
+                                    auto lower = MIRParam(MIRConstant::make_Float({re.first.as_Float().v, te}));
+                                    auto lowerOk = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::GE, mv$(lower)}));
+                                    builder.endBlock(MIRTerminator::make_If({mv$(lowerOk), testBb2, failBb}));
+                                    builder.setCurBlock(testBb2);
 
-                                    if (re.first.as_Float().v == std::numeric_limits<double>::infinity() && re.isInclusive) {
-                                        builder.endBlock(MIRTerminator::make_Goto({succBb}));
-                                    } else {
-                                        auto testGtVal = MIRParam(MIRConstant::make_Float({re.last.as_Float().v, te}));
-                                        auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                                        auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
-                                        builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
-                                    }
+                                    auto upper = MIRParam(MIRConstant::make_Float({re.last.as_Float().v, te}));
+                                    auto op = re.isInclusive ? MIRBinOp::LE : MIRBinOp::LT;
+                                    auto upperOk = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({val.clone(), op, mv$(upper)}));
+                                    builder.endBlock(MIRTerminator::make_If({mv$(upperOk), succBb, failBb}));
 
                                     builder.setCurBlock(succBb);
                                     break;
@@ -5371,15 +5364,13 @@ void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRCon
             case HIRCoreType::F32:
             case HIRCoreType::F64:
             case HIRCoreType::F128:
-                lowerPossible = (first.as_Float().v > -std::numeric_limits<double>::infinity());
-                upperPossible = (last.as_Float().v < std::numeric_limits<double>::infinity());
                 break;
         }
 
         if (lowerPossible) {
             auto testBb2 = builder.newBbUnlinked();
-            auto cmpLtLval = builder.getRvalInIfCond(sp, MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, MIRParam(first.clone())}));
-            builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), defBlk, testBb2}));
+            auto lowerOk = builder.getRvalInIfCond(sp, MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::GE, MIRParam(first.clone())}));
+            builder.endBlock(MIRTerminator::make_If({mv$(lowerOk), testBb2, defBlk}));
 
             builder.setCurBlock(testBb2);
         }
@@ -5387,9 +5378,9 @@ void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRCon
         if (upperPossible) {
             auto succBb = builder.newBbUnlinked();
 
-            auto op = isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-            auto cmpGtLval = builder.getRvalInIfCond(sp, MIRRValue::make_BinOp({MIRParam(val.clone()), op, MIRParam(last.clone())}));
-            builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), defBlk, succBb}));
+            auto op = isInclusive ? MIRBinOp::LE : MIRBinOp::LT;
+            auto upperOk = builder.getRvalInIfCond(sp, MIRRValue::make_BinOp({MIRParam(val.clone()), op, MIRParam(last.clone())}));
+            builder.endBlock(MIRTerminator::make_If({mv$(upperOk), succBb, defBlk}));
 
             builder.setCurBlock(succBb);
         }

@@ -667,6 +667,12 @@ namespace {
             if (lex.next() == TOK_INTERPOLATED_TYPE) {
                 return false;
             }
+            lex.consumeIf(TOK_QMARK);
+            if (lex.consumeIf(TOK_RWORD_FOR)) {
+                if (!opensAngle(lex.next()) || !consumeTtAngle(lex)) {
+                    return false;
+                }
+            }
             if (!consumePath(lex, true)) {
                 return false;
             }

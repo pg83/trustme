@@ -1,3 +1,4 @@
+//@ compile-flags: -Zdump-mir
 #![feature(explicit_tail_calls)]
 #![allow(incomplete_features)]
 
