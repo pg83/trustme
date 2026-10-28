@@ -1,6 +1,6 @@
 // Since 1.90 rustc links x86_64-unknown-linux-gnu programs with lld: it runs
-// `cc -fuse-ld=lld`, and lld records itself as `Linker: LLD ...` in the
-// program's `.comment` section. The C backend linked with whatever linker the
+// `cc -fuse-ld=lld`, and lld records itself with an optional vendor prefix in
+// the program's `.comment` section. The C backend linked with whatever linker the
 // C++ driver picks by default, usually GNU ld, which records nothing there.
 fn u16_at(data: &[u8], at: usize) -> usize {
     u16::from_le_bytes(data[at..at + 2].try_into().unwrap()) as usize
@@ -35,7 +35,7 @@ fn main() {
     let exe = std::env::current_exe().unwrap();
     let elf = std::fs::read(&exe).unwrap();
     let comment = section(&elf, b".comment").unwrap();
-    let mark = b"Linker: LLD";
+    let mark = b"LLD";
     assert!(
         comment.windows(mark.len()).any(|w| w == mark),
         "{} was not linked by lld: {:?}",
