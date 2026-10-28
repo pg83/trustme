@@ -3193,7 +3193,9 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRType* ty, TransmuteDfa& out) -> bo
         return result.first->second;
     };
 
-    intern(epsilonClosure({root.fragment.start}));
+    Vector<unsigned> initial;
+    initial.pushBack(root.fragment.start);
+    intern(epsilonClosure(std::move(initial)));
     for (size_t stateIndex = 0; stateIndex < states.size(); stateIndex++) {
         const auto state = states[stateIndex];
         out.accepting.mut(stateIndex) = std::binary_search(state.begin(), state.end(), root.fragment.accept);
@@ -3227,7 +3229,9 @@ auto TransmuteLayoutBuilder::makeDfa(const HIRType* ty, TransmuteDfa& out) -> bo
         }
         for (auto nfaState : state) {
             for (const auto& edge : nfa.states[nfaState].references) {
-                auto destination = intern(epsilonClosure({edge.destination}));
+                Vector<unsigned> seed;
+                seed.pushBack(edge.destination);
+                auto destination = intern(epsilonClosure(std::move(seed)));
                 out.references[stateIndex].push_back({edge.reference, destination});
             }
         }

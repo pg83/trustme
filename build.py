@@ -7484,6 +7484,7 @@ if not system_rustc_mode:
         "emulated_i128_arithmetic", "emulated_i128_intrinsics",
         "delegation_external_type_shapes", "delegation_self_in_nested_types",
         "repeated_impl_numeric_inference",
+        "transmutability_value_and_reference_paths",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"
