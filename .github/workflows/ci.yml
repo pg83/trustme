@@ -53,7 +53,7 @@ jobs:
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
               apt-get install --yes --no-install-recommends \
-                ca-certificates clang curl golang-go libclang-rt-dev libxxhash-dev libzstd-dev lld llvm patch python3 zlib1g-dev
+                ca-certificates clang curl gdb git golang-go libclang-rt-dev libxxhash-dev libzstd-dev lld llvm patch python3 zlib1g-dev
               export CC="$(command -v clang)"
               export CXX="$(command -v clang++)"
               export LDFLAGS="-fuse-ld=lld"
