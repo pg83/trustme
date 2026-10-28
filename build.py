@@ -354,7 +354,7 @@ cargo = command(
     env={
         "CGO_ENABLED": "0",
         "GOCACHE": "$(B)/gocache",
-        "GOFLAGS": "-mod=vendor",
+        "GOFLAGS": "-mod=vendor -buildvcs=false",
         "GOTOOLCHAIN": "local",
     },
     descr="GO",
@@ -380,7 +380,7 @@ cargo_test = command(
     env={
         "CGO_ENABLED": "0",
         "GOCACHE": "$(B)/gocache",
-        "GOFLAGS": "-mod=vendor",
+        "GOFLAGS": "-mod=vendor -buildvcs=false",
         "GOTOOLCHAIN": "local",
     },
     descr="GO",
