@@ -57,6 +57,15 @@ jobs:
               export CC="$(command -v clang)"
               export CXX="$(command -v clang++)"
               export LDFLAGS="-fuse-ld=lld"
+              (
+                while sleep 60; do
+                  date -u
+                  df -h /workspace
+                  free -m
+                done
+              ) &
+              monitor=$!
+              trap 'kill "$monitor" 2>/dev/null || true' EXIT
               ./build -B .build-ci -j "$(nproc)" -Dcoverage=1 coverage
             '
 
