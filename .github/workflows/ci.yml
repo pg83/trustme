@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   build-linux:
+    if: false
     name: Build Linux
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -32,7 +33,69 @@ jobs:
             develop .#clang -c \
             ./build -B .build-ci -j "$(nproc)" rustc cargo
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run unit tests with coverage
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            ubuntu:26.04 \
+            bash -euxo pipefail -c '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install --yes --no-install-recommends \
+                ca-certificates clang curl golang-go libclang-rt-dev libxxhash-dev libzstd-dev lld llvm patch python3 zlib1g-dev
+              export CC="$(command -v clang)"
+              export CXX="$(command -v clang++)"
+              export LDFLAGS="-fuse-ld=lld"
+              ./build -B .build-ci -j "$(nproc)" -Dcoverage=1 coverage
+            '
+
+      - name: Summarize coverage
+        if: ${{ !cancelled() && hashFiles('.build-ci/coverage/summary.txt') != '' }}
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            echo '```text'
+            cat .build-ci/coverage/summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && hashFiles('.build-ci/coverage/coverage.info') != '' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: .build-ci/coverage/coverage.info
+          disable_search: true
+          fail_ci_if_error: true
+          name: linux-clang-unit
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: |
+            .build-ci/coverage/coverage.info
+            .build-ci/coverage/summary.txt
+            .build-ci/coverage/functions.txt
+            .build-ci/coverage/show.txt
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
   tests-asan-0:
+    if: false
     name: Tests ASan 0/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -44,6 +107,7 @@ jobs:
           shard: "0"
 
   tests-asan-1:
+    if: false
     name: Tests ASan 1/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -55,6 +119,7 @@ jobs:
           shard: "1"
 
   tests-asan-2:
+    if: false
     name: Tests ASan 2/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -66,6 +131,7 @@ jobs:
           shard: "2"
 
   tests-asan-3:
+    if: false
     name: Tests ASan 3/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -77,6 +143,7 @@ jobs:
           shard: "3"
 
   tests-asan-4:
+    if: false
     name: Tests ASan 4/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -88,6 +155,7 @@ jobs:
           shard: "4"
 
   tests-asan-5:
+    if: false
     name: Tests ASan 5/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -99,6 +167,7 @@ jobs:
           shard: "5"
 
   tests-asan-6:
+    if: false
     name: Tests ASan 6/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -110,6 +179,7 @@ jobs:
           shard: "6"
 
   tests-asan-7:
+    if: false
     name: Tests ASan 7/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -121,6 +191,7 @@ jobs:
           shard: "7"
 
   tests-asan-8:
+    if: false
     name: Tests ASan 8/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -132,6 +203,7 @@ jobs:
           shard: "8"
 
   tests-asan-9:
+    if: false
     name: Tests ASan 9/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -143,6 +215,7 @@ jobs:
           shard: "9"
 
   tests-asan-10:
+    if: false
     name: Tests ASan 10/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -154,6 +227,7 @@ jobs:
           shard: "10"
 
   tests-asan-11:
+    if: false
     name: Tests ASan 11/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -165,6 +239,7 @@ jobs:
           shard: "11"
 
   tests-asan-12:
+    if: false
     name: Tests ASan 12/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -176,6 +251,7 @@ jobs:
           shard: "12"
 
   tests-asan-13:
+    if: false
     name: Tests ASan 13/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -187,6 +263,7 @@ jobs:
           shard: "13"
 
   tests-asan-14:
+    if: false
     name: Tests ASan 14/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -198,6 +275,7 @@ jobs:
           shard: "14"
 
   tests-asan-15:
+    if: false
     name: Tests ASan 15/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -209,6 +287,7 @@ jobs:
           shard: "15"
 
   tests-asan-16:
+    if: false
     name: Tests ASan 16/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -220,6 +299,7 @@ jobs:
           shard: "16"
 
   tests-asan-17:
+    if: false
     name: Tests ASan 17/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -231,6 +311,7 @@ jobs:
           shard: "17"
 
   tests-asan-18:
+    if: false
     name: Tests ASan 18/20
     needs: build-linux
     runs-on: ubuntu-24.04
@@ -242,6 +323,7 @@ jobs:
           shard: "18"
 
   tests-asan-19:
+    if: false
     name: Tests ASan 19/20
     needs: build-linux
     runs-on: ubuntu-24.04

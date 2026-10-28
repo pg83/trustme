@@ -31,6 +31,10 @@ build.flags.allow({
         "descr": "native linker used by the external rustc",
         "default": "gcc",
     },
+    "coverage": {
+        "descr": "instrument rustc and merge per-unit LLVM coverage profiles",
+        "default": "",
+    },
 })
 
 
@@ -55,6 +59,9 @@ def parse_test_partition():
 
 test_partition = parse_test_partition()
 system_rustc_mode = bool(build.flags.system_rustc)
+coverage_mode = bool(build.flags.coverage)
+if coverage_mode and system_rustc_mode:
+    raise RuntimeError("-Dcoverage measures trustme rustc and is incompatible with -Dsystem_rustc")
 
 build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 
@@ -63,6 +70,18 @@ build.cxxflags += [
     "-O2",
     "-g",
 ]
+if coverage_mode:
+    coverage_flags = [
+        "-fprofile-instr-generate",
+        "-fcoverage-mapping",
+        "-ffile-prefix-map=$(S)=.",
+        "-fcoverage-prefix-map=$(S)=.",
+        "-fcoverage-compilation-dir=.",
+    ]
+    build.cxxflags += coverage_flags
+    build.ldflags += ["-fprofile-instr-generate"]
+
+rustc_lto_flags = [] if coverage_mode else ["-flto=thin"]
 
 # Keep the platform library in the same imported build graph as its consumers:
 # libstd owns its source discovery and compile flags, while the parent graph
@@ -95,6 +114,10 @@ platform_libstd_lto = import_build(
     namespace="ext/libstd-lto",
 )
 platform_libstd_lto.name = "platform_libstd_lto"
+
+# Coverage uses ordinary objects so llvm-cov sees code that ThinLTO could
+# internalise or remove, and the matching non-LTO platform library.
+rustc_platform_libstd = platform_libstd if coverage_mode else platform_libstd_lto
 
 RUSTC_CPP_SRC = build.glob("$(S)/bin/rustc/*.cpp")
 SRC = RUSTC_CPP_SRC
@@ -220,19 +243,19 @@ else:
         # (thin _tu.h, out-of-line accessors) and leaves cross-TU inlining
         # to LTO; measured ~23% faster libcore compiles. The LTO flavour of
         # the platform library joins in so ObjPool inlines too.
-        deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
-        cxxflags=["-flto=thin"],
-        ldflags=["-lzstd", "-flto=thin"],
+        deps=[rustc_platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        cxxflags=rustc_lto_flags,
+        ldflags=["-lzstd", *rustc_lto_flags],
     )
 
     rustc_debug = program(
         srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
         name="rustc.debug",
         output="$(B)/bin/rustc.debug",
-        deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
+        deps=[rustc_platform_libstd, codegen_c_prelude, unicode_nfc_tables],
         cppflags=["-DTRUSTME_DEBUG=1"],
-        cxxflags=["-flto=thin"],
-        ldflags=["-lzstd", "-flto=thin"],
+        cxxflags=rustc_lto_flags,
+        ldflags=["-lzstd", *rustc_lto_flags],
     )
 
     # The production compiler uses ThinLTO, which can hide static storage by
@@ -8006,6 +8029,51 @@ for _index, _case in enumerate(miri_cases):
         descr="MI",
         color="green",
     ))
+
+if coverage_mode:
+    # Processes write separate raw profiles; the test's last command collapses
+    # them into its one declared output. No process or test shares a profile.
+    coverage_profiles = []
+    for _test in [*unit_tests, *style]:
+        _raw_dir = f"$(B)/coverage/raw/{_test.name}"
+        _profile = f"$(B)/coverage/profiles/{_test.name}.profdata"
+        _test.inputs.append("$(S)/dev/coverage_profile.py")
+        _test.outputs.append(_profile)
+        _test.env["LLVM_PROFILE_FILE"] = _raw_dir + "/%p.profraw"
+        _test.commands.insert(0, ["mkdir", "-p", _raw_dir])
+        _test.commands.append([
+            "python3", "$(S)/dev/coverage_profile.py",
+            "--output", _profile, _raw_dir,
+        ])
+        coverage_profiles.append(_profile)
+
+    coverage_sources = [
+        _source for _source in RUSTC_CPP_SRC
+        if not _source.endswith("_ut.cpp") and not _source.endswith("/tagged_union_sample.cpp")
+    ] + build.glob("$(S)/bin/rustc/*.h") + build.glob("$(S)/bin/rustc/*.inc")
+    coverage = command(
+        name="coverage",
+        inputs=["$(S)/dev/coverage.py", *coverage_sources, *coverage_profiles],
+        outputs=[
+            "$(B)/coverage/coverage.profdata",
+            "$(B)/coverage/coverage.info",
+            "$(B)/coverage/summary.txt",
+            "$(B)/coverage/functions.txt",
+            "$(B)/coverage/show.txt",
+        ],
+        cmd=[
+            "python3", "$(S)/dev/coverage.py",
+            "--rustc", "$(B)/bin/rustc",
+            "--objects", "$(B)/tst/unit/rustc_storage_objects.a",
+            "--source-root", ".",
+            "--output", "$(B)/coverage",
+            *coverage_profiles,
+        ],
+        deps=[rustc, rustc_storage_objects, *unit_tests, *style],
+        cwd="$(S)",
+        descr="CV",
+        color="cyan",
+    )
 
 lite_tests = [
     *(rust_unit_tests if system_rustc_mode else unit_tests),
