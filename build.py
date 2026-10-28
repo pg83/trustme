@@ -7517,6 +7517,7 @@ if not system_rustc_mode:
         "a_raw_identifier_crosses_the_proc_macro_bridge_as_raw",
         "macro_rules_reexport_alias",
         "const_heap_intrinsics",
+        "specialization_inherited_type_order",
     )
     for _stem in (
         "macro_clones_patterns",

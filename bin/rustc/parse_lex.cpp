@@ -928,19 +928,19 @@ Token Lexer::getTokenInt() {
                         numType = CORETYPE_U128;
                     } else if (suffix == "usize") {
                         numType = CORETYPE_UINT;
-                    } else if (suffix == "f16") {
+                    } else if (numMode == NumMode::DEC && suffix == "f16") {
                         numType = CORETYPE_F16;
-                    } else if (suffix == "f32") {
+                    } else if (numMode == NumMode::DEC && suffix == "f32") {
                         numType = CORETYPE_F32;
-                    } else if (suffix == "f64") {
+                    } else if (numMode == NumMode::DEC && suffix == "f64") {
                         numType = CORETYPE_F64;
-                    } else if (suffix == "f128") {
+                    } else if (numMode == NumMode::DEC && suffix == "f128") {
                         numType = CORETYPE_F128;
                     } else {
                         auto tok = Token(val, CORETYPE_ANY, intSpelling);
                         return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                     }
-                    if (numMode == NumMode::DEC && (numType == CORETYPE_F16 || numType == CORETYPE_F32 || numType == CORETYPE_F64 || numType == CORETYPE_F128)) {
+                    if (numType == CORETYPE_F16 || numType == CORETYPE_F32 || numType == CORETYPE_F64 || numType == CORETYPE_F128) {
                         return Token::makeFloat(parseWholeFloat(StringView(reinterpret_cast<const u8*>(intSpelling.c_str()), intSpelling.size())), numType, intSpelling);
                     }
                     return Token(val, numType, intSpelling);

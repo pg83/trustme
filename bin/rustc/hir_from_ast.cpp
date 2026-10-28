@@ -5147,29 +5147,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeInteger& v) -> void {
         }
     };
 
-    if (v.datatype == CORETYPE_F16 || v.datatype == CORETYPE_F32 || v.datatype == CORETYPE_F64 || v.datatype == CORETYPE_F128) {
-        DEBUG(StringView("Integer annotated as float, create float node"));
-        HIRCoreType type;
-        switch (v.datatype) {
-            case CORETYPE_F16:
-                type = HIRCoreType::F16;
-                break;
-            case CORETYPE_F32:
-                type = HIRCoreType::F32;
-                break;
-            case CORETYPE_F64:
-                type = HIRCoreType::F64;
-                break;
-            case CORETYPE_F128:
-                type = HIRCoreType::F128;
-                break;
-            default:
-                BUG(v.span(), StringView("Unexpected floating point type"));
-        }
-        const auto text = FMT(v.value);
-        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({type, parseFloatValue(text.c_str())})));
-        return;
-    }
     rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({H::getType(v.span(), v.datatype), v.value})));
 }
 

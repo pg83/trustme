@@ -5285,23 +5285,15 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     case HIRPatternData::TAG_Value: {
                         auto& pe = pattern.data.as_Value();
-                        if (pe.val.is_String()) {
-                            if (!(ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str)) {
-                                ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, StringView(""));
-                                pattern.implicitDerefCount -= 1;
-                            }
-                        } else if (pe.val.is_ByteString()) {
+                        if (pe.val.is_ByteString()) {
                             const auto& bytes = pe.val.as_ByteString().v;
                             if (const auto* array = ty->opt_Array()) {
                                 context.equateTypes(sp, array->inner, context.crate.types.primitive(HIRCoreType::U8));
                                 if (array->size.is_Known() && array->size.as_Known() != bytes.size()) {
                                     ERROR(sp, E0000, StringView("Byte string pattern has length ") << bytes.size() << StringView(", but is matching ") << ty);
                                 }
-                            } else if (const auto* slice = ty->opt_Slice()) {
-                                context.equateTypes(sp, slice->inner, context.crate.types.primitive(HIRCoreType::U8));
                             } else {
-                                ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, StringView(""));
-                                pattern.implicitDerefCount -= 1;
+                                context.equateTypes(sp, ty->as_Slice().inner, context.crate.types.primitive(HIRCoreType::U8));
                             }
                         }
                         rv = true;

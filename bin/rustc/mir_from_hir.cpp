@@ -4667,39 +4667,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     this->appendFrom(sp, *pe.sub, e.inner);
                     break;
                 }
-                case HIRPatternData::TAG_Value: {
-                    auto& pe = pat.data.as_Value();
-                    // TODO: Check type?
-                    if (pe.val.is_String()) {
-                        const auto& s = pe.val.as_String();
-                        this->pushRule(PatternRule::make_Value(s));
-                    } else if (pe.val.is_ByteString()) {
-                        const auto& s = pe.val.as_ByteString().v;
-                        if (e.inner->is_Array()) {
-                            const auto& ae = e.inner->as_Array();
-                            ASSERT_BUG(sp, ae.size.is_Known() && ae.size.as_Known() == s.size(), StringView("Byte string pattern size mismatch - ") << pat << StringView(" vs ") << e.inner);
-                            fieldPath.push_back(0);
-                            for (auto c : s) {
-                                this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<u8>(c)), HIRCoreType::U8})));
-                                fieldPath.back()++;
-                            }
-                            fieldPath.pop_back();
-                        } else {
-                            Vector<u8> data;
-                            data.grow(s.size());
-                            for (auto c : s) {
-                                data.pushBack(c);
-                            }
-
-                            this->pushRule(PatternRule::make_Value(mv$(data)));
-                        }
-                    }
-                    // TODO: Handle named values
-                    else {
-                        BUG(sp, StringView("Matching borrow invalid pattern - ") << pat);
-                    }
-                    break;
-                }
             }
             fieldPath.pop_back();
             break;
@@ -4999,30 +4966,7 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
             break;
         }
         case HIRType::TAG_Array: {
-            ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), StringView("&[T; N] match on non-Deref lvalue - ") << val);
-            val.wrappers.pop_back();
-
-            Vector<MIRBasicBlockId> targets;
-            std::vector<Vector<u8>> values;
-            size_t tgtOfs = 0;
-            for (size_t i = 0; i < rules.size(); i++) {
-                for (size_t j = 1; j < rules[i].size(); j++) {
-                    ASSERT_BUG(sp, armTargets[tgtOfs] == armTargets[tgtOfs + j], StringView("Mismatched target blocks for Value match"));
-                }
-
-                const auto& r = rules[i][0][ofs];
-                ASSERT_BUG(sp, r.is_Value(), StringView("Matching without _Value pattern - ") << r.tagStr());
-                const auto& re = r.as_Value();
-                if (re.is_Const()) {
-                    TODO(sp, StringView("Handle Constant::Const in match"));
-                }
-
-                targets.pushBack(armTargets[tgtOfs]);
-                values.push_back(re.as_Bytes());
-
-                tgtOfs += rules[i].size();
-            }
-            builder.endBlock(MIRTerminator::make_SwitchValue({mv$(val), defBlk, mv$(targets), MIRSwitchValues(mv$(values))}));
+            BUG(sp, StringView("Array patterns must be decomposed before dispatch"));
             break;
         }
         case HIRType::TAG_Slice: {
