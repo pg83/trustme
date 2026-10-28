@@ -240,7 +240,6 @@ struct Context {
     void addIvarDefault(const Span& sp, unsigned int ivarIndex, const HIRType* type);
 
     void handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type, bool isIrrefutable = false);
-    void handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRType* type);
     void addBindingInner(const Span& sp, const HIRPatternBinding& pb, const HIRType* type);
 
     void addVar(const Span& sp, unsigned int index, const RcString& name, const HIRType* type);

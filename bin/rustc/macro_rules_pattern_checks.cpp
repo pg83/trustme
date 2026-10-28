@@ -23,28 +23,6 @@ bool isTokenPath(eTokenType tt) {
     }
 }
 
-bool isTokenPat(eTokenType tt) {
-    if (isTokenPath(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN:
-        case TOK_UNDERSCORE:
-        case TOK_AMP:
-        case TOK_RWORD_BOX:
-        case TOK_RWORD_REF:
-        case TOK_RWORD_MUT:
-        case TOK_STRING:
-        case TOK_INTEGER:
-        case TOK_CHAR:
-        case TOK_INTERPOLATED_PATTERN:
-            return true;
-        default:
-            return false;
-    }
-}
-
 bool isTokenType(eTokenType tt) {
     if (isTokenPath(tt)) {
         return true;
@@ -61,96 +39,6 @@ bool isTokenType(eTokenType tt) {
             return true;
         default:
             return false;
-    }
-}
-
-bool isTokenExpr(eTokenType tt) {
-    if (isTokenPath(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_AMP:
-        case TOK_STAR:
-        case TOK_DASH:
-        case TOK_EXCLAM:
-        case TOK_RWORD_BOX:
-        case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN:
-        case TOK_RWORD_RETURN:
-        case TOK_RWORD_BREAK:
-        case TOK_RWORD_CONTINUE:
-        case TOK_BRACE_OPEN:
-        case TOK_RWORD_MATCH:
-        case TOK_RWORD_IF:
-        case TOK_RWORD_FOR:
-        case TOK_RWORD_WHILE:
-        case TOK_RWORD_LOOP:
-        case TOK_RWORD_UNSAFE:
-        case TOK_RWORD_TRY:
-        case TOK_LIFETIME:
-        case TOK_RWORD_MOVE:
-        case TOK_PIPE:
-        case TOK_DOUBLE_PIPE:
-        case TOK_INTEGER:
-        case TOK_FLOAT:
-        case TOK_STRING:
-        case TOK_BYTESTRING:
-        case TOK_RWORD_TRUE:
-        case TOK_RWORD_FALSE:
-        case TOK_INTERPOLATED_EXPR:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenStmt(eTokenType tt) {
-    if (isTokenExpr(tt)) {
-        return true;
-    }
-    switch (tt) {
-        case TOK_BRACE_OPEN:
-        case TOK_RWORD_LET:
-        case TOK_INTERPOLATED_STMT:
-        case TOK_INTERPOLATED_STMT_ITEM:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenItem(eTokenType tt) {
-    switch (tt) {
-        case TOK_HASH:
-        case TOK_RWORD_PUB:
-        case TOK_RWORD_UNSAFE:
-        case TOK_RWORD_TYPE:
-        case TOK_RWORD_CONST:
-        case TOK_RWORD_STATIC:
-        case TOK_RWORD_FN:
-        case TOK_RWORD_STRUCT:
-        case TOK_RWORD_ENUM:
-        case TOK_RWORD_TRAIT:
-        case TOK_RWORD_MOD:
-        case TOK_RWORD_USE:
-        case TOK_RWORD_EXTERN:
-        case TOK_RWORD_IMPL:
-        // TODO: more?
-        case TOK_INTERPOLATED_ITEM:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool isTokenVis(eTokenType tt) {
-    switch (tt) {
-        case TOK_RWORD_PUB:
-        case TOK_RWORD_CRATE:
-        case TOK_INTERPOLATED_VIS:
-            return true;
-        default:
-            return true; // TODO: Is this true? it can capture just nothing
     }
 }
 

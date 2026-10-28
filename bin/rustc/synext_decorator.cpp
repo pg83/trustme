@@ -4027,7 +4027,7 @@ auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const AS
             auto& e = str.data.as_Struct();
             unsigned int idx = 0;
             for (const auto& fld : e.ents) {
-                block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct_field", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(*type->pool, fld.name))))));
+                block->pushStmt(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct_field", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(*type->pool, fld.name)))))));
                 idx++;
             }
             break;
@@ -4035,7 +4035,7 @@ auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const AS
         case ASTStructData::TAG_Tuple: {
             auto& e = str.data.as_Tuple();
             for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(*type->pool, FMT(idx)))))));
+                block->pushStmt(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(*type->pool, FMT(idx))))))));
             }
             break;
         }
@@ -4088,7 +4088,7 @@ auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const AS
                 auto block = newBlock(*type->pool, sp);
                 std::vector<ASTPattern> patsA;
                 makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
-                    return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_variant_arg"), vec$(sEnt->clone(), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a)))));
+                    return NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_variant_arg"), vec$(sEnt->clone(), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a))))));
                 });
                 block->pushTailExpr(this->getValOk(*type->pool, opts.coreName));
 
@@ -4101,7 +4101,7 @@ auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const AS
                 auto block = newBlock(*type->pool, sp);
                 std::vector<ASTStructPatternEntry> patsA;
                 makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
-                    return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_struct_variant_field"), vec$(sEnt->clone(), NEWNODE(String, e.fields[idx].name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a)))));
+                    return NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_struct_variant_field"), vec$(sEnt->clone(), NEWNODE(String, e.fields[idx].name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a))))));
                 });
                 block->pushTailExpr(this->getValOk(*type->pool, opts.coreName));
 
@@ -4192,6 +4192,7 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
     ASTExprNode* nodeV = nullptr;
     switch (str.data.tag()) {
         case ASTStructData::TAG_Unit: {
+            nodeV = NEWNODE(NamedValue, basePath);
             break;
         }
         case ASTStructData::TAG_Struct: {
@@ -4216,30 +4217,13 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
         }
     }
 
-    auto closure = this->decClosure(*type->pool, sp, this->getValOk(opts.coreName, mv$(nodeV)));
-
-    auto args = vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), static_cast<ASTExprNode*>(nullptr), closure);
-
-    ASTExprNode* node = nullptr;
-    switch (str.data.tag()) {
-        case ASTStructData::TAG_Unit: {
-            node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
-            break;
-        }
-        case ASTStructData::TAG_Struct: {
-            auto& e = str.data.as_Struct();
-            BUG_ASSERT(!args[2]);
-            args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
-            node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct", mv$(args));
-            break;
-        }
-        case ASTStructData::TAG_Tuple: {
-            auto& e = str.data.as_Tuple();
-            BUG_ASSERT(!args[2]);
-            args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
-            node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct", mv$(args));
-            break;
-        }
+    auto* node = this->getValOk(opts.coreName, nodeV);
+    if (!str.data.is_Unit()) {
+        auto* closure = this->decClosure(*type->pool, sp, node);
+        const auto count = str.data.is_Struct() ? str.data.as_Struct().ents.size() : str.data.as_Tuple().ents.size();
+        auto args = vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), NEWNODE(Integer, U128(count), CORETYPE_UINT), closure);
+        const auto* method = str.data.is_Struct() ? "read_struct" : "read_tuple_struct";
+        node = NEWNODE(CallPath, this->getTraitPathDecoder() + method, mv$(args));
     }
 
     return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));

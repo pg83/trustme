@@ -889,7 +889,6 @@ public:
         return expandAssociatedTypes(sp, type);
     }
 
-
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params, SolverResponseCallback* effects = nullptr) const;
 
     bool iterateBoundsTraitsCb(const Span& sp, const HIRType* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const;
@@ -958,7 +957,6 @@ public:
     const HIRType* unknownExistentials(const Span& sp, const HIRType* input) const;
 
     Unifier::Outcome relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
-    SolverCertainty evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
     SolverCertainty probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
 
     SolverCoercionResponse evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef = false, bool unknownTargetIsFresh = false, SolverOpenStepCallback* openStep = nullptr) const;

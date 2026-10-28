@@ -7476,6 +7476,10 @@ if not system_rustc_mode:
         "const_assert_inhabited", "async_gen", "llvm_asm_operands",
         "inline_asm_label", "union_field_and_erased_ordering",
         "specialization_repeated_type_parameter",
+        "derive_legacy_serialization", "generic_assert_break_values",
+        "proc_macro_pattern_roundtrip", "proc_macro_type_roundtrip",
+        "specialization_nested_shapes", "specialization_inherited_nested",
+        "repeated_impl_parameter_shapes",
     ):
         _src = "$(S)/tst/unit/test_" + _stem + ".rs"
         _stamp = "$(B)/tst/unit/debug_trace_" + _stem + ".stamp"

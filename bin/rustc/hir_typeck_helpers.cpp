@@ -678,7 +678,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     const Span& span() const;
 
-
     bool goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const;
 
     bool crateCacheUsable() const;
@@ -5566,27 +5565,6 @@ SolverCertainty TraitResolution::evaluateInherentImplBounds(const Span& sp, cons
     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
     monomorph.setConstevalState(this->board(), HIRItemPath(""));
     return this->evaluateGenericBounds(sp, impl.params, implParams, monomorph, 0, false, effects);
-}
-
-SolverCertainty TraitResolution::evaluateInherentImpl(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const {
-    auto result = SolverCertainty::Proven;
-    switch (this->relateInherentImplHeader(sp, impl, receiver, implParams)) {
-        case Unifier::Outcome::Proven:
-            break;
-        case Unifier::Outcome::Ambiguous:
-            result = SolverCertainty::Ambiguous;
-            break;
-        case Unifier::Outcome::Mismatch:
-            return SolverCertainty::NoSolution;
-    }
-    const auto bounds = this->evaluateInherentImplBounds(sp, impl, implParams);
-    if (bounds == SolverCertainty::NoSolution) {
-        return bounds;
-    }
-    if (bounds == SolverCertainty::Ambiguous) {
-        result = bounds;
-    }
-    return result;
 }
 
 SolverCertainty TraitResolution::probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const {

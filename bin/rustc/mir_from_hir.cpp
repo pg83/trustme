@@ -482,8 +482,6 @@ namespace {
 
         void visit(HIRExprNodeMatch& node) override;
 
-        void emitIf(/*const*/ HIRExprNodeP& cond, MIRBasicBlockId trueBranch, MIRBasicBlockId falseBranch);
-
         static bool isSignedInteger(HIRCoreType type);
 
         static HIRCoreType unsignedIntegerType(HIRCoreType type);
@@ -591,9 +589,6 @@ namespace {
         std::vector<PatternBinding> bindings;
         std::vector<Deref> derefs;
 
-        static ::Ordering ruleIsBefore(const PatternRule& l, const PatternRule& r);
-
-        bool isBefore(const PatternRuleset& other) const;
     };
 
     struct PatternDump {
@@ -3338,83 +3333,6 @@ PatternRule PatternRule::clone() const {
     rv.fieldPath = this->fieldPath;
     rv.rootIndex = this->rootIndex;
     return rv;
-}
-
-::Ordering PatternRuleset::ruleIsBefore(const PatternRule& l, const PatternRule& r) {
-    if (l.tag() != r.tag()) {
-        if (l.tag() < r.tag()) {
-            return ::OrdGreater;
-        } else {
-            return ::OrdLess;
-        }
-    }
-
-    switch (l.tag()) {
-        case PatternRule::TAG_Any: {
-            return ::OrdEqual;
-        }
-        case PatternRule::TAG_Variant: {
-            auto& le = l.as_Variant();
-            auto& re = r.as_Variant();
-            if (le.idx != re.idx) {
-                return ::ord(le.idx, re.idx);
-            }
-            BUG_ASSERT(le.subRules.size() == re.subRules.size());
-            for (unsigned int i = 0; i < le.subRules.size(); i++) {
-                auto cmp = ruleIsBefore(le.subRules[i], re.subRules[i]);
-                if (cmp != ::OrdEqual) {
-                    return cmp;
-                }
-            }
-            return ::OrdEqual;
-        }
-        case PatternRule::TAG_Slice: {
-            auto& le = l.as_Slice();
-            auto& re = r.as_Slice();
-            if (le.len != re.len) {
-                return ::ord(le.len, re.len);
-            }
-            BUG_ASSERT(le.subRules.size() == re.subRules.size());
-            for (unsigned int i = 0; i < le.subRules.size(); i++) {
-                auto cmp = ruleIsBefore(le.subRules[i], re.subRules[i]);
-                if (cmp != ::OrdEqual) {
-                    return cmp;
-                }
-            }
-            return ::OrdEqual;
-        }
-        case PatternRule::TAG_SplitSlice: {
-            TODO(Span(), StringView("Order PatternRule::SplitSlice"));
-            break;
-        }
-        case PatternRule::TAG_Bool: {
-            const auto le = l.as_Bool();
-            const auto re = r.as_Bool();
-            return ::ord(le, re);
-        }
-        case PatternRule::TAG_Value: {
-            TODO(Span(), StringView("Order PatternRule::Value"));
-            break;
-        }
-        case PatternRule::TAG_ValueRange: {
-            TODO(Span(), StringView("Order PatternRule::ValueRange"));
-            break;
-        }
-    }
-    UNREACHABLE();
-}
-
-bool PatternRuleset::isBefore(const PatternRuleset& other) const {
-    BUG_ASSERT(rules.size() == other.rules.size());
-    for (unsigned int i = 0; i < rules.size(); i++) {
-        const auto& l = rules[i];
-        const auto& r = other.rules[i];
-        auto cmp = ruleIsBefore(l, r);
-        if (cmp != ::OrdEqual) {
-            return cmp == ::OrdLess;
-        }
-    }
-    return false;
 }
 
 void PatternRulesetBuilder::pushRule(PatternRule r) {
@@ -10024,83 +9942,6 @@ auto ExprVisitorConv::visit(HIRExprNodeMatch& node) -> void {
         builder.setResult(sp, mv$(res));
     } else {
     }
-}
-
-auto ExprVisitorConv::emitIf(/*const*/ HIRExprNodeP& cond, MIRBasicBlockId trueBranch, MIRBasicBlockId falseBranch) -> void {
-    TRACE_FUNCTION_F(StringView("true=bb") << trueBranch << StringView(", false=bb") << falseBranch);
-    auto* condP = &cond;
-
-    {
-        bool reverse = false;
-        while (auto* condUni = cast<HIRExprNodeUniOp>(condP->get())) {
-            ASSERT_BUG(condUni->span(), condUni->op == HIRExprNodeUniOp::Op::Invert, StringView("Unexpected UniOp on boolean in `if` condition"));
-            condP = &condUni->value;
-            reverse = !reverse;
-        }
-
-        if (reverse) {
-            std::swap(trueBranch, falseBranch);
-        }
-    }
-
-    if (auto* condBin = cast<HIRExprNodeBinOp>(condP->get())) {
-        switch (condBin->op) {
-            case HIRExprNodeBinOp::Op::BoolAnd:
-            case HIRExprNodeBinOp::Op::BoolOr: {
-                // TODO: Generate a SplitScope
-                if (condBin->op == HIRExprNodeBinOp::Op::BoolAnd) {
-                    DEBUG(StringView("- Short-circuit BoolAnd"));
-                    auto innerTrueBranch = builder.newBbUnlinked();
-                    emitIf(condBin->left, innerTrueBranch, falseBranch);
-                    builder.setCurBlock(innerTrueBranch);
-                } else {
-                    DEBUG(StringView("- Short-circuit BoolOr"));
-                    auto innerFalseBranch = builder.newBbUnlinked();
-                    emitIf(condBin->left, trueBranch, innerFalseBranch);
-                    builder.setCurBlock(innerFalseBranch);
-                }
-
-                auto splitScope = builder.newScopeSplit(condBin->span());
-                builder.endSplitArm(condBin->span(), splitScope, /*reachable=*/true);
-                auto finalTrueBranch = builder.newBbUnlinked();
-                auto finalFalseBranch = builder.newBbUnlinked();
-                emitIf(condBin->right, finalTrueBranch, finalFalseBranch);
-
-                builder.setCurBlock(finalFalseBranch);
-                builder.endSplitArm(condBin->span(), splitScope, /*reachable=*/true, true);
-                builder.endBlock(MIRTerminator::make_Goto(falseBranch));
-
-                builder.setCurBlock(finalTrueBranch);
-                builder.endSplitArm(condBin->span(), splitScope, /*reachable=*/true);
-                builder.terminateScope(condBin->span(), std::move(splitScope));
-                builder.endBlock(MIRTerminator::make_Goto(trueBranch));
-            }
-                return;
-            default:
-                break;
-        }
-    }
-
-    if (auto* condLit = cast<HIRExprNodeLiteral>(condP->get())) {
-        DEBUG(StringView("- constant condition"));
-        if (condLit->data.as_Boolean()) {
-            builder.endBlock(MIRTerminator::make_Goto(trueBranch));
-        } else {
-            builder.endBlock(MIRTerminator::make_Goto(falseBranch));
-        }
-        return;
-    }
-
-    MIRLValue decisionVal;
-    {
-        auto scope = builder.newScopeTemp(cond->span());
-        this->visitNodePtr(*condP);
-        ASSERT_BUG(cond->span(), cond->resType == HIRCoreType::Bool, StringView("If condition wasn't a bool"));
-        decisionVal = builder.getResultInIfCond(cond->span());
-        builder.terminateScope(cond->span(), mv$(scope));
-    }
-
-    builder.endBlock(MIRTerminator::make_If({mv$(decisionVal), trueBranch, falseBranch}));
 }
 
 auto ExprVisitorConv::isSignedInteger(HIRCoreType type) -> bool {

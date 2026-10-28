@@ -137,40 +137,6 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
     return ResolveItemRefMacro::make_None({});
 }
 
-ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
-    TRACE_FUNCTION_F(StringView("path=") << path << StringView(" in ") << basePath);
-    ResolveState rs(sp, settings, crate);
-
-    auto mod = rs.getModule(basePath, path, true, outPath);
-    switch (mod.tag()) {
-        case ResolveModuleRef::TAG_Ast: {
-            const auto modPtr = mod.as_Ast();
-            ASTAbsolutePath tmp;
-            if (!outPath) {
-                outPath = &tmp;
-            }
-            auto res = rs.findItem(*modPtr, path.nodes().back().name(), ns, outPath);
-            if (res.is_None()) {
-                BUG(sp, StringView("Unable to find ") << path << StringView(" (starting from ") << basePath << StringView(")"));
-            }
-
-            TODO(sp, StringView(""));
-            break;
-        }
-        case ResolveModuleRef::TAG_Hir: {
-            return mod;
-        }
-        case ResolveModuleRef::TAG_ImplicitPrelude: {
-            return mod;
-        }
-        case ResolveModuleRef::TAG_None: {
-            BUG(sp, StringView("Unable to find ") << path << StringView(" (starting from ") << basePath << StringView(")"));
-            break;
-        }
-    }
-    UNREACHABLE();
-}
-
 ResolveState::ResolveState(const Span& span, const Settings& settings, const ASTCrate& crate)
     : sp(span)
     , settings(settings)

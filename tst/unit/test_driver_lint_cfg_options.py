@@ -53,6 +53,11 @@ def main() -> int:
         raise SystemExit("usage: test_driver_lint_cfg_options.py RUSTC INPUT_RS STAMP")
 
     rustc, src, stamp = map(os.path.abspath, sys.argv[1:])
+    help_result = subprocess.run([rustc, "--help"], capture_output=True, text=True, check=False)
+    expect_ok(help_result, "compiler help")
+    for option in ("USAGE: rustc", "--extern", "--crate-type", "--target", "-Z <option>"):
+        if option not in help_result.stdout:
+            raise RuntimeError(f"compiler help is missing {option!r}")
     cfgs = ["--cfg=driver_flag", '--cfg', 'driver_value="active"']
     expected_cfgs = [
         "--check-cfg=cfg(driver_flag, driver_unknown)",

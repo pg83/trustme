@@ -44,8 +44,6 @@ struct TypeckModuleState {
 
     NullOnDrop<const HIRGenericParams> setItemGenerics(const HIRGenericParams& gps);
 
-    void prepareFromPath(const HIRItemPath& ip);
-
     void pushTraits(HIRItemPath p, const HIRModule& mod);
 
     void popTraits(const HIRModule& mod);
