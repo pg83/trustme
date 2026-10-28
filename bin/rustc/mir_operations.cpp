@@ -5300,6 +5300,9 @@ namespace {
                 break;
                 case MIRTerminator::TAG_Switch: {
                     auto& te = bb.terminator.as_Switch();
+                    if (te.validFlag != ~0u) {
+                        break;
+                    }
                     auto it = knownValuesVar.find(te.val);
                     if (it != knownValuesVar.end()) {
                         MIR_ASSERT(state, it->second < te.targets.length(), StringView("Terminator::Switch with known variant index out of bounds") << StringView(" (#") << it->second << StringView(" with ") << bb.terminator << StringView(")"));

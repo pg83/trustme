@@ -455,6 +455,8 @@ public:
         SavedActiveLocal(VarState vs);
 
     public:
+        static SavedActiveLocal storageOnly();
+
         const VarState& getState() const {
             return state;
         }

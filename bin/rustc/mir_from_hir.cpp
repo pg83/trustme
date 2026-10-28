@@ -362,6 +362,13 @@ namespace {
         const ScopeHandle* superLetScope = nullptr;
         bool inBorrow = false;
 
+        struct AsyncDropStorage {
+            const AsyncDropStorage* previous;
+            const MIRLValue& value;
+        };
+
+        const AsyncDropStorage* asyncDropStorage = nullptr;
+
         struct GeneratorState {
             static constexpr unsigned UNRESUMED = 0;
             static constexpr unsigned RETURNED = 1;
@@ -1054,23 +1061,24 @@ namespace {
                                 this->pushStatements(bb, stmtIdx);
                             }
                             this->stmtIdx = ~0u;
-                            if (auto* s = bb.terminator.opt_Drop()) {
-                                if (dropFlagMapping.count(s->flagIdx) != 0) {
-                                    auto slot = MIRLValue::newArgument(0);
-                                    slot.wrappers.push_back(MIRLValue::Wrapper::newField(0));
-                                    slot.wrappers.push_back(MIRLValue::Wrapper::newDeref());
-                                    slot.wrappers.push_back(MIRLValue::Wrapper::newField(0));
-                                    slot.wrappers.push_back(MIRLValue::Wrapper::newDowncast(1));
-                                    slot.wrappers.push_back(MIRLValue::Wrapper::newField(0));
-                                    slot.wrappers.push_back(MIRLValue::Wrapper::newField(dropFlagsField));
-                                    newStatements.push_back(
-                                        MIRStatement::make_LoadDropFlag({
-                                            s->flagIdx,
-                                            std::move(slot),
-                                            dropFlagMapping.at(s->flagIdx),
-                                        })
-                                    );
-                                }
+                            const auto* drop = bb.terminator.opt_Drop();
+                            const auto* branch = bb.terminator.opt_Switch();
+                            const auto flag = drop ? drop->flagIdx : branch ? branch->validFlag : ~0u;
+                            if (dropFlagMapping.count(flag) != 0) {
+                                auto slot = MIRLValue::newArgument(0);
+                                slot.wrappers.push_back(MIRLValue::Wrapper::newField(0));
+                                slot.wrappers.push_back(MIRLValue::Wrapper::newDeref());
+                                slot.wrappers.push_back(MIRLValue::Wrapper::newField(0));
+                                slot.wrappers.push_back(MIRLValue::Wrapper::newDowncast(1));
+                                slot.wrappers.push_back(MIRLValue::Wrapper::newField(0));
+                                slot.wrappers.push_back(MIRLValue::Wrapper::newField(dropFlagsField));
+                                newStatements.push_back(
+                                    MIRStatement::make_LoadDropFlag({
+                                        flag,
+                                        std::move(slot),
+                                        dropFlagMapping.at(flag),
+                                    })
+                                );
                             }
                             this->visitTerminator(bb.terminator);
                             size_t stmtIdx = bb.statements.size();
@@ -7979,9 +7987,6 @@ std::map<unsigned, MirBuilder::SavedActiveLocal> MirBuilder::getActiveLocals(con
             case VarState::TAG_Invalid: {
                 break;
             }
-            case VarState::TAG_MovedOut: {
-                break;
-            }
         }
     }
     return rv;
@@ -8387,6 +8392,10 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
 {
 }
 
+auto MirBuilder::SavedActiveLocal::storageOnly() -> SavedActiveLocal {
+    return SavedActiveLocal(VarState::make_Invalid(InvalidType::Moved));
+}
+
 #include "mir_from_hir_pattern_tu.cpp"
 
 ExprVisitorConv::ExprVisitorConv(MirBuilder& builder, const Vector<const HIRType*>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
@@ -8445,6 +8454,13 @@ auto ExprVisitorConv::emitSyncDestructor(const Span& sp, const HIRType* ty, MIRL
 auto ExprVisitorConv::awaitFuture(const Span& sp, const HIRType* futureTy, MIRLValue future, const HIRType* outputTy, bool isNext) -> MIRLValue {
     const auto stateValue = static_cast<unsigned>(generatorState.states.size());
     generatorState.states.back().saved = builder.getActiveLocals(sp, generatorState.savedDropFlags);
+    /* Starting destruction removes a local from the pending-drop set, but its
+       storage still backs the destructor's borrow until that future completes. */
+    for (const auto* storage = asyncDropStorage; storage; storage = storage->previous) {
+        if (storage->value.root.is_Local()) {
+            generatorState.states.back().saved.emplace(storage->value.root.as_Local(), MirBuilder::SavedActiveLocal::storageOnly());
+        }
+    }
     generatorState.states.push_back(builder.newBbUnlinked());
     builder.endBlock(generatorState.states.back().entrypoint);
     builder.setCurBlock(generatorState.states.back().entrypoint);
@@ -8709,10 +8725,14 @@ auto ExprVisitorConv::emitAsyncBoxShallowDrop(const Span& sp, MIRLValue value, u
 }
 
 auto ExprVisitorConv::emitDeepDrop(const Span& sp, const MIRLValue& value, unsigned int flag) -> bool {
+    const AsyncDropStorage storage{asyncDropStorage, value};
+    auto savedStorage = saveAndEdit(asyncDropStorage, &storage);
     return emitAsyncDrop(sp, value.clone(), flag);
 }
 
 auto ExprVisitorConv::emitShallowDrop(const Span& sp, const MIRLValue& value, unsigned int flag) -> bool {
+    const AsyncDropStorage storage{asyncDropStorage, value};
+    auto savedStorage = saveAndEdit(asyncDropStorage, &storage);
     return emitAsyncBoxShallowDrop(sp, value.clone(), flag);
 }
 

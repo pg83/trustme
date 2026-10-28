@@ -7516,6 +7516,8 @@ if not system_rustc_mode:
         "nested_tuple_field_origins", "serialized_assembly_operands",
         "coroutine_assembly_live_values", "serialized_match_tables",
         "external_enum_globs_and_root_aliases",
+        "proc_macro_lifetime_bound_lists", "external_unit_self_patterns",
+        "async_drop_keeps_borrowed_storage",
         "an_interpolated_pattern_is_one_alternative_of_an_or_pattern",
         "an_attribute_macro_on_an_inline_module_sees_its_items",
         "associated_const_equality_bound",
