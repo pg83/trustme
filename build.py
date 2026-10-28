@@ -65,8 +65,8 @@ system_rustc_mode = bool(build.flags.system_rustc)
 # of this project without changing the runner's treatment of other flags.
 if build.flags.coverage:
     os.environ["TRUSTME_COVERAGE"] = "1"
-coverage_mode = bool(build.flags.coverage or os.environ.get("TRUSTME_COVERAGE"))
-if coverage_mode and system_rustc_mode:
+coverage_mode = bool(build.flags.coverage or (os.environ.get("TRUSTME_COVERAGE") and not system_rustc_mode))
+if build.flags.coverage and system_rustc_mode:
     raise RuntimeError("-Dcoverage measures trustme rustc and is incompatible with -Dsystem_rustc")
 
 build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
