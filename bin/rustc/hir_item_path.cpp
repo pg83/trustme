@@ -89,28 +89,6 @@ const HIRItemPath& HIRItemPath::getTopIp() const {
     return *this;
 }
 
-bool HIRItemPath::operator==(const HIRSimplePath& sp) const {
-    if (sp.crateName() != "") {
-        return false;
-    }
-
-    auto i = sp.components().size();
-    const auto* n = this;
-    while (n && i--) {
-        if (!n->name) {
-            return false;
-        }
-        if (n->name != sp.components()[i]) {
-            return false;
-        }
-        n = n->parent;
-    }
-    if (i > 0 || n->name) {
-        return false;
-    }
-    return true;
-}
-
 template <>
 void stl::output<ZeroCopyOutput, HIRItemPath>(ZeroCopyOutput& os, const HIRItemPath& x) {
     if (x.wrapped) {

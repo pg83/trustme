@@ -14,7 +14,6 @@ struct HIRTypeParamDef {
     const HIRType* defaultValue;
     bool isSized;
 
-    Ordering ord(const HIRTypeParamDef& x) const;
 };
 
 struct HIRValueParamDef {
@@ -22,7 +21,6 @@ struct HIRValueParamDef {
     const HIRType* type;
     HIRConstGeneric defaultValue;
 
-    Ordering ord(const HIRValueParamDef& x) const;
 };
 
 enum class HIRGenericParamKind : u8 {
@@ -91,5 +89,4 @@ public:
         return PrintBounds(*this);
     }
 
-    Ordering ord(const HIRGenericParams& x) const;
 };

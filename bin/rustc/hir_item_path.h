@@ -54,6 +54,4 @@ public:
         return HIRItemPath(*this, name.c_str());
     }
 
-    bool operator==(const HIRSimplePath& sp) const;
-
 };

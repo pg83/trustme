@@ -84,6 +84,8 @@ namespace {
 
         [[nodiscard]] const HIRType* visitImplSelfType(const HIRType* ty) override;
 
+        static void checkImplSignature(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
+
         static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
@@ -1441,6 +1443,44 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
     return crate.types.intern(mv$(data));
 }
 
+auto BindVisitor::checkImplSignature(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs) -> void {
+    const auto checkType = [](const HIRType* type) {
+        if (type->is_Infer()) {
+            ERROR(Span(), E0000, StringView("the placeholder `_` is not allowed in impl signatures"));
+        }
+        return false;
+    };
+    /* Type traversal leaves inference inside constant expressions to type checking. */
+    visitTyWith(selfTy, checkType);
+    if (traitArgs) {
+        for (const auto* type : traitArgs->types) {
+            visitTyWith(type, checkType);
+        }
+    }
+    for (const auto& value : params.values) {
+        visitTyWith(value.type, checkType);
+    }
+    for (const auto* type : params.wellFormedTypes) {
+        visitTyWith(type, checkType);
+    }
+    for (const auto& bound : params.bounds) {
+        switch (bound.tag()) {
+            case HIRGenericBound::TAG_TraitBound: {
+                const auto& trait = bound.as_TraitBound();
+                visitTyWith(trait.type, checkType);
+                visitTraitPathTysWith(trait.trait, checkType);
+                break;
+            }
+            case HIRGenericBound::TAG_TypeEquality: {
+                const auto& equality = bound.as_TypeEquality();
+                visitTyWith(equality.type, checkType);
+                visitTyWith(equality.otherType, checkType);
+                break;
+            }
+        }
+    }
+}
+
 auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs) -> void {
     const size_t n = params.types.size();
     if (n == 0 || n > 64) {
@@ -1514,6 +1554,7 @@ auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, con
 
 auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     TRACE_FUNCTION_F(StringView("impl ") << impl.type << StringView(" - from ") << impl.srcModule);
+    checkImplSignature(impl.params, impl.type, nullptr);
     checkImplParamsConstrained(impl.params, impl.type, nullptr);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
@@ -1547,6 +1588,7 @@ auto BindVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> void {
 
 auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     TRACE_FUNCTION_F(StringView("impl ") << traitPath << StringView(" for ") << impl.type);
+    checkImplSignature(impl.params, impl.type, &impl.traitArgs);
     checkImplParamsConstrained(impl.params, impl.type, &impl.traitArgs);
     auto traitGpath = HIRGenericPath(traitPath, impl.traitArgs.clone());
     auto _0 = this->ms.setCurrentTraitImpl(impl);
@@ -1575,6 +1617,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
 }
 
 auto BindVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) -> void {
+    checkImplSignature(impl.params, impl.type, &impl.traitArgs);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
     const auto oldModule = curModule;

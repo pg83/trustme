@@ -92,19 +92,6 @@ HIRGenericBound HIRGenericBound::clone() const {
     UNREACHABLE();
 }
 
-Ordering HIRTypeParamDef::ord(const HIRTypeParamDef& x) const {
-    ORD(name, x.name);
-    ORD(defaultValue, x.defaultValue);
-    ORD(isSized, x.isSized);
-    return OrdEqual;
-}
-
-Ordering HIRValueParamDef::ord(const HIRValueParamDef& x) const {
-    ORD(name, x.name);
-    ORD(type, x.type);
-    return OrdEqual;
-}
-
 bool HIRGenericParams::isEmpty() const {
     if (!types.empty()) {
         return false;
@@ -136,21 +123,6 @@ HIRGenericParams::PrintArgs::PrintArgs(const HIRGenericParams& gp)
 HIRGenericParams::PrintBounds::PrintBounds(const HIRGenericParams& gp)
     : gp(gp)
 {
-}
-
-Ordering HIRGenericParams::ord(const HIRGenericParams& x) const {
-    if (paramCount() != x.paramCount()) {
-        return paramCount() < x.paramCount() ? OrdLess : OrdGreater;
-    }
-    for (size_t i = 0; i < paramCount(); i++) {
-        if (paramKindAt(i) != x.paramKindAt(i)) {
-            return paramKindAt(i) < x.paramKindAt(i) ? OrdLess : OrdGreater;
-        }
-    }
-    ORD(types, x.types);
-    ORD(values, x.values);
-    ORD(bounds, x.bounds);
-    return OrdEqual;
 }
 
 template <>

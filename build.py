@@ -7529,6 +7529,7 @@ if not system_rustc_mode:
         "local_async_drop_glue",
         "const_array_size_of_captured_callable",
         "byte_literal_escape_boundaries",
+        "impl_header_defaults_and_const_local_inference",
     )
     for _stem in (
         "macro_clones_patterns",
