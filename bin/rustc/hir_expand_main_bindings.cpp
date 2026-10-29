@@ -6581,32 +6581,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
     }
     HIRPathParams traitArgs(argTupType);
 
-    // TODO: You can call via &-ptrs, but that currently isn't handled in typeck
-    if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
-        if (node.traitUsed == HIRExprNodeCallValue::TraitUsed::Unknown) {
-            switch (nodePp->cls) {
-                case HIRExprNodeClosure::Class::Unknown:
-                    BUG(sp, StringView("References an ::Unknown closure"));
-                case HIRExprNodeClosure::Class::NoCapture:
-                case HIRExprNodeClosure::Class::Shared:
-                    if (!crate.getLangItemPathOpt("fn").components().empty()) {
-                        node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
-                    } else if (!crate.getLangItemPathOpt("fn_mut").components().empty()) {
-                        node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnMut;
-                    } else {
-                        node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
-                    }
-                    break;
-                case HIRExprNodeClosure::Class::Mut:
-                    node.traitUsed = !crate.getLangItemPathOpt("fn_mut").components().empty() ? HIRExprNodeCallValue::TraitUsed::FnMut : HIRExprNodeCallValue::TraitUsed::FnOnce;
-                    break;
-                case HIRExprNodeClosure::Class::Once:
-                    node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
-                    break;
-            }
-        }
-    }
-
     const HIRType* selfArgType;
     HIRPath methodPath(HIRSimplePath{});
     switch (node.traitUsed) {
