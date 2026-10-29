@@ -1468,6 +1468,9 @@ auto RustPrinter::visit(ASTExprNodeIf& n) -> void {
 
 auto RustPrinter::visit(ASTExprNodeClosure& n) -> void {
     exprRoot = false;
+    if (n.isConst) {
+        os << StringView("const ");
+    }
     if (n.isMove) {
         os << StringView("move ");
     }

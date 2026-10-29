@@ -3983,7 +3983,9 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
        place through `codegen_fn_attrs` of the closure's own def. */
     for (size_t i = implCounts.closure; i < out.implsClosure.size(); i++) {
         auto& ti = out.implsClosure[i];
+        ti.second.isConst = node.isConst;
         for (auto& m : ti.second.methods) {
+            m.second.data.isConst = node.isConst;
             m.second.data.markings.trackCaller = node.trackCaller;
             m.second.data.markings.inlineType = node.inlineType;
             if (parentTargetFeatures && node.inlineType != HIRFunction::Markings::Inline::Always) {
@@ -3999,6 +4001,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     for (size_t i = implCounts.type; i < out.implsType.size(); i++) {
         auto& ti = out.implsType[i];
         for (auto& m : ti->methods) {
+            m.second.data.isConst = node.isConst;
             m.second.data.markings.trackCaller = node.trackCaller;
             m.second.data.markings.inlineType = node.inlineType;
             if (parentTargetFeatures && node.inlineType != HIRFunction::Markings::Inline::Always) {

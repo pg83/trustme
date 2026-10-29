@@ -906,7 +906,9 @@ namespace {
                 return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Unsafe);
             case TOK_RWORD_CONST:
                 if (isClosureStart(lex)) {
-                    return ParseExprValClosure(lex, false);
+                    auto* closure = ParseExprValClosure(lex, false);
+                    static_cast<ASTExprNodeClosure*>(closure)->isConst = true;
+                    return closure;
                 }
                 return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Const);
 

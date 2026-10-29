@@ -750,6 +750,9 @@ NODE(
     ASTExprNodeClosure,
     {
         os << hrbs;
+        if (isConst) {
+            os << StringView("const ");
+        }
         if (isPinned) {
             os << StringView("static ");
         }
@@ -784,7 +787,9 @@ NODE(
         for (const auto& a : this->args) {
             args.push_back(std::make_pair(a.first.clone(), a.second->clone()));
         }
-        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), code->clone(), isMove, isUse, isPinned, trackCaller, inlineType);
+        auto* node = NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), code->clone(), isMove, isUse, isPinned, trackCaller, inlineType);
+        static_cast<ASTExprNodeClosure*>(node)->isConst = isConst;
+        return node;
     }
 );
 

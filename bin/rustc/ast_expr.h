@@ -531,6 +531,7 @@ struct ASTExprNodeClosure: public ASTExprNode {
     argsT args;
     ASTType* returnType;
     ASTExprNode* code = nullptr;
+    bool isConst = false;
     bool isMove;
     bool isUse;
     bool isPinned;

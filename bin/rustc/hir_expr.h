@@ -653,6 +653,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     argsT args;
     const HIRType* returnType;
     HIRExprNodeP code;
+    bool isConst = false;
     bool isMove = false;
     bool isUse = false;
     bool trackCaller = false;

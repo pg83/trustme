@@ -5217,6 +5217,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeClosure& v) -> void {
             ERROR(v.span(), E0000, StringView("Invalid use of `static` on non-yielding closure"));
         }
         auto* closure = ctx.crate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), ctx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse);
+        closure->isConst = v.isConst;
         closure->trackCaller = v.trackCaller;
         closure->inlineType = LowerHIRInlineMarking(v.inlineType);
         rv.reset(closure);

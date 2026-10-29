@@ -3045,6 +3045,9 @@ auto TreeVisitor::visit(HIRExprNodeArraySized& node) -> void {
 
 auto TreeVisitor::visit(HIRExprNodeClosure& node) -> void {
     if (node.code) {
+        if (node.isConst) {
+            os << StringView("const ");
+        }
         if (node.isMove) {
             os << StringView(" move");
         }

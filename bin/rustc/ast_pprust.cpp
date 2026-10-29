@@ -2516,6 +2516,9 @@ void State::printExprStruct(const ASTPath& path, const ASTExprNodeStructLiteral:
 
 void State::printClosure(const ASTExprNodeClosure& closure) {
     this->printHigherRankedBounds(closure.hrbs);
+    if (closure.isConst) {
+        this->wordSpace(StringView("const"));
+    }
     if (closure.isMove) {
         this->wordSpace(StringView("move"));
     }

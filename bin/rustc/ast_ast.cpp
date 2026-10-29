@@ -650,31 +650,6 @@ void stl::output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTU
 }
 
 template <>
-void stl::output<ZeroCopyOutput, ASTEnumVariant>(ZeroCopyOutput& os, const ASTEnumVariant& x) {
-    os << StringView("EnumVariant(") << x.name;
-    switch (x.data.tag()) {
-        case ASTEnumVariantData::TAG_Unit: {
-            break;
-        }
-        case ASTEnumVariantData::TAG_Tuple: {
-            auto& e = x.data.as_Tuple();
-            os << StringView("(") << e.items << StringView(")");
-            break;
-        }
-        case ASTEnumVariantData::TAG_Struct: {
-            auto& e = x.data.as_Struct();
-            os << StringView(" { ") << e.fields << StringView(" }");
-            break;
-        }
-    }
-    if (x.discriminantValue) {
-        os << StringView(" = ") << *x.discriminantValue;
-    }
-    os << StringView(")");
-    return;
-}
-
-template <>
 void stl::output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
     outCont(out, values);
 }
