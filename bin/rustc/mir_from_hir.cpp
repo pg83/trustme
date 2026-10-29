@@ -1977,22 +1977,9 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
-                            const auto pbe = te.binding.as_Struct();
-                            const auto& strData = pbe->data;
-                            switch (strData.tag()) {
-                                case HIRStructData::TAG_Unit: {
-                                    BUG(sp, StringView("Attempting to match over unit type - ") << ty);
-                                    break;
-                                }
-                                case HIRStructData::TAG_Tuple: {
-                                    TODO(sp, StringView("Matching on tuple-like struct?"));
-                                    break;
-                                }
-                                case HIRStructData::TAG_Named: {
-                                    TODO(sp, StringView("Matching on struct?"));
-                                    break;
-                                }
-                            }
+                            /* The ruleset builder lowers struct patterns and
+                               struct constants to field rules; Any was skipped. */
+                            BUG(sp, StringView("Struct pattern was not lowered to field rules - ") << ty);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
@@ -4920,22 +4907,8 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    const auto pbe = te.binding.as_Struct();
-                    const auto& strData = pbe->data;
-                    switch (strData.tag()) {
-                        case HIRStructData::TAG_Unit: {
-                            BUG(sp, StringView("Attempting to match over unit type - ") << ty);
-                            break;
-                        }
-                        case HIRStructData::TAG_Tuple: {
-                            TODO(sp, StringView("Matching on tuple-like struct?"));
-                            break;
-                        }
-                        case HIRStructData::TAG_Named: {
-                            TODO(sp, StringView("Matching on struct? - ") << ty);
-                            break;
-                        }
-                    }
+                    /* Dispatch only sees non-Any rules after field lowering. */
+                    BUG(sp, StringView("Struct pattern was not lowered to field rules - ") << ty);
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {

@@ -9564,6 +9564,18 @@ auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGen
         ASSERT_BUG(sp, !val.is_Infer(), StringView("Failure to infer ") << v << StringView(" in ") << topType);
         v = std::move(val);
     }
+    if (v.is_Unevaluated()) {
+        /* Inferred consts carry the caller's substitution environment. Resolve
+           it before discarding the inference variables, keeping the shared
+           expression body in the generic context where it was checked. */
+        auto next = v.as_Unevaluated()->clone();
+        if (next.selfType) {
+            next.selfType = checkTypeResolved(sp, next.selfType, topType);
+        }
+        checkTypeResolvedPp(sp, next.paramsImpl, topType);
+        checkTypeResolvedPp(sp, next.paramsItem, topType);
+        v = HIRConstGeneric(internUnevaluated(mv$(next)));
+    }
 }
 
 auto ExprVisitorApply::checkTypeResolvedPp(const Span& sp, HIRPathParams& pp, const HIRType* topType) const -> void {

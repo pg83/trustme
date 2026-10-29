@@ -2116,23 +2116,8 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
     }
     switch ((*v).tag()) {
         case HIRType::TAG_Infer: {
-            auto& te = (*v).as_Infer();
-            auto& xe = (*x).as_Infer();
-            switch (te.tyClass) {
-                case HIRInferClass::None:
-                    return HIRCompare::Fuzzy;
-                default:
-                    switch (xe.tyClass) {
-                        case HIRInferClass::None:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            if (te.tyClass != xe.tyClass) {
-                                return HIRCompare::Unequal;
-                            }
-                            return HIRCompare::Fuzzy;
-                    }
-            }
-            break;
+            /* Both unrestricted inference classes returned above. */
+            return v->as_Infer().tyClass == x->as_Infer().tyClass ? HIRCompare::Fuzzy : HIRCompare::Unequal;
         }
         case HIRType::TAG_Generic: {
             UNREACHABLE();
