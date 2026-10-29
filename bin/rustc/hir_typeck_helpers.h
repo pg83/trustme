@@ -45,7 +45,6 @@ struct SolverImpl {
     HIRPathParams getTraitParams(HIRTypeInterner& types) const;
     const HIRType* getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
     const HIRType* getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
-    bool typeIsSpecialisable(const char* name) const;
     bool moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const;
     const HIRType* monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRType* type, const HIRPathParams& methodParams = {}) const;
     HIRTraitPath monomorphImplTraitPath(HIRTypeInterner& types, const Span& sp, const HIRTraitPath& traitPath, const HIRPathParams& methodParams = {}) const;

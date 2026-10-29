@@ -1044,14 +1044,6 @@ const HIRType* SolverImpl::getType(HIRTypeInterner& types, const char* name, con
     return SolverImplTraitMonomorph(types, *traitImpl, implParams, params).monomorphType(sp, defaultType);
 }
 
-bool SolverImpl::typeIsSpecialisable(const char* name) const {
-    if (!traitImpl) {
-        return false;
-    }
-    const auto it = traitImpl->types.find(name);
-    return it != traitImpl->types.end() && it->second.isSpecialisable;
-}
-
 bool SolverImpl::moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const {
     if (traitImpl) {
         return other.traitImpl && traitImpl->moreSpecificThan(types, *other.traitImpl);
@@ -16964,12 +16956,21 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     if (it == sourceImpl->types.end()) {
                         continue;
                     }
-                    if (it->second.isSpecialisable) {
-                        break;
-                    }
-                    auto inherited = source->impl.getType(crate.types, assocName, itemParams);
                     auto implType = selected->impl.getImplType(crate.types);
                     auto traitParams = selected->impl.getTraitParams(crate.types);
+                    if (it->second.isSpecialisable) {
+                        /* A concrete selected head can inherit a default associated
+                           type. An open head may still select a different descendant. */
+                        const auto concrete = [](const HIRType* type) {
+                            return typeIsConcrete(type) && !(type->flags & (HIRType::HAS_DEFERRED_CONST | HIRType::HAS_UNEVALUATED_CONST));
+                        };
+                        if (!concrete(implType)
+                            || !std::all_of(traitParams.types.begin(), traitParams.types.end(), concrete)
+                            || !std::all_of(traitParams.values.begin(), traitParams.values.end(), [](const auto& value) { return value.is_Evaluated(); })) {
+                            break;
+                        }
+                    }
+                    auto inherited = source->impl.getType(crate.types, assocName, itemParams);
                     auto sourceTrait = HIRGenericPath(trait, traitParams.clone());
                     HIRTraitPath::assocListT associated;
                     associated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{std::move(sourceTrait), itemParams.clone(), std::move(inherited)}});
