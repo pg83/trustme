@@ -551,9 +551,6 @@ bool operator==(const MIRAsmParam& a, const MIRAsmParam& b) {
             if (ae.spec != be.spec) {
                 return false;
             }
-            if (!!ae.input != !!be.input) {
-                return false;
-            }
             if (ae.input && *ae.input != *be.input) {
                 return false;
             }

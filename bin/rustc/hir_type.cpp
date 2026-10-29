@@ -2518,10 +2518,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                         }
                         break;
                     }
-                    case HIRType::TAG_Path: {
-                        auto& re = (*right).as_Path();
-                        return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                    }
                 }
             case HIRInferClass::Float:
                 switch ((*right).tag()) {
@@ -2550,10 +2546,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                                 return HIRCompare::Unequal;
                         }
                         break;
-                    }
-                    case HIRType::TAG_Path: {
-                        auto& re = (*right).as_Path();
-                        return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
                     }
                 }
         }
