@@ -1970,20 +1970,16 @@ HIRCompare HIRMatchGenerics::cmpPath(const Span& sp, const HIRPath& pathL, const
 }
 
 HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const HIRType* tyR, tCbResolveType resolvePlaceholder) {
+    /* The pattern is a declaration; only the matched type can contain ivars. */
+    ASSERT_BUG(sp, !tyL->is_Infer(), StringView("Inference variable in generic match pattern - ") << tyL);
     if (const auto* e = tyL->opt_Generic()) {
         return this->matchTy(*e, tyR, resolvePlaceholder);
     }
-    const auto& v = (tyL->is_Infer() ? resolvePlaceholder.getType(sp, tyL) : tyL);
+    const auto* v = tyL;
     const auto& x = (tyR->is_Infer() || tyR->is_Generic() ? resolvePlaceholder.getType(sp, tyR) : tyR);
     TRACE_FUNCTION_F(tyL << StringView(", ") << tyR << StringView(" -- ") << v << StringView(", ") << x);
-    if (const auto* e = v->opt_Generic()) {
-        return this->matchTy(*e, x, resolvePlaceholder);
-    }
     if (const auto* xep = x->opt_Infer()) {
         const auto& xe = *xep;
-        if (xe.index != ~0u && v->is_Infer() && v->as_Infer().index == xe.index) {
-            return HIRCompare::Equal;
-        }
         switch (xe.tyClass) {
             case HIRInferClass::None:
                 // TODO: Have another callback (optional?) that allows the caller to equate `v` somehow
@@ -2013,53 +2009,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
             case HIRInferClass::Float:
                 if (const auto* te = v->opt_Primitive()) {
                     switch (*te) {
-                        case HIRCoreType::F16:
-                        case HIRCoreType::F32:
-                        case HIRCoreType::F64:
-                        case HIRCoreType::F128:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            return HIRCompare::Unequal;
-                    }
-                }
-                break;
-        }
-    }
-
-    if (const auto* tep = v->opt_Infer()) {
-        const auto& te = *tep;
-        // TODO: Restrict this block with a flag so it panics if an ivar is seen when not expected
-        ASSERT_BUG(sp, te.index != ~0u, StringView("Encountered ivar for `this` - ") << v);
-
-        switch (te.tyClass) {
-            case HIRInferClass::None:
-                // TODO: Have another callback (optional?) that allows the caller to equate `v` somehow
-
-                return HIRCompare::Fuzzy;
-            case HIRInferClass::Integer:
-                if (const auto* xe = x->opt_Primitive()) {
-                    switch (*xe) {
-                        case HIRCoreType::I8:
-                        case HIRCoreType::U8:
-                        case HIRCoreType::I16:
-                        case HIRCoreType::U16:
-                        case HIRCoreType::I32:
-                        case HIRCoreType::U32:
-                        case HIRCoreType::I64:
-                        case HIRCoreType::U64:
-                        case HIRCoreType::I128:
-                        case HIRCoreType::U128:
-                        case HIRCoreType::Isize:
-                        case HIRCoreType::Usize:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            return HIRCompare::Unequal;
-                    }
-                }
-                break;
-            case HIRInferClass::Float:
-                if (const auto* xe = x->opt_Primitive()) {
-                    switch (*xe) {
                         case HIRCoreType::F16:
                         case HIRCoreType::F32:
                         case HIRCoreType::F64:
@@ -2115,10 +2064,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
         return HIRCompare::Unequal;
     }
     switch ((*v).tag()) {
-        case HIRType::TAG_Infer: {
-            /* Both unrestricted inference classes returned above. */
-            return v->as_Infer().tyClass == x->as_Infer().tyClass ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-        }
+        case HIRType::TAG_Infer:
         case HIRType::TAG_Generic: {
             UNREACHABLE();
         }
