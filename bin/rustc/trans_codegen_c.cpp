@@ -5808,9 +5808,7 @@ auto CodeGeneratorC::emitTermTailCall(const MIRTypeResolve& localMirRes, const M
             break;
         }
         case MIRCallTarget::TAG_Intrinsic: {
-            auto& intrinsic = e.fcn.as_Intrinsic();
-            target = MIRCallTarget::make_Intrinsic({intrinsic.name, intrinsic.params.clone()});
-            break;
+            UNREACHABLE();
         }
     }
     std::vector<MIRParam> args;

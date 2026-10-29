@@ -1876,13 +1876,7 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
                         break;
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
-                        auto& e2 = e.fcn.as_Intrinsic();
-                        if (e2.name == "type_id") {
-                            state.insertTypeid(e2.params.types.at(0));
-                        } else if (e2.name == "drop_in_place") {
-                            state.insertDestructorType(e2.params.types.at(0));
-                        }
-                        break;
+                        UNREACHABLE();
                     }
                 }
                 for (const auto& arg : e.args) {

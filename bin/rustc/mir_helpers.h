@@ -690,9 +690,7 @@ public:
                         break;
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
-                        auto& ce = e.fcn.as_Intrinsic();
-                        visitPathParams(ce.params);
-                        break;
+                        UNREACHABLE();
                     }
                 }
                 for (auto& v : e.args) {

@@ -1009,9 +1009,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 of << StringView("TAILCALL ");
                 switch (e.fcn.tag()) {
                     case MIRCallTarget::TAG_Intrinsic: {
-                        auto& f = e.fcn.as_Intrinsic();
-                        of << StringView("\"") << f.name << StringView("\"");
-                        break;
+                        UNREACHABLE();
                     }
                     case MIRCallTarget::TAG_Value: {
                         auto& f = e.fcn.as_Value();

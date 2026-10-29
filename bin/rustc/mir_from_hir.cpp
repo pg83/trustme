@@ -9453,7 +9453,7 @@ auto ExprVisitorConv::visit(HIRExprNodeReturn& node) -> void {
             }
             if (const auto* path = call->path.data.opt_Generic()) {
                 const auto& fcn = builder.crate().getFunctionByPath(node.span(), path->path);
-                if (path->path.crateName() == "#intrinsics" || fcn.abi == "rust-intrinsic" || fcn.abi == "platform-intrinsic") {
+                if (path->path.crateName() == "#intrinsics" || fcn.markings.isRustcIntrinsic || fcn.abi == "rust-intrinsic" || fcn.abi == "platform-intrinsic") {
                     ERROR(node.span(), E0000, StringView("intrinsics cannot be tail-called with `become`"));
                 }
             }

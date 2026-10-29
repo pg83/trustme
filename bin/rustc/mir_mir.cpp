@@ -501,15 +501,7 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
                     break;
                 }
                 case MIRCallTarget::TAG_Intrinsic: {
-                    auto& afe = ae.fcn.as_Intrinsic();
-                    auto& bfe = be.fcn.as_Intrinsic();
-                    if (afe.name != bfe.name) {
-                        return false;
-                    }
-                    if (afe.params != bfe.params) {
-                        return false;
-                    }
-                    break;
+                    UNREACHABLE();
                 }
             }
             if (ae.args != be.args) {
@@ -1106,9 +1098,7 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
                     break;
                 }
                 case MIRCallTarget::TAG_Intrinsic: {
-                    auto& ste = se.fcn.as_Intrinsic();
-                    tgt = MIRCallTarget::make_Intrinsic({ste.name, this->monomorph(ste.params)});
-                    break;
+                    UNREACHABLE();
                 }
             }
             return MIRTerminator::make_TailCall({mv$(tgt), this->cloneParamVec(se.args), se.source, se.tracksCaller});

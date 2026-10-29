@@ -346,9 +346,7 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                         break;
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
-                        auto& e2 = e.fcn.as_Intrinsic();
-                        os << StringView("\"") << e2.name << StringView("\"::") << e2.params;
-                        break;
+                        UNREACHABLE();
                     }
                 }
                 os << StringView("( ");
