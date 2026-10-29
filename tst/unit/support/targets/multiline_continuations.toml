@@ -1,0 +1,13 @@
+[target]
+family = """u\
+
+	nix"""
+os-name = """li\
+    nux"""
+env-name = """mu\
+
+  sl"""
+arch = """x86_\
+	64"""
+[backend.c]
+variant = "gnu"
