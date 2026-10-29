@@ -187,6 +187,8 @@ namespace {
 
         void visit(HIRExprNodeLet& node) override;
 
+        void visit(HIRExprNodeReturn& node) override;
+
         void visit(HIRExprNodeClosure& node) override;
 
         void visit(HIRExprNodeGenerator& node) override;
@@ -9195,6 +9197,24 @@ auto ExprVisitorApply::visit(HIRExprNodeBlock& node) -> void {
 auto ExprVisitorApply::visit(HIRExprNodeLet& node) -> void {
     node.type = this->checkTypeResolvedTop(node.span(), node.type);
     HIRExprVisitorDef::visit(node);
+}
+
+auto ExprVisitorApply::visit(HIRExprNodeReturn& node) -> void {
+    HIRExprVisitorDef::visit(node);
+    if (!node.isTailCall) {
+        return;
+    }
+    if (const auto* call = cast<HIRExprNodeCallPath>(node.value.get())) {
+        const auto* ufcs = call->path.data.opt_UfcsKnown();
+        if (ufcs && (ufcs->trait.path == context.resolve.langFn() || ufcs->trait.path == context.resolve.langFnMut() || ufcs->trait.path == context.resolve.langFnOnce())) {
+            ERROR(node.span(), E0000, StringView("tail calls can only be performed with function definitions or pointers"));
+        }
+    } else if (const auto* call = cast<HIRExprNodeCallValue>(node.value.get())) {
+        const auto* type = call->value->resType;
+        if (!type->is_Function() && !type->is_NamedFunction()) {
+            ERROR(node.span(), E0000, StringView("tail calls can only be performed with function definitions or pointers"));
+        }
+    }
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeClosure& node) -> void {

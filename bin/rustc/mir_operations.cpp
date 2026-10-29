@@ -7367,20 +7367,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     })) {
                         e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
                     }
-                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& fcnTy = pe.type->as_Function();
-                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        MIR_ASSERT(state, e.args.size() == 2, StringView("Fn* tail call requires two arguments"));
-                        auto fcnLvalue = mv$(e.args[0].as_LValue());
-                        auto argsLvalue = mv$(e.args[1].as_LValue());
-                        e.args.clear();
-                        e.args.reserve(fcnTy.argTypes.length());
-                        for (unsigned int i = 0; i < fcnTy.argTypes.length(); i++) {
-                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
-                        }
-                        e.fcn = pe.trait.path == resolve.langFnOnce() ? mv$(fcnLvalue) : MIRLValue::newDeref(mv$(fcnLvalue));
-                    }
                 } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
