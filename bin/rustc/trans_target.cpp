@@ -1259,7 +1259,7 @@ namespace {
                     repr->size++;
                 }
             }
-            if (str.structMarkings.isAsyncDropGlue && !monomorphiseTypeNeeded(ty) && !extendAsyncDropGlueRepr(sp, resolve, ty, *repr)) {
+            if (str.structMarkings.isAsyncDropGlue && (monomorphiseTypeNeeded(ty) || !extendAsyncDropGlueRepr(sp, resolve, ty, *repr))) {
                 return nullptr;
             }
             if (str.structMarkings.isNoNiche) {
