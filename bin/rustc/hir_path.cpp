@@ -1389,8 +1389,11 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
         auto vX = FMT(x);
         return ::ord(vT, vX);
     }
-    if (auto cmp = ::ord(this->selfType, x.selfType)) {
-        return cmp;
+    if (this->selfType != x.selfType) {
+        if (!this->selfType || !x.selfType) {
+            return this->selfType ? OrdGreater : OrdLess;
+        }
+        return ::ord(this->selfType, x.selfType);
     }
     if (auto cmp = this->paramsImpl.ord(x.paramsImpl)) {
         return cmp;

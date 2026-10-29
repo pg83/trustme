@@ -1136,7 +1136,8 @@ auto BindVisitor::bindConstgeneric(HIRConstGeneric& value, bool repeatCount) -> 
         }
         auto next = (*unevaluated)->clone();
         next.selfType = selfType;
-        if (inheritsGenerics && ms.implGenerics) {
+        /* Alias expansion has already substituted the definition's parameters. */
+        if (inheritsGenerics && ms.implGenerics && !next.paramsImpl.hasParams()) {
             next.paramsImpl = ms.implGenerics->makeNopParams(crate.types, 0);
         }
         if (inheritsGenerics && ms.itemGenerics) {
