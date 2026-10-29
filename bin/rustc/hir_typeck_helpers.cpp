@@ -3027,7 +3027,55 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                     if (li.index != ri.index) {
                         return Outcome::Mismatch;
                     }
-                    return li.origin.equalsIgnoringRegions(ri.origin) ? Outcome::Proven : this->defer(left, right);
+                    /* Relating two instantiations of one opaque also relates the
+                       origin's arguments, before numeric and const inference fallbacks. */
+                    if (li.origin.data.tag() != ri.origin.data.tag()) {
+                        return this->defer(left, right);
+                    }
+                    switch (li.origin.data.tag()) {
+                        case HIRPathData::TAG_Generic: {
+                            const auto& lp = li.origin.data.as_Generic();
+                            const auto& rp = ri.origin.data.as_Generic();
+                            if (lp.path != rp.path) {
+                                return this->defer(left, right);
+                            }
+                            return this->unifyParams(lp.params, rp.params);
+                        }
+                        case HIRPathData::TAG_UfcsInherent: {
+                            const auto& lp = li.origin.data.as_UfcsInherent();
+                            const auto& rp = ri.origin.data.as_UfcsInherent();
+                            if (lp.item != rp.item) {
+                                return this->defer(left, right);
+                            }
+                            if (this->unifyResolved(lp.type, rp.type) == Outcome::Mismatch || this->unifyParams(lp.params, rp.params) == Outcome::Mismatch) {
+                                return Outcome::Mismatch;
+                            }
+                            return this->unifyParams(lp.implParams, rp.implParams);
+                        }
+                        case HIRPathData::TAG_UfcsKnown: {
+                            const auto& lp = li.origin.data.as_UfcsKnown();
+                            const auto& rp = ri.origin.data.as_UfcsKnown();
+                            if (lp.item != rp.item || lp.trait.path != rp.trait.path) {
+                                return this->defer(left, right);
+                            }
+                            if (this->unifyResolved(lp.type, rp.type) == Outcome::Mismatch || this->unifyParams(lp.trait.params, rp.trait.params) == Outcome::Mismatch) {
+                                return Outcome::Mismatch;
+                            }
+                            return this->unifyParams(lp.params, rp.params);
+                        }
+                        case HIRPathData::TAG_UfcsUnknown: {
+                            const auto& lp = li.origin.data.as_UfcsUnknown();
+                            const auto& rp = ri.origin.data.as_UfcsUnknown();
+                            if (lp.item != rp.item) {
+                                return this->defer(left, right);
+                            }
+                            if (this->unifyResolved(lp.type, rp.type) == Outcome::Mismatch) {
+                                return Outcome::Mismatch;
+                            }
+                            return this->unifyParams(lp.params, rp.params);
+                        }
+                    }
+                    UNREACHABLE();
                 }
             }
             UNREACHABLE();

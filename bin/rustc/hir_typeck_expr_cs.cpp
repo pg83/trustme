@@ -4104,13 +4104,7 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                             break;
                         }
                         case TypeDataErasedTypeInner::TAG_Alias: {
-                            auto& lee = lE.inner.as_Alias();
-                            auto& ree = rE.inner.as_Alias();
-                            if (lee.inner != ree.inner) {
-                                ERROR(sp, E0000, StringView("Type mismatch between ") << lT << StringView(" and ") << rT << StringView(" - different source"));
-                            }
-                            equalityTypeparams(lee.params, ree.params);
-                            break;
+                            ERROR(sp, E0000, StringView("Type mismatch between ") << lT << StringView(" and ") << rT << StringView(" - different source"));
                         }
                     }
                     break;
