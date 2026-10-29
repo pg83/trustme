@@ -4249,7 +4249,7 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                             auto& ree = rE.inner.as_Fcn();
                             ASSERT_BUG(sp, lee.origin != HIRSimplePath(), StringView("ErasedType ") << lT << StringView(" wasn't bound to its origin"));
                             ASSERT_BUG(sp, ree.origin != HIRSimplePath(), StringView("ErasedType ") << rT << StringView(" wasn't bound to its origin"));
-                            if (!equalityPath(lee.origin, ree.origin)) {
+                            if (lee.index != ree.index || !equalityPath(lee.origin, ree.origin)) {
                                 ERROR(sp, E0000, StringView("Type mismatch between ") << lT << StringView(" and ") << rT << StringView(" - different source"));
                             }
                             break;

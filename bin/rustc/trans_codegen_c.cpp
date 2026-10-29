@@ -7381,7 +7381,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                         of << StringView("(size_t)");
                         break;
                     case MetadataType::TraitObject:
-                        of << StringView("(const void*)");
+                        of << StringView("(void*)");
                         break;
                 }
                 emitParam(e.args.at(0));
