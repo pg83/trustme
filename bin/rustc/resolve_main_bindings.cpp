@@ -3274,45 +3274,20 @@ namespace {
                 case ASTItem::TAG_Impl: {
                     auto& e = i->data.as_Impl();
                     auto& def = e.def();
-                    if (!def.type()->isValid()) {
-                        TRACE_FUNCTION_F(StringView("impl ") << def.trait().ent << StringView(" for .."));
-                        itemContext.push(def.params(), GenericSlot::Level::Top);
-
-                        itemContext.iblTargetGenerics = &def.params();
-                        BUG_ASSERT(def.trait().ent.isValid());
+                    TRACE_FUNCTION_F(StringView("impl ") << def.trait().ent << StringView(" for ") << def.type());
+                    itemContext.pushSelf(def.type());
+                    itemContext.push(def.params(), GenericSlot::Level::Top);
+                    itemContext.iblTargetGenerics = &def.params();
+                    ResolveAbsoluteType(itemContext, def.type());
+                    if (def.trait().ent.isValid()) {
                         ResolveAbsolutePath(itemContext, def.trait().sp, Context::LookupMode::Type, def.trait().ent);
-                        itemContext.iblTargetGenerics = nullptr;
-
-                        ResolveAbsoluteGeneric(itemContext, def.params());
-
-                        if (e.items().size() != 0) {
-                            ERROR(i->span, E0000, StringView("impl Trait for .. with methods"));
-                        }
-
-                        itemContext.pop(def.params());
-
-                        auto* trait = def.trait().ent.bindings.type.binding.as_Trait().trait_;
-                        itemContext.crate.findTraitMut(i->span, *trait).setIsMarker();
-                    } else {
-                        TRACE_FUNCTION_F(StringView("impl ") << def.trait().ent << StringView(" for ") << def.type());
-                        itemContext.pushSelf(def.type());
-                        itemContext.push(def.params(), GenericSlot::Level::Top);
-
-                        itemContext.iblTargetGenerics = &def.params();
-                        ResolveAbsoluteType(itemContext, def.type());
-                        if (def.trait().ent.isValid()) {
-                            ResolveAbsolutePath(itemContext, def.trait().sp, Context::LookupMode::Type, def.trait().ent);
-                        }
-                        itemContext.iblTargetGenerics = nullptr;
-
-                        ResolveAbsoluteGeneric(itemContext, def.params());
-
-                        ExpandDelegationGlobs(itemContext, e);
-                        ResolveAbsoluteImplItems(itemContext, e);
-
-                        itemContext.pop(def.params());
-                        itemContext.popSelf(def.type());
                     }
+                    itemContext.iblTargetGenerics = nullptr;
+                    ResolveAbsoluteGeneric(itemContext, def.params());
+                    ExpandDelegationGlobs(itemContext, e);
+                    ResolveAbsoluteImplItems(itemContext, e);
+                    itemContext.pop(def.params());
+                    itemContext.popSelf(def.type());
                     break;
                 }
                 case ASTItem::TAG_NegImpl: {

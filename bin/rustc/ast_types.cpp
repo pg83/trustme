@@ -243,10 +243,6 @@ ASTType* mkType(ObjPool& pool, Span sp) {
     return mkType(pool, sp, TypeData::make_Any({}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::Invalid, Span sp) {
-    return mkType(pool, sp, TypeData::make_None({}));
-}
-
 ASTType* mkType(ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv) {
     auto sp = inv.span();
     return mkType(pool, sp, TypeData::make_Macro({pool.make<ASTMacroInvocation>(mv$(inv))}));

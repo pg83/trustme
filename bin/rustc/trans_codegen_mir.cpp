@@ -21,6 +21,18 @@
 using namespace stl;
 
 namespace {
+    StringView borrowPrefix(HIRBorrowType type) {
+        switch (type) {
+            case HIRBorrowType::Shared:
+                return StringView("&");
+            case HIRBorrowType::Unique:
+                return StringView("&mut ");
+            case HIRBorrowType::Owned:
+                return StringView("&move ");
+        }
+        UNREACHABLE();
+    }
+
     template <typename T>
     struct Fmt {
         const WireBoard& wb;
@@ -604,18 +616,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             break;
                         case MIRRValue::TAG_Borrow: {
                             auto& e = se.src.as_Borrow();
-                            of << StringView("&");
-                            switch (e.type) {
-                                case HIRBorrowType::Shared:
-                                    break;
-                                case HIRBorrowType::Unique:
-                                    of << StringView("mut ");
-                                    break;
-                                case HIRBorrowType::Owned:
-                                    of << StringView("move ");
-                                    break;
-                            }
-                            of << fmt(e.val);
+                            of << borrowPrefix(e.type) << fmt(e.val);
                         } break;
                             break;
                         case MIRRValue::TAG_Cast: {
@@ -1160,18 +1161,7 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<co
             }
             case HIRType::TAG_Borrow: {
                 auto& te = tuMatch.as_Borrow();
-                switch (te.type) {
-                    case HIRBorrowType::Shared:
-                        os << StringView("&");
-                        break;
-                    case HIRBorrowType::Unique:
-                        os << StringView("&mut ");
-                        break;
-                    case HIRBorrowType::Owned:
-                        os << StringView("&move ");
-                        break;
-                }
-                os << fmt(x.wb, te.inner);
+                os << borrowPrefix(te.type) << fmt(x.wb, te.inner);
                 break;
             }
             case HIRType::TAG_Pointer: {
@@ -1343,18 +1333,7 @@ void stl::output<ZeroCopyOutput, Fmt<MIRParam>>(ZeroCopyOutput& os, Fmt<MIRParam
             break;
         case MIRParam::TAG_Borrow: {
             auto& e = x.e.as_Borrow();
-            os << StringView("&");
-            switch (e.type) {
-                case HIRBorrowType::Shared:
-                    break;
-                case HIRBorrowType::Unique:
-                    os << StringView("mut ");
-                    break;
-                case HIRBorrowType::Owned:
-                    os << StringView("move ");
-                    break;
-            }
-            os << fmt(x.wb, e.val);
+            os << borrowPrefix(e.type) << fmt(x.wb, e.val);
         } break;
             break;
         case MIRParam::TAG_Constant: {

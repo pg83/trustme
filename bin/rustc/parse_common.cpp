@@ -2694,7 +2694,7 @@ namespace {
             }
             traitPath = Spanned<ASTPath>{implType->span(), mv$(implType->path())};
             if (GET_TOK(tok, lex) == TOK_DOUBLE_DOT) {
-                implType = mkType(lex.typePool(), ASTTypeTags::Invalid(), lex.pointSpan());
+                ERROR(lex.pointSpan(), E0000, StringView("`impl Trait for .. {}` is an obsolete syntax; use `auto trait` instead"));
             } else {
                 PUTBACK(tok, lex);
                 implType = ParseType(lex, true);

@@ -95,7 +95,6 @@ struct TypeErasedType {
 #include "ast_types_tu.h"
 
 namespace ASTTypeTags {
-    struct Invalid {};
 
     struct Macro {};
 
@@ -199,7 +198,6 @@ struct ASTType {
 
 ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data);
 ASTType* mkType(stl::ObjPool& pool, Span sp);
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
