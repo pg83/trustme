@@ -309,6 +309,16 @@ namespace {
         return MIRConstant::make_ItemAddr(box$(vtablePath));
     }
 
+    MIRConstant literalVtable(const MIRTypeResolve& state, EncodedLiteralSlice lit, const MonomorphState& params) {
+        const auto ptrSize = TargetGetPointerBits() / 8;
+        const auto metadata = lit.slice(ptrSize);
+        const auto* relocation = metadata.getReloc();
+        MIR_ASSERT(state, relocation && relocation->p && metadata.readUint(ptrSize) == EncodedLiteral::PTR_BASE, StringView("Invalid literal vtable address"));
+        const auto vtablePath = params.monomorphPath(state.sp, *relocation->p);
+        const auto& vtable = vtablePath.data.as_UfcsKnown();
+        return createVtable(vtable.type, HIRTraitPath(vtable.trait.clone()), vtable.item);
+    }
+
     MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, const HIRType* ty, const MonomorphState& params, HIRPath path) {
         TRACE_FUNCTION_F(ty << StringView(" <= ") << lit);
         switch ((*ty).tag()) {
@@ -603,7 +613,8 @@ namespace {
                 } else {
                     const auto ptrSize = TargetGetPointerBits() / 8;
                     auto v = lit.readUint(ptrSize);
-                    if (state.resolve.metadataType(state.sp, te.inner) == MetadataType::Slice) {
+                    const auto metadataType = state.resolve.metadataType(state.sp, te.inner);
+                    if (metadataType == MetadataType::Slice) {
                         const auto* slice = te.inner->opt_Slice();
                         MIR_ASSERT(state, slice || te.inner == HIRCoreType::Str, StringView("Slice metadata on non-slice type ") << te.inner);
                         auto thinTy = state.crate.types.pointer(te.type, slice ? slice->inner : state.crate.types.primitive(HIRCoreType::U8));
@@ -611,6 +622,12 @@ namespace {
                         auto ptr = mutator.inTemporary(thinTy, MIRRValue::make_Cast({mv$(addr), thinTy}));
                         auto size = MIRConstant::make_Uint({lit.slice(ptrSize).readUint(ptrSize), HIRCoreType::Usize});
                         return MIRRValue::make_MakeDst({mv$(ptr), mv$(size)});
+                    }
+                    if (metadataType == MetadataType::TraitObject) {
+                        const auto* thinTy = state.crate.types.pointer(te.type, state.crate.types.unit());
+                        auto addr = mutator.inTemporary(state.crate.types.primitive(HIRCoreType::Usize), MIRConstant::make_Uint({v, HIRCoreType::Usize}));
+                        auto ptr = mutator.inTemporary(thinTy, MIRRValue::make_Cast({mv$(addr), thinTy}));
+                        return MIRRValue::make_MakeDst({mv$(ptr), literalVtable(state, lit, params)});
                     }
                     auto lval = mutator.inTemporary(state.crate.types.primitive(HIRCoreType::Usize), MIRRValue(MIRConstant::make_Uint({v, HIRCoreType::Usize})));
                     return MIRRValue::make_Cast({mv$(lval), mv$(ty)});
@@ -633,6 +650,8 @@ namespace {
                             MIR_ASSERT(state, te.inner == HIRCoreType::Str, StringView("Slice metadata on non-slice type ") << te.inner);
                             ptrInner = state.crate.types.primitive(HIRCoreType::U8);
                         }
+                    } else if (metadataType == MetadataType::TraitObject) {
+                        ptrInner = state.crate.types.unit();
                     } else {
                         ptrInner = te.inner;
                     }
@@ -651,8 +670,9 @@ namespace {
                             return MIRRValue::make_MakeDst({mv$(ptr), mv$(size)});
                         }
                         case MetadataType::TraitObject:
+                            return MIRRValue::make_MakeDst({mv$(ptr), literalVtable(state, lit, params)});
                         case MetadataType::Unknown:
-                            MIR_TODO(state, StringView("Integer-address borrow with metadata ") << metadataType);
+                            MIR_BUG(state, StringView("Unknown metadata for integer-address borrow of ") << te.inner);
                     }
                 }
 

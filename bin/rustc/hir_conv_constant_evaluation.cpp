@@ -1466,7 +1466,16 @@ static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalVa
 
     const auto ptrSize = TargetGetPointerBits() / 8;
     if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
-        MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(), StringView("Trait-object pointer upcast must provide explicit metadata"));
+        if (const auto* sourceTrait = dynamicTypeS->opt_TraitObject()) {
+            if (traitObject->trait.path.path == HIRSimplePath() || sourceTrait->trait.path == traitObject->trait.path) {
+                return;
+            }
+            auto metadata = dst.slice(ptrSize).readPtr(state);
+            const auto* source = metadata.second.asStaticref();
+            const auto* vtable = source ? source->path().data.opt_UfcsKnown() : nullptr;
+            MIR_ASSERT(state, metadata.first == EncodedLiteral::PTR_BASE && vtable && vtable->item == localState.rootResolve.board().ctfe->vtableName(), StringView("Invalid vtable for trait-object upcast from ") << dynamicTypeS);
+            dynamicTypeS = vtable->type;
+        }
         auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
         auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
         dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
@@ -2151,7 +2160,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
                         if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
                             localState.writeParam(dst, e.ptrVal);
-                        } else {
+                        }
+                        if (srcMetadata != MetadataType::Slice) {
                             writeCtfeUnsizeMetadata(localState, dst, te.inner, srcInner);
                         }
                         break;
@@ -2163,7 +2173,8 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
                         if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
                             localState.writeParam(dst, e.ptrVal);
-                        } else {
+                        }
+                        if (srcMetadata != MetadataType::Slice) {
                             writeCtfeUnsizeMetadata(localState, dst, te.inner, srcInner);
                         }
                         break;
