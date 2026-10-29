@@ -1575,9 +1575,6 @@ namespace {
                 rv |= visitMirLvalueRawMut(e.slot, MIRValUsage::Read, cb);
                 break;
             }
-            case MIRStatement::TAG_ScopeEnd: {
-                break;
-            }
         }
         return rv;
     }
@@ -1620,8 +1617,6 @@ namespace {
                 break;
             case MIRStatement::TAG_LoadDropFlag:
                 rv |= cb.visitLvalue(stmt.as_LoadDropFlag().slot, MIRValUsage::Read);
-                break;
-            case MIRStatement::TAG_ScopeEnd:
                 break;
         }
         return rv;
@@ -2056,25 +2051,6 @@ namespace {
             }
         }
 
-        for (auto& block : fcn.blocks) {
-            if (block.statements.size() > 1) {
-                for (auto it = block.statements.begin() + 1; it != block.statements.end();) {
-                    if ((it - 1)->is_ScopeEnd() && it->is_ScopeEnd()) {
-                        auto& dst = (it - 1)->as_ScopeEnd();
-                        const auto& src = it->as_ScopeEnd();
-                        DEBUG(StringView("Unify ") << *(it - 1) << StringView(" and ") << *it);
-                        for (auto v : src.slots) {
-                            dst.slots.pushBack(v);
-                        }
-                        std::sort(dst.slots.mutBegin(), dst.slots.mutEnd());
-                        it = block.statements.erase(it);
-                        changed = true;
-                    } else {
-                        ++it;
-                    }
-                }
-            }
-        }
 
         {
             Vector<bool> visited;
@@ -3870,14 +3846,6 @@ namespace {
                                     return false;
                                 }
                                 if (ae.bitIndex != be.bitIndex) {
-                                    return false;
-                                }
-                                break;
-                            }
-                            case MIRStatement::TAG_ScopeEnd: {
-                                auto& ae = tuMatch.as_ScopeEnd();
-                                auto& be = tuMatch2.as_ScopeEnd();
-                                if (ae.slots.length() != be.slots.length() || !std::equal(ae.slots.begin(), ae.slots.end(), be.slots.begin())) {
                                     return false;
                                 }
                                 break;
@@ -6832,23 +6800,6 @@ namespace {
                         se->idx = dfRewriteTable[se->idx];
                     } else if (auto* se = stmt.opt_SaveDropFlag()) {
                         se->idx = dfRewriteTable[se->idx];
-                    } else if (auto* se = stmt.opt_ScopeEnd()) {
-                        size_t write = 0;
-                        for (size_t read = 0; read < se->slots.length(); read++) {
-                            const auto rewritten = localRewriteTable[se->slots[read]];
-                            if (rewritten != ~0u) {
-                                se->slots.mut(write++) = rewritten;
-                            }
-                        }
-                        while (se->slots.length() > write) {
-                            se->slots.popBack();
-                        }
-
-                        if (se->slots.empty()) {
-                            DEBUG(state << StringView("Delete ScopeEnd (now empty)"));
-                            toRemoveStatements.mut(stmtIdx) = true;
-                            continue;
-                        }
                     }
                 }
                 state.setCurStmtTerm(i);
@@ -6994,9 +6945,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 case MIRStatement::TAG_LoadDropFlag: {
                     auto& se = stmt.as_LoadDropFlag();
                     MIRCleanupLValue(state, mutator, se.slot);
-                    break;
-                }
-                case MIRStatement::TAG_ScopeEnd: {
                     break;
                 }
                 case MIRStatement::TAG_Asm: {

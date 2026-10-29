@@ -155,7 +155,7 @@ namespace {
 
         MIRFunctionPointer deserialiseMir();
         MIRBasicBlock deserialiseMirBasicblock();
-        MIRStatement deserialiseMirStatement();
+        bool deserialiseMirStatement(MIRStatement& rv);
         AsmOptions deserialiseAsmOptions();
         AsmLineFragment deserialiseAsmLineFrag();
         AsmLine deserialiseAsmLine();
@@ -301,8 +301,6 @@ namespace {
     DEF_D(AsmLine, return d.deserialiseAsmLine();)
     template <>
     DEF_D(MIRAsmParam, return d.deserialiseAsmParam();)
-    template <>
-    DEF_D(MIRStatement, return d.deserialiseMirStatement();)
     template <>
     DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
 
@@ -1133,10 +1131,21 @@ MIRFunction* HirDeserialiser::decodeBody(const MIRLazyBody& body) {
 
 MIRBasicBlock HirDeserialiser::deserialiseMirBasicblock() {
     TRACE_FUNCTION;
-    auto statements = deserialiseVec<MIRStatement>();
-    auto terminator = deserialiseMirTerminator();
-    const auto isCleanup = in.readBool();
-    return MIRBasicBlock{mv$(statements), mv$(terminator), isCleanup};
+    MIRBasicBlock rv;
+    {
+        auto _ = in.openObject(typeid(decltype(rv.statements)).name());
+        const size_t count = in.readCount();
+        rv.statements.reserve(count);
+        for (size_t i = 0; i < count; i++) {
+            MIRStatement statement;
+            if (deserialiseMirStatement(statement)) {
+                rv.statements.push_back(mv$(statement));
+            }
+        }
+    }
+    rv.terminator = deserialiseMirTerminator();
+    rv.isCleanup = in.readBool();
+    return rv;
 }
 
 AsmOptions HirDeserialiser::deserialiseAsmOptions() {
@@ -1198,8 +1207,7 @@ MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
     }
 }
 
-MIRStatement HirDeserialiser::deserialiseMirStatement() {
-    MIRStatement rv;
+bool HirDeserialiser::deserialiseMirStatement(MIRStatement& rv) {
     TRACE_FUNCTION_FR(StringView(""), rv);
     auto _ = in.openObject("MIR::Statement");
 
@@ -1220,8 +1228,9 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
             rv = MIRStatement::make_SetDropFlag(sdf);
         } break;
         case 4:
-            rv = MIRStatement::make_ScopeEnd({deserialiseVector<unsigned int>()});
-            break;
+            /* Legacy ScopeEnd markers have no execution or lifetime effect. */
+            deserialiseVector<unsigned int>();
+            return false;
         case 5:
             rv = MIRStatement::make_Asm2({deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>()});
             break;
@@ -1234,7 +1243,7 @@ MIRStatement HirDeserialiser::deserialiseMirStatement() {
         default:
             BUG(Span(), StringView("Bad tag for MIR::Statement - ") << tag);
     }
-    return rv;
+    return true;
 }
 
 MIRTerminator HirDeserialiser::deserialiseMirTerminator() {
@@ -4183,12 +4192,6 @@ auto HirSerialiser::serialise(const MIRStatement& stmt) -> void {
             out.writeCount(e.idx);
             out.writeBool(e.newVal);
             out.writeCount(e.other);
-            break;
-        }
-        case MIRStatement::TAG_ScopeEnd: {
-            auto& e = stmt.as_ScopeEnd();
-            out.writeTag(4);
-            serialiseVec(e.slots);
             break;
         }
         case MIRStatement::TAG_Asm2: {

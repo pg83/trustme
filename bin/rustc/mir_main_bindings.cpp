@@ -194,15 +194,6 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                     os << StringView("LoadDropFlag(df$") << e.idx << StringView(" = ") << FMT_M(e.slot) << StringView(" BIT ") << e.bitIndex << StringView(")");
                     break;
                 }
-                case MIRStatement::TAG_ScopeEnd: {
-                    auto& e = stmt.as_ScopeEnd();
-                    os << StringView("// Scope End: ");
-                    for (auto idx : e.slots) {
-                        os << StringView("_$") << idx << StringView(",");
-                    }
-                    os << StringView("\n");
-                    break;
-                }
             }
         }
 

@@ -1868,9 +1868,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         case MIRStatement::TAG_Assign: {
             break;
         }
-        case MIRStatement::TAG_ScopeEnd: {
-            return;
-        }
         case MIRStatement::TAG_SetDropFlag: {
             auto& se = stmt.as_SetDropFlag();
             MIR_ASSERT(state, se.idx < localState.dropFlags.length(), StringView("Drop flag ") << se.idx << StringView(" out of range"));

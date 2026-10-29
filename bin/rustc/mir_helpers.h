@@ -566,9 +566,6 @@ public:
                 rv |= visitLvalue(e.slot, MIRValUsage::Read);
                 break;
             }
-            case MIRStatement::TAG_ScopeEnd: {
-                break;
-            }
         }
         return rv;
     }

@@ -316,6 +316,5 @@ generate(
             ("unsigned int", "bitIndex"),
         ], copy=False, doc="Load drop flag `idx` from bit `bitIndex` of the"
                            " bit-set array `slot` (nominally `u8`s)"),
-        v("ScopeEnd", fields=[("stl::Vector<unsigned>", "slots")]),
     ],
 )

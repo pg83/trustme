@@ -1791,9 +1791,6 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
                     TransEnumerateFillFromMIRLValue(state, se.slot);
                     break;
                 }
-                case MIRStatement::TAG_ScopeEnd: {
-                    break;
-                }
             }
         }
         DEBUG(StringView("> ") << bb.terminator);

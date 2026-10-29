@@ -618,11 +618,6 @@ bool operator==(const MIRStatement& a, const MIRStatement& b) {
             auto& be = b.as_LoadDropFlag();
             return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
         }
-        case MIRStatement::TAG_ScopeEnd: {
-            auto& ae = a.as_ScopeEnd();
-            auto& be = b.as_ScopeEnd();
-            return ::ord(ae.slots, be.slots) == OrdEqual;
-        }
     }
     UNREACHABLE();
 }
@@ -982,15 +977,6 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
         case MIRStatement::TAG_LoadDropFlag: {
             TODO(Span(), StringView("clone_bb LoadDropFlag"));
             break;
-        }
-        case MIRStatement::TAG_ScopeEnd: {
-            auto& se = src.as_ScopeEnd();
-            MIRStatement::Data_ScopeEnd newSe;
-            newSe.slots.grow(se.slots.length());
-            for (auto idx : se.slots) {
-                newSe.slots.pushBack(mapLocal(idx));
-            }
-            return MIRStatement(mv$(newSe));
         }
     }
     UNREACHABLE();

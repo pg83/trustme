@@ -848,9 +848,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     of << StringView(")");
                 } break;
                     break;
-                case MIRStatement::TAG_ScopeEnd: {
-                    break;
-                } break;
             }
             of << StringView(";\n");
         }

@@ -293,9 +293,6 @@ namespace {
                         case MIRStatement::TAG_LoadDropFlag: {
                             break;
                         }
-                        case MIRStatement::TAG_ScopeEnd: {
-                            break;
-                        }
                     }
                 }
                 mirRes.setCurStmtTerm(bbIdx);

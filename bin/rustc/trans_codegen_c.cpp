@@ -4204,8 +4204,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
     DEBUG(stmt);
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     switch (stmt.tag()) {
-        case MIRStatement::TAG_ScopeEnd:
-            break;
         case MIRStatement::TAG_SetDropFlag: {
             const auto& e = stmt.as_SetDropFlag();
             of << indent << StringView("df") << e.idx << StringView(" = ");
