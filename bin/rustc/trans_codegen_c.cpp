@@ -4584,12 +4584,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                                 of << StringView(")");
                                 break;
 
-                            case MIRBinOp::ADD_OV:
-                            case MIRBinOp::SUB_OV:
-                            case MIRBinOp::MUL_OV:
-                            case MIRBinOp::DIV_OV:
-                                MIR_TODO(localMirRes, StringView("Overflowing binops for emulated i128"));
-                                break;
                         }
                         break;
                     } else {
@@ -4647,12 +4641,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                             of << StringView(" <= ");
                             break;
 
-                        case MIRBinOp::ADD_OV:
-                        case MIRBinOp::SUB_OV:
-                        case MIRBinOp::MUL_OV:
-                        case MIRBinOp::DIV_OV:
-                            MIR_TODO(localMirRes, StringView("Overflow"));
-                            break;
                     }
                     emitParam(ve.valR);
                     if (typeIsEmulatedI128(tyR)) {

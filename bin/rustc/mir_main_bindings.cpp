@@ -488,18 +488,6 @@ auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRRValue& rval) -> void {
                 case MIRBinOp::MOD:
                     os << StringView("MOD");
                     break;
-                case MIRBinOp::ADD_OV:
-                    os << StringView("ADD_OV");
-                    break;
-                case MIRBinOp::SUB_OV:
-                    os << StringView("SUB_OV");
-                    break;
-                case MIRBinOp::MUL_OV:
-                    os << StringView("MUL_OV");
-                    break;
-                case MIRBinOp::DIV_OV:
-                    os << StringView("DIV_OV");
-                    break;
 
                 case MIRBinOp::BIT_OR:
                     os << StringView("BIT_OR");

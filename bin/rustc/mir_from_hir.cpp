@@ -10049,13 +10049,9 @@ auto ExprVisitorConv::generateCheckedBinop(const Span& sp, MIRLValue resSlot, MI
             builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({mv$(valL), op, mv$(valR)}), updateDestState);
             break;
         case MIRBinOp::ADD:
-        case MIRBinOp::ADD_OV:
         case MIRBinOp::SUB:
-        case MIRBinOp::SUB_OV:
         case MIRBinOp::MUL:
-        case MIRBinOp::MUL_OV:
         case MIRBinOp::DIV:
-        case MIRBinOp::DIV_OV:
         case MIRBinOp::MOD:
             ASSERT_BUG(sp, tyL == tyR, StringView("Types in arithmatic operators must be equal - ") << tyL << StringView(" != ") << tyR);
             ASSERT_BUG(sp, tyL->is_Primitive(), StringView("Only primitives allowed in arithmatic operators"));

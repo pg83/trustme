@@ -631,26 +631,14 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 case MIRBinOp::ADD:
                                     of << StringView("+");
                                     break;
-                                case MIRBinOp::ADD_OV:
-                                    of << StringView("+^");
-                                    break;
                                 case MIRBinOp::SUB:
                                     of << StringView("-");
-                                    break;
-                                case MIRBinOp::SUB_OV:
-                                    of << StringView("-^");
                                     break;
                                 case MIRBinOp::MUL:
                                     of << StringView("*");
                                     break;
-                                case MIRBinOp::MUL_OV:
-                                    of << StringView("*^");
-                                    break;
                                 case MIRBinOp::DIV:
                                     of << StringView("/");
-                                    break;
-                                case MIRBinOp::DIV_OV:
-                                    of << StringView("/^");
                                     break;
                                 case MIRBinOp::MOD:
                                     of << StringView("%");

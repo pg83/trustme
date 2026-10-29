@@ -1744,26 +1744,14 @@ void stl::output<ZeroCopyOutput, MIRBinOp>(ZeroCopyOutput& out, MIRBinOp value) 
         case MIRBinOp::ADD:
             out << StringView("ADD");
             return;
-        case MIRBinOp::ADD_OV:
-            out << StringView("ADD_OV");
-            return;
         case MIRBinOp::SUB:
             out << StringView("SUB");
-            return;
-        case MIRBinOp::SUB_OV:
-            out << StringView("SUB_OV");
             return;
         case MIRBinOp::MUL:
             out << StringView("MUL");
             return;
-        case MIRBinOp::MUL_OV:
-            out << StringView("MUL_OV");
-            return;
         case MIRBinOp::DIV:
             out << StringView("DIV");
-            return;
-        case MIRBinOp::DIV_OV:
-            out << StringView("DIV_OV");
             return;
         case MIRBinOp::MOD:
             out << StringView("MOD");

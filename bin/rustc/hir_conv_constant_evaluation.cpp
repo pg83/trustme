@@ -1140,11 +1140,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                 case MIRBinOp::MOD:
                     writeResult(floatValueRemainder(l, r));
                     break;
-                case MIRBinOp::ADD_OV:
-                case MIRBinOp::SUB_OV:
-                case MIRBinOp::MUL_OV:
-                case MIRBinOp::DIV_OV:
-                    MIR_TODO(state, StringView("do_arith float unimplemented - val = ") << l << StringView(" , ") << r);
 
                 case MIRBinOp::BIT_OR:
                 case MIRBinOp::BIT_AND:
@@ -1220,11 +1215,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                     }
                     dst.writeUint(state, ti.bits, ti.mask(l % r));
                     break;
-                case MIRBinOp::ADD_OV:
-                case MIRBinOp::SUB_OV:
-                case MIRBinOp::MUL_OV:
-                case MIRBinOp::DIV_OV:
-                    MIR_TODO(state, StringView("do_arith unsigned - val = ") << l << StringView(" , ") << r);
 
                 case MIRBinOp::BIT_OR:
                     dst.writeUint(state, ti.bits, l | r);
@@ -1319,11 +1309,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                     }
                     dst.writeSint(state, ti.bits, ti.mask(l % r));
                     break;
-                case MIRBinOp::ADD_OV:
-                case MIRBinOp::SUB_OV:
-                case MIRBinOp::MUL_OV:
-                case MIRBinOp::DIV_OV:
-                    MIR_TODO(state, StringView("do_arith signed - val = ") << l << StringView(" , ") << r);
 
                 case MIRBinOp::BIT_OR:
                     dst.writeUint(state, ti.bits, (l | r).getInner());

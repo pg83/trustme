@@ -420,15 +420,11 @@ static inline bool operator!=(const MIRLValue& a, const MIRLValue& b) {
 }
 
 enum class MIRBinOp {
-    ADD,
-    ADD_OV,
-    SUB,
-    SUB_OV,
-    MUL,
-    MUL_OV,
-    DIV,
-    DIV_OV,
-    MOD,
+    ADD = 0,
+    SUB = 2,
+    MUL = 4,
+    DIV = 6,
+    MOD = 8,
 
     BIT_OR,
     BIT_AND,
