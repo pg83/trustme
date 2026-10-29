@@ -7525,6 +7525,8 @@ if not system_rustc_mode:
         "format_three_byte_fill",
         "inferred_pattern_base_type",
         "const_closure_captures_and_dispatch",
+        "compiler_box_expression",
+        "local_async_drop_glue",
     )
     for _stem in (
         "macro_clones_patterns",
