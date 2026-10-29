@@ -4757,6 +4757,9 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
                 break;
             }
             case ASTItem::TAG_Static: {
+                if (item.data.as_Static().sClass() != ASTStatic::CONST) {
+                    ERROR(item.span, E0000, StringView("associated static items are not allowed"));
+                }
                 break;
             }
             case ASTItem::TAG_Type: {
@@ -4790,21 +4793,7 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     ASTItem rv;
     switch (tok.type()) {
         case TOK_RWORD_STATIC: {
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            name = tok.ident().hygienicName();
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            auto ty = ParseType(lex);
-            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-
-            ASTExprNode* val = nullptr;
-            if (GET_TOK(tok, lex) == TOK_EQUAL) {
-                val = ParseExpr(lex);
-                GET_TOK(tok, lex);
-            }
-            CHECK_TOK(tok, TOK_SEMICOLON);
-
-            rv = ASTStatic(ASTStatic::STATIC, mv$(ty), val);
-            break;
+            ERROR(lex.tokenStartSpan(tok), E0000, StringView("associated static items are not allowed"));
         }
         case TOK_RWORD_CONST: {
             name = getOptionalIdent(lex);
@@ -5061,6 +5050,9 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
                 }
                 case ASTItem::TAG_Static: {
                     auto& e = item.data.as_Static();
+                    if (e.sClass() != ASTStatic::CONST) {
+                        ERROR(item.span, E0000, StringView("associated static items are not allowed"));
+                    }
                     impl.addStatic(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));
                     break;
                 }
@@ -5130,6 +5122,9 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
     }
 
     ParseFunctionQualifiers(lex, tok, fnFlags, abi);
+    if (tok.type() == TOK_RWORD_STATIC) {
+        ERROR(lex.tokenStartSpan(tok), E0000, StringView("associated static items are not allowed"));
+    }
     if (tok.type() == TOK_RWORD_CONST) {
         RcString sourceName;
         auto name = getOptionalIdent(lex, &sourceName);
