@@ -3583,13 +3583,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     applyBoundsAsRulesTrait(context, sp, realType, realTrait);
                     break;
                 }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    auto& be = bound.as_TypeEquality();
-                    auto realTypeLeft = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
-                    auto realTypeRight = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
-                    context.equateTypes(sp, realTypeLeft, realTypeRight);
-                    break;
-                }
             }
         }
 
@@ -6635,9 +6628,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                     for (const auto* type : traitBound->trait.path.params.types) {
                         collect(collect, type);
                     }
-                } else if (const auto* equality = bound.opt_TypeEquality()) {
-                    collect(collect, equality->type);
-                    collect(collect, equality->otherType);
                 }
             }
             for (const auto* type : ms.itemGenerics->wellFormedTypes) {

@@ -1508,19 +1508,6 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
                         return false;
                     }
                 }
-            } else {
-                const auto& equality = bound.as_TypeEquality();
-                const HIRType* sides[2][2] = {{equality.type, equality.otherType}, {equality.otherType, equality.type}};
-                for (const auto& side : sides) {
-                    ImplHeadMonomorphiser known(types, parentMatcher);
-                    const auto* type = known.monomorphType(sp, side[0]);
-                    if (!known.complete()) {
-                        continue;
-                    }
-                    if (side[1]->matchTestGenericsFuzz(sp, cb.normalizeType(type), resolve, parentMatcher) == HIRCompare::Unequal) {
-                        return false;
-                    }
-                }
             }
         }
         const auto learnt = mappedCount();
@@ -1547,13 +1534,6 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
             const auto* type = monomorph.monomorphType(sp, traitBound->type);
             auto trait = monomorph.monomorphTraitpath(sp, traitBound->trait, true);
             if (!monomorph.complete() || !cb.traitBound(type, trait)) {
-                return false;
-            }
-        } else {
-            const auto& equality = bound.as_TypeEquality();
-            const auto* left = monomorph.monomorphType(sp, equality.type);
-            const auto* right = monomorph.monomorphType(sp, equality.otherType);
-            if (!monomorph.complete() || !cb.typeEquality(left, right)) {
                 return false;
             }
         }

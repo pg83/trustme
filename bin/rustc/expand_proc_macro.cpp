@@ -2472,13 +2472,6 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
                     visitPath(be.trait);
                     break;
                 }
-                case ASTGenericBound::TAG_Equality: {
-                    auto& be = e.as_Equality();
-                    visitType(be.type);
-                    pmi.sendSymbol("=");
-                    visitType(be.replacement);
-                    break;
-                }
             }
             pmi.sendSymbol(",");
         }

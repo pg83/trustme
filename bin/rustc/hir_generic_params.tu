@@ -3,7 +3,7 @@
 
 generate(
     name="HIRGenericBound",
-    default="TypeEquality",
+    default="TraitBound",
     clone=False,
     output=True,
     variants=[
@@ -13,10 +13,6 @@ generate(
             ("HIRBoundConstness", "constness", "HIRBoundConstness::Never"),
             ("bool", "isTrivial", "false"),
         ], copy=False),
-        v("TypeEquality", fields=[
-            ("const HIRType*", "type"),
-            ("const HIRType*", "otherType"),
-        ]),
     ],
     extra="""
         HIRGenericBound clone() const;

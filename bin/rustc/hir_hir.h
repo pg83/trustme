@@ -598,15 +598,12 @@ public:
    generics.  Return false from any of them to say it cannot be met. */
 struct HIRSpecializationBoundCallback {
     virtual bool traitBound(const HIRType* type, const HIRTraitPath& trait) = 0;
-    virtual bool typeEquality(const HIRType* left, const HIRType* right) = 0;
     virtual bool sizedBound(const HIRType* type) = 0;
 
     /* What `<type as sourceTrait>::item<atyParams>` is in the child's environment, or
        null when it does not resolve there. */
     virtual const HIRType* normalizeProjection(const HIRType* type, const HIRGenericPath& sourceTrait, const RcString& item, const HIRPathParams& atyParams) = 0;
 
-    /* `type` with every projection the child's environment resolves replaced. */
-    virtual const HIRType* normalizeType(const HIRType* type) = 0;
 };
 
 class HIRTraitImpl {

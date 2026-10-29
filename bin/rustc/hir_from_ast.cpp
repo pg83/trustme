@@ -648,12 +648,6 @@ namespace {
                     }
                     break;
                 }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    auto& be = bound.as_TypeEquality();
-                    collectUsedTypeParams(types, sp, be.type, used, opaque);
-                    collectUsedTypeParams(types, sp, be.otherType, used, opaque);
-                    break;
-                }
             }
         }
     }
@@ -928,11 +922,6 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 } else {
                     ERROR(bound.span, E0000, StringView("MaybeTrait on unknown trait ") << trait.path);
                 }
-                break;
-            }
-            case ASTGenericBound::TAG_Equality: {
-                auto& e = bound.as_Equality();
-                rv.bounds.push_back(HIRGenericBound::make_TypeEquality({LowerHIRType(e.type), LowerHIRType(e.replacement)}));
                 break;
             }
         }
@@ -2374,11 +2363,6 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                             } else {
                                 ERROR(item.span, E0000, StringView("MaybeTrait on unknown trait ") << trait.path);
                             }
-                            break;
-                        }
-                        case ASTGenericBound::TAG_Equality: {
-                            auto& _ = bound.as_Equality();
-                            BUG(item.span, StringView("Unexpected type equality bound on associated type"));
                             break;
                         }
                     }

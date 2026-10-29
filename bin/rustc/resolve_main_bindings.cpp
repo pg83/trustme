@@ -2019,12 +2019,6 @@ namespace {
                     ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
                     break;
                 }
-                case ASTGenericBound::TAG_Equality: {
-                    auto& e = bound.as_Equality();
-                    ResolveAbsoluteType(context, e.type);
-                    ResolveAbsoluteType(context, e.replacement);
-                    break;
-                }
             }
         }
         for (auto& type : mutRange(params.bareBoundTypes)) {
@@ -2720,12 +2714,6 @@ namespace {
                     ReplaceDelegatedSelf(e.trait, replacementName);
                     break;
                 }
-                case ASTGenericBound::TAG_Equality: {
-                    auto& e = bound.as_Equality();
-                    ReplaceDelegatedSelf(e.type, replacementName);
-                    ReplaceDelegatedSelf(e.replacement, replacementName);
-                    break;
-                }
             }
         }
     }
@@ -2931,11 +2919,6 @@ namespace {
                 case HIRGenericBound::TAG_TraitBound: {
                     auto& e = bound.as_TraitBound();
                     rv.addBound(ASTGenericBound::make_IsTrait({span, {}, HIRTypeToAST(context, span, e.type), {}, HIRTraitPathToAST(context, span, e.trait), HIRConstnessToAST(e.constness)}));
-                    break;
-                }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    auto& e = bound.as_TypeEquality();
-                    rv.addBound(ASTGenericBound::make_Equality({HIRTypeToAST(context, span, e.type), HIRTypeToAST(context, span, e.otherType)}));
                     break;
                 }
             }

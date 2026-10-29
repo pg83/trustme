@@ -1471,12 +1471,6 @@ auto BindVisitor::checkImplSignature(const HIRGenericParams& params, const HIRTy
                 visitTraitPathTysWith(trait.trait, checkType);
                 break;
             }
-            case HIRGenericBound::TAG_TypeEquality: {
-                const auto& equality = bound.as_TypeEquality();
-                visitTyWith(equality.type, checkType);
-                visitTyWith(equality.otherType, checkType);
-                break;
-            }
         }
     }
 }
@@ -1529,15 +1523,6 @@ auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, con
                     for (const auto& assoc : e.trait.typeBounds) {
                         uint64_t before = used;
                         visitTyWith(assoc.second.type, mark);
-                        changed = changed || used != before;
-                    }
-                    break;
-                }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    const auto& e = b.as_TypeEquality();
-                    if (usesOnly(collect(e.type))) {
-                        uint64_t before = used;
-                        visitTyWith(e.otherType, mark);
                         changed = changed || used != before;
                     }
                     break;
@@ -2451,11 +2436,6 @@ auto Expander::collectTraitAliasBounds(const Span& sp, const HIRTraitPath& alias
             case HIRGenericBound::TAG_TraitBound: {
                 const auto& e = bound.as_TraitBound();
                 expanded = HIRGenericBound::make_TraitBound({monomorph.monomorphType(sp, e.type), monomorph.monomorphTraitpath(sp, e.trait, false), e.constness, e.isTrivial});
-                break;
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                const auto& e = bound.as_TypeEquality();
-                expanded = HIRGenericBound::make_TypeEquality({monomorph.monomorphType(sp, e.type), monomorph.monomorphType(sp, e.otherType)});
                 break;
             }
         }

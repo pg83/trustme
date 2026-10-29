@@ -4750,10 +4750,6 @@ auto ClosureExprVisitorExtract::Monomorph::boundNeeded(const Span& sp, const HIR
             }
             return true;
         }
-        case HIRGenericBound::TAG_TypeEquality: {
-            TODO(sp, StringView(""));
-            break;
-        }
     }
     UNREACHABLE();
 }
@@ -4763,10 +4759,6 @@ auto ClosureExprVisitorExtract::Monomorph::monomorphBound(const Span& sp, const 
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = b.as_TraitBound();
             return HIRGenericBound::make_TraitBound({this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness, e.isTrivial});
-        }
-        case HIRGenericBound::TAG_TypeEquality: {
-            auto& e = b.as_TypeEquality();
-            return HIRGenericBound::make_TypeEquality({this->monomorphType(sp, e.type), this->monomorphType(sp, e.otherType)});
         }
     }
     UNREACHABLE();
@@ -6011,10 +6003,6 @@ auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParam
             case HIRGenericBound::TAG_TraitBound: {
                 auto& e = b.as_TraitBound();
                 return HIRGenericBound::make_TraitBound({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness, e.isTrivial});
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& e = b.as_TypeEquality();
-                return HIRGenericBound::make_TypeEquality({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphType(sp, e.otherType)});
             }
         }
         UNREACHABLE();

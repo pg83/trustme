@@ -1218,12 +1218,6 @@ namespace {
                 changed |= substitutePath(e.trait, from, to);
                 break;
             }
-            case ASTGenericBound::TAG_Equality: {
-                auto& e = bound.as_Equality();
-                changed |= substituteType(e.type, from, to);
-                changed |= substituteType(e.replacement, from, to);
-                break;
-            }
         }
         return changed;
     }

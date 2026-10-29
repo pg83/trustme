@@ -22,12 +22,6 @@ namespace {
                 h = mixHash(h, hirTraitPathHash(e.trait));
                 break;
             }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& e = bound.as_TypeEquality();
-                h = mixHash(h, reinterpret_cast<uintptr_t>(e.type));
-                h = mixHash(h, reinterpret_cast<uintptr_t>(e.otherType));
-                break;
-            }
         }
         return h;
     }
@@ -41,11 +35,6 @@ namespace {
                 auto& ae = a.as_TraitBound();
                 auto& be = b.as_TraitBound();
                 return ae.type == be.type && hirTraitPathIdentical(ae.trait, be.trait);
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& ae = a.as_TypeEquality();
-                auto& be = b.as_TypeEquality();
-                return ae.type == be.type && ae.otherType == be.otherType;
             }
         }
         UNREACHABLE();
@@ -190,12 +179,6 @@ void TraitResolveCommon::buildIndex(const Span& sp, BoundIndex& index) const {
             case HIRGenericBound::TAG_TraitBound: {
                 auto& be = b.as_TraitBound();
                 this->prepIndexesAddTraitBound(sp, index, be.type, be.trait.clone());
-                break;
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& be = b.as_TypeEquality();
-                DEBUG(StringView("Equality - ") << be.type << StringView(" = ") << be.otherType);
-                this->prepIndexesAddEquality(sp, index, be.type, be.otherType);
                 break;
             }
         }

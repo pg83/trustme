@@ -351,8 +351,6 @@ const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, cons
                                         for (const auto* type : traitBound->trait.path.params.types) {
                                             named |= names(type);
                                         }
-                                    } else if (const auto* equality = bound.opt_TypeEquality()) {
-                                        named |= names(equality->type) || names(equality->otherType);
                                     }
                                 }
                                 for (const auto* type : generics.wellFormedTypes) {

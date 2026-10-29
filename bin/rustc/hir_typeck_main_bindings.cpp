@@ -250,12 +250,6 @@ auto TypecheckVisitor::checkParameters(const Span& sp, const HIRSimplePath& used
                 }
                 break;
             }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& e = bound.as_TypeEquality();
-                // TODO: Check that two types are equal in this case
-                DEBUG(StringView("TODO: Check equality bound ") << e.type << StringView(" == ") << e.otherType);
-                break;
-            }
         }
     }
 }
@@ -488,12 +482,6 @@ auto TypecheckVisitor::visitParams(HIRGenericParams& params) -> void {
                         ERROR(Span(), E0000, StringView("trait bound `") << e.type << StringView(": ") << e.trait.path << StringView("` is not satisfied"));
                     }
                 }
-                break;
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& e = bound.as_TypeEquality();
-                e.type = this->visitType(e.type);
-                e.otherType = this->visitType(e.otherType);
                 break;
             }
         }

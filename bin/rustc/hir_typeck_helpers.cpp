@@ -5347,28 +5347,6 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             if (result == SolverCertainty::NoSolution) {
                 return result;
             }
-        } else if (const auto* equality = bound.opt_TypeEquality()) {
-            if (onlyBoundsConstrainingTraitParams && !containsTraitParameter.contains(sp, equality->type) && !containsTraitParameter.contains(sp, equality->otherType)) {
-                continue;
-            }
-            const auto left = monomorph.monomorphType(sp, equality->type, true);
-            const auto right = monomorph.monomorphType(sp, equality->otherType, true);
-            if (conditionalScope && (conditional.contains(sp, left) || conditional.contains(sp, right))) {
-                continue;
-            }
-            Unifier relation(
-                sp,
-                ivars,
-                this,
-                {
-                    .bindRigidValues = true,
-                    .relateProjectionInputs = true,
-                }
-            );
-            mergeRelation(relation.unify(left, right));
-            if (result == SolverCertainty::NoSolution) {
-                return result;
-            }
         }
     }
 
@@ -14488,31 +14466,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 candidate->normalizationNestedGoals.pushBack(&bound);
                 result = Certainty::Ambiguous;
             }
-        } else if (const auto* equality = bound.opt_TypeEquality()) {
-            const HIRType* left;
-            const HIRType* right;
-            if (markerImpl) {
-                auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
-                left = ms.monomorphType(span(), equality->type);
-                right = ms.monomorphType(span(), equality->otherType);
-            } else if (traitImpl) {
-                left = candidate->impl.monomorphImplType(crate.types, span(), equality->type);
-                right = candidate->impl.monomorphImplType(crate.types, span(), equality->otherType);
-            } else {
-                auto ms = MonomorphStatePtr(crate.types, associatedProjection->type, &associatedProjection->trait.params, &associatedProjection->params);
-                left = ms.monomorphType(span(), equality->type);
-                right = ms.monomorphType(span(), equality->otherType);
-            }
-            const auto relation = this->relateTypes(*candidate, left, right);
-            if (relation == Certainty::NoSolution) {
-                return Certainty::NoSolution;
-            }
-            if (relation == Certainty::Ambiguous) {
-                candidate->ambiguityBeyondHead = true;
-                candidate->nestedAmbiguity = true;
-                candidate->nonObligationNestedAmbiguity = true;
-                result = Certainty::Ambiguous;
-            }
         }
     }
     for (const auto i : pendingSized) {
@@ -15184,7 +15137,7 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, cons
             return true;
         }
 
-        bool typeEquality(const HIRType* left, const HIRType* right) override {
+        bool typeEquality(const HIRType* left, const HIRType* right) {
             const auto* leftNormalized = probe.expandAssociatedTypes(sp, left);
             const auto* rightNormalized = probe.expandAssociatedTypes(sp, right);
             return leftNormalized == rightNormalized || leftNormalized->equalsIgnoringRegions(rightNormalized);
@@ -15203,10 +15156,6 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, cons
             const bool unresolved = normalized == projection || (path && path->binding.is_Opaque() && normalized->equalsIgnoringRegions(projection));
             DEBUG(StringView("parent projection ") << projection << StringView(" => ") << (unresolved ? StringView("unresolved") : StringView("")) << (unresolved ? nullptr : normalized));
             return unresolved ? nullptr : normalized;
-        }
-
-        const HIRType* normalizeType(const HIRType* type) override {
-            return probe.expandAssociatedTypes(sp, type);
         }
     } prover{probe, crate, sp};
 

@@ -477,11 +477,6 @@ void RustPrinter::printBounds(const ASTGenericParams& params) {
                     os << ent.type << StringView(": ?") << ent.trait;
                     break;
                 }
-                case ASTGenericBound::TAG_Equality: {
-                    auto& ent = b.as_Equality();
-                    os << ent.type << StringView(": =") << ent.replacement;
-                    break;
-                }
             }
         }
         os << StringView("\n");

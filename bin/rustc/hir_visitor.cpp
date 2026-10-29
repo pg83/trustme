@@ -666,12 +666,6 @@ void HIRVisitor::visitGenericBound(HIRGenericBound& bound) {
             this->visitTraitPath(e.trait);
             break;
         }
-        case HIRGenericBound::TAG_TypeEquality: {
-            auto& e = bound.as_TypeEquality();
-            e.type = visitType(e.type);
-            e.otherType = visitType(e.otherType);
-            break;
-        }
     }
 }
 

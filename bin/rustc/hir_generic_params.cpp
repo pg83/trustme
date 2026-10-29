@@ -27,19 +27,6 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
             }
             break;
         }
-        case HIRGenericBound::TAG_TypeEquality: {
-            auto& ae = (*this).as_TypeEquality();
-            auto& be = b.as_TypeEquality();
-            auto cmp = ae.type->ordIgnoringRegions(be.type);
-            if (cmp != OrdEqual) {
-                return cmp;
-            }
-            cmp = ae.otherType->ordIgnoringRegions(be.otherType);
-            if (cmp != OrdEqual) {
-                return cmp;
-            }
-            break;
-        }
     }
     return OrdEqual;
 }
@@ -83,10 +70,6 @@ HIRGenericBound HIRGenericBound::clone() const {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = (*this).as_TraitBound();
             return HIRGenericBound::make_TraitBound({e.type, e.trait.clone(), e.constness, e.isTrivial});
-        }
-        case HIRGenericBound::TAG_TypeEquality: {
-            auto& e = (*this).as_TypeEquality();
-            return HIRGenericBound::make_TypeEquality({e.type, e.otherType});
         }
     }
     UNREACHABLE();

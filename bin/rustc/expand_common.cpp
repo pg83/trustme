@@ -1208,12 +1208,6 @@ namespace {
                     ExpandPath(es, mod, be.trait);
                     break;
                 }
-                case ASTGenericBound::TAG_Equality: {
-                    auto& be = bound.as_Equality();
-                    ExpandType(es, mod, be.type);
-                    ExpandType(es, mod, be.replacement);
-                    break;
-                }
             }
         }
         for (auto& type : mutRange(params.bareBoundTypes)) {

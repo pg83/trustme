@@ -42,10 +42,6 @@ generate(
             ("ASTType*", "type"),
             ("ASTPath", "trait"),
         ], deep=["type"], doc="Removed trait bound: \"Type: ?Trait\""),
-        v("Equality", fields=[
-            ("ASTType*", "type"),
-            ("ASTType*", "replacement"),
-        ], deep=["type", "replacement"], doc="Type equality: \"Type = Replacement\""),
     ],
     extra_fields=[
         ("Span", "span"),
