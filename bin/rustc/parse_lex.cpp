@@ -965,14 +965,14 @@ Token Lexer::getTokenInt() {
                         this->startSpelling("b\"");
                         while ((ch = this->getc()) != '"') {
                             if (ch == '\\') {
-                                auto v = this->parseEscape('"');
+                                auto v = this->parseEscape('"', nullptr, /*byteLiteral=*/true);
                                 if (v != ~0u) {
-                                    if (v > 256) {
-                                        compileErrorGeneric(*this, "Value out of range for byte literal");
-                                    }
                                     str += (char)v;
                                 }
                             } else {
+                                if (ch.v > 0x7F) {
+                                    compileErrorGeneric(*this, "non-ASCII character in byte literal");
+                                }
                                 str += ch;
                             }
                         }
@@ -981,12 +981,15 @@ Token Lexer::getTokenInt() {
                         this->startSpelling("b'");
                         ch = this->getc();
                         if (ch == '\\') {
-                            u32 val = this->parseEscape('\'');
+                            u32 val = this->parseEscape('\'', nullptr, /*byteLiteral=*/true);
                             if (this->getc() != '\'') {
                                 compileErrorGeneric(*this, "Multi-byte character literal");
                             }
                             return this->withLiteralSuffix(Token(U128(val), CORETYPE_U8, this->takeSpelling()));
                         } else {
+                            if (ch.v > 0x7F) {
+                                compileErrorGeneric(*this, "non-ASCII character in byte literal");
+                            }
                             if (this->getc() != '\'') {
                                 compileErrorGeneric(*this, "Multi-byte character literal");
                             }
@@ -1297,6 +1300,9 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
                 }
                 terminatingHashes = hashes;
             } else {
+                if (isByte && ch.v > 0x7F) {
+                    compileErrorGeneric(*this, "non-ASCII character in byte literal");
+                }
                 val += ch;
             }
         }
@@ -1495,7 +1501,7 @@ FloatValue Lexer::parseFloat(StringView whole) {
     }
 }
 
-u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
+u32 Lexer::parseEscape(char enclosing, bool* isByteEscape, bool byteLiteral) {
     if (isByteEscape) {
         *isByteEscape = false;
     }
@@ -1518,6 +1524,9 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             return std::strtol(tmp, NULL, 16);
         } break;
         case 'u': {
+            if (byteLiteral) {
+                compileErrorGeneric(*this, "Unicode escapes are not allowed in byte literals");
+            }
             u32 val = 0;
             ch = this->getc();
             bool reqCloseBrace = false;
@@ -1560,15 +1569,21 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             return '\t';
         case '\r':
         case '\n':
+            if (enclosing == '\'') {
+                compileErrorGeneric(*this, "escaped newline is not allowed in a character literal");
+            }
             while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
                 ch = this->getc();
             }
             if (ch == '\\') {
-                return parseEscape(enclosing, isByteEscape);
+                return parseEscape(enclosing, isByteEscape, byteLiteral);
             } else if (ch == enclosing) {
                 this->ungetc();
                 return ~0;
             } else {
+                if (byteLiteral && ch.v > 0x7F) {
+                    compileErrorGeneric(*this, "non-ASCII character in byte literal");
+                }
                 return ch.v;
             }
         default:

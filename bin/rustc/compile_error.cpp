@@ -30,11 +30,6 @@ void compileErrorBugCheckAt(const char* file, int line, const char* condition) {
     std::abort();
 }
 
-void compileErrorTodo(const char* message) {
-    sysO << StringView("Todo(") << message << StringView(")") << endL;
-    std::abort();
-}
-
 void compileErrorTodo(const TokenStream& lex, const char* message) {
     sysO << lex.pointSpan() << StringView(": Todo(") << message << StringView(")") << endL;
     std::abort();

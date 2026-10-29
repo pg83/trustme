@@ -106,7 +106,7 @@ private:
     };
     U128 parseInt(NumMode* numMode);
     FloatValue parseFloat(stl::StringView whole);
-    u32 parseEscape(char enclosing, bool* isByteEscape = nullptr);
+    u32 parseEscape(char enclosing, bool* isByteEscape = nullptr, bool byteLiteral = false);
 
     void pushHygine() override;
 
