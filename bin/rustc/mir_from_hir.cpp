@@ -9349,6 +9349,12 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
         }
     }
 
+    for (const auto& parameter : ent.params) {
+        if (const auto* reg = parameter.opt_Reg(); reg && reg->output) {
+            builder.markValueAssigned(node.span(), *reg->output);
+        }
+    }
+
     if (labels.empty()) {
         builder.pushStmt(node.span(), mv$(ent));
         if (!node.options.noreturn && !node.options.naked) {

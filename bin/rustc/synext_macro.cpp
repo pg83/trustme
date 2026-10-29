@@ -2015,7 +2015,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             hasOutputValue |= bool(reg->valOut);
         }
     }
-    if (hasLabel && hasOutputValue) {
+    if (hasLabel && hasOutputValue && !crate.features.count(RcString::newInterned("asm_goto_with_outputs"))) {
         ERROR(sp, E0000, StringView("using both label and output operands for inline assembly is unstable"));
     }
 

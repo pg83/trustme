@@ -278,7 +278,7 @@ namespace {
                                         break;
                                     }
                                     case MIRAsmParam::TAG_Label: {
-                                        break;
+                                        UNREACHABLE();
                                     }
                                 }
                             }
@@ -407,19 +407,13 @@ namespace {
                                 }
                             }
                         }
-                        bool hasTarget = false;
                         if (te.retBlock != ~0u) {
                             statesToDo.push_back(std::make_pair(te.retBlock, state.clone()));
-                            hasTarget = true;
                         }
                         for (const auto& p : te.params) {
                             if (const auto* target = p.opt_Label()) {
                                 statesToDo.push_back(std::make_pair(*target, state.clone()));
-                                hasTarget = true;
                             }
-                        }
-                        if (!hasTarget) {
-                            state.finalise(stmtIdx);
                         }
                         break;
                     }
@@ -1371,19 +1365,33 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         for (size_t stmtIdx = 0; stmtIdx < bb.statements.size(); stmtIdx++) {
             state.setCurStmt(bbIdx, stmtIdx);
             const auto& stmt = bb.statements[stmtIdx];
-            if (const auto* se = stmt.opt_Assign()) {
-                assignedLvalue(bbIdx, stmtIdx + 1, se->dst);
-            } else if (const auto* se = stmt.opt_Asm()) {
-                for (const auto& e : se->outputs) {
-                    assignedLvalue(bbIdx, stmtIdx + 1, e.second);
+            visitMirLvalues(stmt, [&](const MIRLValue& lvalue, MIRValUsage usage) {
+                if (usage == MIRValUsage::Write) {
+                    assignedLvalue(bbIdx, stmtIdx + 1, lvalue);
                 }
-            }
+                return false;
+            });
         }
         state.setCurStmtTerm(bbIdx);
 
         if (bb.terminator.is_Call()) {
             auto& te = bb.terminator.as_Call();
             assignedLvalue(te.retBlock, 0, te.retVal);
+        } else if (const auto* te = bb.terminator.opt_Asm2()) {
+            for (const auto& parameter : te->params) {
+                const auto* reg = parameter.opt_Reg();
+                if (!reg || !reg->output) {
+                    continue;
+                }
+                if (te->retBlock != ~0u) {
+                    assignedLvalue(te->retBlock, 0, *reg->output);
+                }
+                for (const auto& target : te->params) {
+                    if (const auto* label = target.opt_Label()) {
+                        assignedLvalue(*label, 0, *reg->output);
+                    }
+                }
+            }
         }
     }
 
