@@ -2638,7 +2638,7 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                     return l.origin.compareWithPlaceholders(sp, r.origin, resolvePlaceholder);
                 }
             }
-            return HIRCompare::Equal;
+            UNREACHABLE();
         }
         case HIRType::TAG_Array: {
             auto& le = (*left).as_Array();

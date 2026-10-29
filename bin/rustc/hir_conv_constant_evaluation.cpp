@@ -6096,7 +6096,17 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
 }
 
 [[nodiscard]] auto Expander::visitType(const HIRType* ty) -> const HIRType* {
-    ty = visitTypeDefaultViaHooks(ty);
+    if (const auto* erased = ty->opt_ErasedType(); erased && erased->inner.is_Alias()) {
+        auto* savedParams = getParams;
+        auto aliasParams = makeCallable<GenericParamsCb>([&](const Span&) -> const HIRGenericParams& {
+            return erased->inner.as_Alias().inner->generics;
+        });
+        getParams = &aliasParams;
+        ty = visitTypeDefaultViaHooks(ty);
+        getParams = savedParams;
+    } else {
+        ty = visitTypeDefaultViaHooks(ty);
+    }
 
     if (ty->is_Array()) {
         auto data = ty->cloneData();
