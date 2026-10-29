@@ -47,215 +47,6 @@ void HIRCreateMutableOwnerCache(WireBoard& wb, ObjPool& pool) {
 }
 
 namespace {
-    HIRFunction* findFunctionInModule(HIRModule& mod, const HIRFunction& target) {
-        for (auto& pair : mod.valueItems) {
-            if (auto* item = pair.second->ent.opt_Function(); item && *item == &target) {
-                return *item;
-            }
-        }
-        for (auto& pair : mod.modItems) {
-            auto& item = pair.second->ent;
-            if (auto* sub = item.opt_Module()) {
-                if (auto* found = findFunctionInModule(*sub, target)) {
-                    return found;
-                }
-            } else if (auto* trait = item.opt_Trait()) {
-                for (auto& value : trait->values) {
-                    if (auto* function = value.second.opt_Function(); function == &target) {
-                        return function;
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    HIRConstant* findConstantInModule(HIRModule& mod, const HIRConstant& target) {
-        for (auto& pair : mod.valueItems) {
-            if (auto* item = pair.second->ent.opt_Constant(); item && *item == &target) {
-                return *item;
-            }
-        }
-        for (auto& pair : mod.modItems) {
-            auto& item = pair.second->ent;
-            if (auto* sub = item.opt_Module()) {
-                if (auto* found = findConstantInModule(*sub, target)) {
-                    return found;
-                }
-            } else if (auto* trait = item.opt_Trait()) {
-                for (auto& value : trait->values) {
-                    if (auto* constant = value.second.opt_Constant(); constant == &target) {
-                        return constant;
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    HIRStatic* findStaticInModule(HIRModule& mod, const HIRStatic& target) {
-        for (auto& pair : mod.valueItems) {
-            if (auto* item = pair.second->ent.opt_Static(); item && *item == &target) {
-                return *item;
-            }
-        }
-        for (auto& item : mod.inlineStatics) {
-            if (item.second.get() == &target) {
-                return item.second.get();
-            }
-        }
-        for (auto& pair : mod.modItems) {
-            auto& item = pair.second->ent;
-            if (auto* sub = item.opt_Module()) {
-                if (auto* found = findStaticInModule(*sub, target)) {
-                    return found;
-                }
-            } else if (auto* trait = item.opt_Trait()) {
-                for (auto& value : trait->values) {
-                    if (auto* stat = value.second.opt_Static(); stat == &target) {
-                        return stat;
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    template <typename Group, typename Callback>
-    auto findInImplGroup(Group& group, Callback callback) -> decltype(callback(*group.generic.front())) {
-        for (auto& pair : group.named) {
-            for (auto& impl : pair.second) {
-                if (auto* found = callback(*impl)) {
-                    return found;
-                }
-            }
-        }
-        for (auto& impl : group.nonNamed) {
-            if (auto* found = callback(*impl)) {
-                return found;
-            }
-        }
-        for (auto& impl : group.generic) {
-            if (auto* found = callback(*impl)) {
-                return found;
-            }
-        }
-        return nullptr;
-    }
-
-    HIRFunction* findFunctionInCrate(HIRCrate& crate, const HIRFunction& target) {
-        if (auto* found = findFunctionInModule(crate.rootModule, target)) {
-            return found;
-        }
-        for (auto& value : crate.newValues) {
-            if (auto* function = value.second->ent.opt_Function(); function && *function == &target) {
-                return *function;
-            }
-        }
-        if (auto* found = findInImplGroup(crate.typeImpls, [&](HIRTypeImpl& impl) -> HIRFunction* {
-                for (auto& method : impl.methods) {
-                    if (&method.second.data == &target) {
-                        return &method.second.data;
-                    }
-                }
-                return nullptr;
-            })) {
-            return found;
-        }
-        for (auto& trait : crate.traitImpls) {
-            if (auto* found = findInImplGroup(trait.second, [&](HIRTraitImpl& impl) -> HIRFunction* {
-                    for (auto& method : impl.methods) {
-                        if (&method.second.data == &target) {
-                            return &method.second.data;
-                        }
-                    }
-                    return nullptr;
-                })) {
-                return found;
-            }
-        }
-        for (auto& ext : crate.extCrates) {
-            if (ext.second.data) {
-                if (auto* found = findFunctionInCrate(*ext.second.data, target)) {
-                    return found;
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    HIRConstant* findConstantInCrate(HIRCrate& crate, const HIRConstant& target) {
-        if (auto* found = findConstantInModule(crate.rootModule, target)) {
-            return found;
-        }
-        for (auto& value : crate.newValues) {
-            if (auto* constant = value.second->ent.opt_Constant(); constant && *constant == &target) {
-                return *constant;
-            }
-        }
-        if (auto* found = findInImplGroup(crate.typeImpls, [&](HIRTypeImpl& impl) -> HIRConstant* {
-                for (auto& constant : impl.constants) {
-                    if (&constant.second.data == &target) {
-                        return &constant.second.data;
-                    }
-                }
-                return nullptr;
-            })) {
-            return found;
-        }
-        for (auto& trait : crate.traitImpls) {
-            if (auto* found = findInImplGroup(trait.second, [&](HIRTraitImpl& impl) -> HIRConstant* {
-                    for (auto& constant : impl.constants) {
-                        if (&constant.second.data == &target) {
-                            return &constant.second.data;
-                        }
-                    }
-                    return nullptr;
-                })) {
-                return found;
-            }
-        }
-        for (auto& ext : crate.extCrates) {
-            if (ext.second.data) {
-                if (auto* found = findConstantInCrate(*ext.second.data, target)) {
-                    return found;
-                }
-            }
-        }
-        return nullptr;
-    }
-
-    HIRStatic* findStaticInCrate(HIRCrate& crate, const HIRStatic& target) {
-        if (auto* found = findStaticInModule(crate.rootModule, target)) {
-            return found;
-        }
-        for (auto& value : crate.newValues) {
-            if (auto* stat = value.second->ent.opt_Static(); stat && *stat == &target) {
-                return *stat;
-            }
-        }
-        for (auto& trait : crate.traitImpls) {
-            if (auto* found = findInImplGroup(trait.second, [&](HIRTraitImpl& impl) -> HIRStatic* {
-                    for (auto& stat : impl.statics) {
-                        if (&stat.second.data == &target) {
-                            return &stat.second.data;
-                        }
-                    }
-                    return nullptr;
-                })) {
-                return found;
-            }
-        }
-        for (auto& ext : crate.extCrates) {
-            if (ext.second.data) {
-                if (auto* found = findStaticInCrate(*ext.second.data, target)) {
-                    return found;
-                }
-            }
-        }
-        return nullptr;
-    }
-
     void indexMutableOwnersInModule(HIRMutableOwnerCache& cache, HIRModule& mod) {
         for (auto& pair : mod.valueItems) {
             auto& item = pair.second->ent;
@@ -2256,14 +2047,10 @@ HIRFunction& HIRCrate::findFunctionMut(const WireBoard& wb, const Span& sp, cons
     if (auto* found = cache.functions.find(&function)) {
         return **found;
     }
-    indexMutableOwnersOfCrate(cache, *this);
-    if (auto* found = cache.functions.find(&function)) {
-        return **found;
-    }
-    auto* found = findFunctionInCrate(*this, function);
+    indexMutableOwners(cache, *this);
+    auto* found = cache.functions.find(&function);
     ASSERT_BUG(sp, found, StringView("Function is not owned by the HIR crate graph: ") << path);
-    cache.functions.insert(&function, found);
-    return *found;
+    return **found;
 }
 
 HIRStatic& HIRCrate::findStaticMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRStatic& item) {
@@ -2276,14 +2063,10 @@ HIRStatic& HIRCrate::findStaticMut(const WireBoard& wb, const Span& sp, const HI
     if (auto* found = cache.statics.find(&item)) {
         return **found;
     }
-    indexMutableOwnersOfCrate(cache, *this);
-    if (auto* found = cache.statics.find(&item)) {
-        return **found;
-    }
-    auto* found = findStaticInCrate(*this, item);
+    indexMutableOwners(cache, *this);
+    auto* found = cache.statics.find(&item);
     ASSERT_BUG(sp, found, StringView("Static is not owned by the HIR crate graph"));
-    cache.statics.insert(&item, found);
-    return *found;
+    return **found;
 }
 
 HIRConstant& HIRCrate::findConstantMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRConstant& item) {
@@ -2296,14 +2079,10 @@ HIRConstant& HIRCrate::findConstantMut(const WireBoard& wb, const Span& sp, cons
     if (auto* found = cache.constants.find(&item)) {
         return **found;
     }
-    indexMutableOwnersOfCrate(cache, *this);
-    if (auto* found = cache.constants.find(&item)) {
-        return **found;
-    }
-    auto* found = findConstantInCrate(*this, item);
+    indexMutableOwners(cache, *this);
+    auto* found = cache.constants.find(&item);
     ASSERT_BUG(sp, found, StringView("Constant is not owned by the HIR crate graph"));
-    cache.constants.insert(&item, found);
-    return *found;
+    return **found;
 }
 
 HIRExprNode& HIRCrate::findExprNodeMut(const Span& sp, const HIRExprNode& node) {

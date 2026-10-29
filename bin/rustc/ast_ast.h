@@ -800,6 +800,11 @@ public:
     bool insertPrelude = true;
     char indexPopulated = 0;
 
+    /* The original block lives in the expression pool, beyond the lifetime
+     * of temporary macro item modules. Copies use it as a stable identity. */
+    const ASTExprNode* fragmentOrigin = nullptr;
+    bool isFragmentCopy = false;
+
     LintLevelOverrides lintLevels;
 
     struct IndexEnt {

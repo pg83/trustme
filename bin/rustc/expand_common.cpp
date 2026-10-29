@@ -2581,6 +2581,15 @@ auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
 
 auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     this->inAssignLhs = false;
+    if (node.localMod && node.localMod->fragmentOrigin && expandState.modstack.item && expandState.modstack.item->isFragmentCopy) {
+        const auto* origin = node.localMod->fragmentOrigin;
+        for (const auto& module : expandState.modstack.item->anonMods()) {
+            if (module->fragmentOrigin == origin) {
+                node.localMod = module;
+                break;
+            }
+        }
+    }
     unsigned int modItemCount = 0;
     bool hasLocalMod = node.localMod != nullptr;
 

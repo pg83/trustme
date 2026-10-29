@@ -303,6 +303,8 @@ auto ASTModule::clone() const -> ASTModule {
     result.fileInfo = fileInfo;
     result.insertPrelude = insertPrelude;
     result.lintLevels = lintLevels;
+    result.fragmentOrigin = fragmentOrigin;
+    result.isFragmentCopy = true;
     for (const auto& item : items) {
         auto cloned = ASTNamed<ASTItem>(item->span, item->attrs.clone(), item->vis, item->name, item->data.clone());
         cloned.cachedCfg = item->cachedCfg;

@@ -1234,6 +1234,9 @@ ASTExprNodeBlock::ASTExprNodeBlock(Type type, std::vector<Line> nodes, std::shar
     , localMod(std::move(localMod))
     , nodes(std::move(nodes))
 {
+    if (this->localMod && !this->localMod->fragmentOrigin) {
+        this->localMod->fragmentOrigin = this;
+    }
 }
 
 ASTExprNodeAsyncBlock::ASTExprNodeAsyncBlock(ASTExprNode* inner, bool isMove, bool isUse)
