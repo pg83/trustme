@@ -602,6 +602,13 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
     HIRVisitor::visitTraitImpl(traitPath, impl);
     selfTypes.popBack();
 
+    if (traitPath == crate.getLangItemPathOpt("async_drop")) {
+        const auto& dropTrait = crate.getLangItemPathOpt("drop");
+        if (dropTrait.components().empty() || !resolve_.findImpl(sp, dropTrait, HIRPathParams{}, impl.type, [](SolverSelection) { return true; })) {
+            ERROR(sp, E0000, StringView("AsyncDrop impl requires a Drop impl for ") << impl.type);
+        }
+    }
+
     // TODO: Check that the type+trait is valid
 
     {

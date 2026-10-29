@@ -7521,6 +7521,9 @@ if not system_rustc_mode:
         "named_variadic_function_body",
         "expanded_extern_block_declarations",
         "assert_struct_update_text",
+        "assert_type_ascription_text",
+        "format_three_byte_fill",
+        "inferred_pattern_base_type",
     )
     for _stem in (
         "macro_clones_patterns",

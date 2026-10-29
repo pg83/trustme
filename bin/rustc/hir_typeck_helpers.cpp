@@ -17388,28 +17388,6 @@ void stl::output<ZeroCopyOutput, TraitResolution::AutoderefBorrow>(ZeroCopyOutpu
 }
 
 template <>
-void stl::output<ZeroCopyOutput, TraitResolution::AllowedReceivers>(ZeroCopyOutput& os, TraitResolution::AllowedReceivers x) {
-    switch (x) {
-        case TraitResolution::AllowedReceivers::All:
-            os << StringView("All");
-            break;
-        case TraitResolution::AllowedReceivers::AnyBorrow:
-            os << StringView("AnyBorrow");
-            break;
-        case TraitResolution::AllowedReceivers::SharedBorrow:
-            os << StringView("SharedBorrow");
-            break;
-        case TraitResolution::AllowedReceivers::Value:
-            os << StringView("Value");
-            break;
-        case TraitResolution::AllowedReceivers::Box:
-            os << StringView("Box");
-            break;
-    }
-    return;
-}
-
-template <>
 void stl::output<ZeroCopyOutput, TraitResolution::MethodAccess>(ZeroCopyOutput& os, TraitResolution::MethodAccess x) {
     switch (x) {
         case TraitResolution::MethodAccess::Shared:

@@ -2038,10 +2038,10 @@ namespace {
             } break;
         }
 
-        if (enm.forcedAlignment > 0 && enm.data.is_Value()) {
+        if (enm.forcedAlignment > 0) {
             rv.align = std::max(rv.align, static_cast<size_t>(enm.forcedAlignment));
-            while (rv.size % rv.align != 0) {
-                rv.size++;
+            if (rv.size % rv.align != 0) {
+                rv.size += rv.align - rv.size % rv.align;
             }
             rv.userAlign = true;
         }
