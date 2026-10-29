@@ -1091,7 +1091,6 @@ public:
 
     SolverCertainty typeIsSized(const Span& sp, const HIRType* ty) const;
     SolverCertainty typeIsCopy(const Span& sp, const HIRType* ty) const;
-    SolverCertainty typeIsClone(const Span& sp, const HIRType* ty) const;
 
     const HIRType* typeIsOwnedBox(const Span& sp, const HIRType* ty) const;
 

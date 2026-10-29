@@ -301,7 +301,6 @@ namespace {
 
         void visitParams(const ASTGenericParams& params);
 
-        void visitHrb(const ASTHigherRankedBounds& hrb);
 
         void visitBounds(const ASTGenericParams& params);
 
@@ -2523,22 +2522,6 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                 }
             }
             isFirst = false;
-        }
-        pmi.sendSymbol(">");
-    }
-}
-
-auto ProcMacroVisitor::visitHrb(const ASTHigherRankedBounds& hrb) -> void {
-    if (!hrb.empty()) {
-        pmi.sendRword("for");
-        pmi.sendSymbol("<");
-        for (const auto& lft : hrb.lifetimes) {
-            pmi.sendLifetime(lft.name().name.c_str());
-            pmi.sendSymbol(",");
-        }
-        for (const auto& type : hrb.types) {
-            pmi.sendIdent(type.c_str());
-            pmi.sendSymbol(",");
         }
         pmi.sendSymbol(">");
     }

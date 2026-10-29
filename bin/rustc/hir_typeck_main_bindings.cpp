@@ -283,6 +283,9 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
 
     switch (data.tag()) {
         case HIRType::TAG_Infer: {
+            if (checkingFunctionSignature) {
+                ERROR(sp, E0000, StringView("the placeholder `_` is not allowed in function signatures"));
+            }
             break;
         }
         case HIRType::TAG_Diverge: {

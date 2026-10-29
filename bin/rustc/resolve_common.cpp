@@ -539,12 +539,11 @@ auto ResolveState::matchingNamespace(const ASTItem& i, ResolveNamespace ns) -> b
         case ASTItem::TAG_Union:
         case ASTItem::TAG_Trait:
         case ASTItem::TAG_TraitAlias:
-            return ns == ResolveNamespace::Namespace;
         case ASTItem::TAG_Struct:
-            return ns == ResolveNamespace::Namespace || (ns == ResolveNamespace::Value && !i.as_Struct().data.is_Struct());
+            return ns == ResolveNamespace::Namespace;
         case ASTItem::TAG_Function:
         case ASTItem::TAG_Static:
-            return ns == ResolveNamespace::Value;
+            return false;
         case ASTItem::TAG_Macro:
             return ns == ResolveNamespace::Macro;
         case ASTItem::TAG_NegImpl:
@@ -729,8 +728,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                     break;
                 case ResolveNamespace::Namespace:
                     return ResolveItemRefType(&i->data);
-                case ResolveNamespace::Value:
-                    return ResolveItemRefValue(&i->data);
             }
         }
 
@@ -931,26 +928,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                 return ResolveItemRefType(ti);
             }
         } break;
-        case ResolveNamespace::Value: {
-            auto it = mod.valueItems.find(itemName);
-            if (it != mod.valueItems.end() && it->second->publicity.isVisible(visPath)) {
-                DEBUG(StringView("Found `") << itemName << StringView("` in HIR value"));
-                const HIRValueItem* vi;
-                if (const auto* p = it->second->ent.opt_Import()) {
-                    if (outPath) {
-                        *outPath = spToAp(p->path);
-                    }
-                    vi = &H::getCrate(sp, crate, p->path).getValitemByPath(sp, p->path, true);
-                } else {
-                    if (outPath) {
-                        outPath->nodes.pushBack(itemName);
-                    }
-                    vi = &it->second->ent;
-                }
-                ASSERT_BUG(sp, !vi->is_Import(), StringView("Recursive value import in HIR: ") << it->second->ent.as_Import().path << StringView(" pointed to ") << vi->as_Import().path);
-                return ResolveItemRefValue(vi);
-            }
-        } break;
         case ResolveNamespace::Macro: {
             auto it = mod.macroItems.find(itemName);
             if (it == mod.macroItems.end()) {
@@ -1031,9 +1008,6 @@ void stl::output<ZeroCopyOutput, ResolveNamespace>(ZeroCopyOutput& os, ResolveNa
     switch (ns) {
         case ResolveNamespace::Namespace:
             os << StringView("Namespace");
-            return;
-        case ResolveNamespace::Value:
-            os << StringView("Value");
             return;
         case ResolveNamespace::Macro:
             os << StringView("Macro");

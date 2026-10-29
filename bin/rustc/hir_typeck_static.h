@@ -101,7 +101,6 @@ class StaticTraitResolve: public TraitResolveCommon {
 
     MetadataType selfMetadata = MetadataType::Unknown;
     mutable HIRTypeRefMap<bool> copyCache;
-    mutable HIRTypeRefMap<bool> cloneCache;
     mutable HIRTypeRefMap<bool> dropCache;
 
     mutable HIRTypeRefMap<const HIRType*> atyCache;
@@ -220,9 +219,7 @@ public:
         return findNamedTraitInTraitCb(sp, des, params, traitPtr, traitPath, pp, selfType, cb);
     }
 
-    bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;
     bool typeIsCopy(const Span& sp, const HIRType* ty) const;
-    bool typeIsClone(const Span& sp, const HIRType* ty) const;
     bool typeIsSized(const Span& sp, const HIRType* ty) const;
     bool typeIsImpossible(const Span& sp, const HIRType* ty) const;
     bool canUnsize(const Span& sp, const HIRType* dst, const HIRType* src) const;

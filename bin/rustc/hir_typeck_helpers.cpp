@@ -5904,15 +5904,6 @@ SolverCertainty TraitResolution::typeIsCopy(const Span& sp, const HIRType* ty) c
     return solveTraitGoalCertainty(sp, langCopy(), type);
 }
 
-SolverCertainty TraitResolution::typeIsClone(const Span& sp, const HIRType* ty) const {
-    TRACE_FUNCTION_F(ty);
-    const auto& type = this->ivars.getType(ty);
-    if (langClone().components().empty()) {
-        return solveStructuralTraitGoalCertainty(sp, StructuralTrait::Clone, type);
-    }
-    return solveTraitGoalCertainty(sp, langClone(), type);
-}
-
 SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef, bool unknownTargetIsFresh, SolverOpenStepCallback* openStep) const {
     SolverCoercionResponse result;
     TRACE_FUNCTION_FR(

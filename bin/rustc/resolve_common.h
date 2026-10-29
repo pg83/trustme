@@ -18,13 +18,11 @@ class HIRCrate;
 class HIRModule;
 class HIRProcMacro;
 class HIRTypeItem;
-class HIRValueItem;
 
 #include "resolve_common_tu.h"
 
 enum class ResolveNamespace {
     Namespace,
-    Value,
     Macro,
 };
 ResolveModuleRef ResolveLookupGetModule(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);

@@ -1055,26 +1055,6 @@ bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimple
     return false;
 }
 
-bool StaticTraitResolve::traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const {
-    TRACE_FUNCTION_FR(StringView("name=") << name << StringView(", trait=") << traitPath, outPath);
-    auto it = traitPtr.types.find(name);
-    if (it != traitPtr.types.end()) {
-        outPath = traitPath.clone();
-        return true;
-    }
-
-    auto tySelf = crate.types.self();
-    auto monomorph = MonomorphStatePtr(crate.types, tySelf, &traitPath.params, nullptr);
-    for (const auto& st : traitPtr.allParentTraits) {
-        if (st.traitPtr->types.count(name)) {
-            outPath.path = st.path.path;
-            outPath.params = monomorph.monomorphPathParams(sp, st.path.params, false);
-            return true;
-        }
-    }
-    return false;
-}
-
 bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRType* type) const {
     const auto* environment = typingEnvironment();
     const u64 answerKey = reinterpret_cast<uintptr_t>(type);
@@ -1096,21 +1076,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRType* type) const {
     } else {
         copyCache.insert(std::make_pair(type, proven));
     }
-    return proven;
-}
-
-bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRType* type) const {
-    if (const auto it = cloneCache.find(type); it != cloneCache.end()) {
-        return it->second;
-    }
-
-    HIRPathParams params;
-    bool proven = false;
-    this->findImpl(sp, langClone(), &params, type, [&](SolverSelection) {
-        proven = true;
-        return proven;
-    });
-    cloneCache.insert(std::make_pair(type, proven));
     return proven;
 }
 
@@ -2350,7 +2315,6 @@ StaticTraitResolve::StaticTraitResolve(const WireBoard& wb, OpaqueReveal reveal)
 
 void StaticTraitResolve::prepIndexes() {
     copyCache.clear();
-    cloneCache.clear();
     dropCache.clear();
     atyCache.clear();
     TraitResolveCommon::prepIndexes(Span());

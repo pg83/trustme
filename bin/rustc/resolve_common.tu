@@ -35,22 +35,11 @@ generate(
 )
 
 generate(
-    name="ResolveItemRefValue",
-    default="None",
-    variants=[
-        v("None"),
-        v("Ast", "const ASTItem*"),
-        v("Hir", "const HIRValueItem*"),
-    ],
-)
-
-generate(
     name="ResolveItemRef",
     default="None",
     variants=[
         v("None"),
         v("Namespace", "ResolveItemRefType", copy=False),
-        v("Value", "ResolveItemRefValue", copy=False),
         v("Macro", "ResolveItemRefMacro", copy=False),
     ],
 )

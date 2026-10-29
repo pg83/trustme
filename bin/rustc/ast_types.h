@@ -190,26 +190,6 @@ struct ASTType {
 
     ASTType* clone() const;
 
-    ASTType* innerType() const {
-        switch (data.tag()) {
-            case TypeData::TAG_Borrow: {
-                auto& e = data.as_Borrow();
-                return e.inner;
-            }
-            case TypeData::TAG_Pointer: {
-                auto& e = data.as_Pointer();
-                return e.inner;
-            }
-            case TypeData::TAG_Array: {
-                auto& e = data.as_Array();
-                return e.inner;
-            }
-            default: {
-                BUG(Span(), stl::StringView("Called inner_type on non-wrapper"));
-            }
-        }
-    }
-
     void print(stl::ZeroCopyOutput& os, bool isDebug = false) const;
 
     PrettyPrintType printPretty() const {
