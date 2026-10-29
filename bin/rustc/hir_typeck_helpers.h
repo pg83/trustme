@@ -832,11 +832,6 @@ private:
     std::vector<HIRSimplePath> opaqueAliasScopes;
     std::vector<HIRSimplePath> definingOpaqueAliases;
     stl::Vector<const HIRPath*> definingFcnOrigins;
-    struct ClosureReturnExpectation {
-        const HIRExprNodeClosure* closure;
-        const HIRType* type;
-    };
-    stl::Vector<ClosureReturnExpectation> closureReturnExpectations;
 
 public:
     SolverCertainty probeTypeRelation(const Span& sp, const HIRType* left, const HIRType* right) const;
@@ -853,13 +848,10 @@ public:
     void addDefiningFcnOrigin(const HIRPath& origin);
     bool isDefiningFcnOrigin(const HIRPath& origin) const;
 
-    void setClosureReturnExpectation(const HIRExprNodeClosure* closure, const HIRType* type);
-    const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
-
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 
     bool solverEnvIsEmpty() const {
-        return opaqueAliasScopes.empty() && definingOpaqueAliases.empty() && definingFcnOrigins.empty() && closureReturnExpectations.empty();
+        return opaqueAliasScopes.empty() && definingOpaqueAliases.empty() && definingFcnOrigins.empty();
     }
 
     const HIRGenericPath* currentTraitPath() const {

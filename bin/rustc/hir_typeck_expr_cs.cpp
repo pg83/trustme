@@ -2406,25 +2406,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         const bool hasSelfCoercionGoal = std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
             return constraint.isSelf;
         });
-        const bool isFnAssociated = v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce());
-        const auto registerLateClosureOutput = [&](const HIRType* implType) {
-            if (!isFnAssociated) {
-                return static_cast<const HIRType*>(nullptr);
-            }
-            const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
-            const auto* expectedOutput = context.getType(v.leftTy);
-            const bool divergingClosureOutput = closure
-                && closure->returnType->is_Infer()
-                && (context.getType(closure->returnType)->is_Diverge() || context.usedNeverFallback(closure->returnType));
-            if (divergingClosureOutput && !expectedOutput->is_Diverge() && !context.ivars.typeContainsIvars(expectedOutput)) {
-                DEBUG(StringView("[check_associated] - apply late expected output ") << expectedOutput << StringView(" to diverging closure"));
-                context.registerClosureReturnObligation(sp, closure, expectedOutput);
-                return closure->returnType;
-            }
-            return static_cast<const HIRType*>(nullptr);
-        };
-        const HIRType* lateClosureReturn = registerLateClosureOutput(context.getType(v.implTy));
-
         /* The current primitive impl is redundant only after every operator
          * type is known. Before then its typed head carries inference effects. */
         const auto* excludedCurrentOperatorImpl = currentOperatorUsesLanguagePrimitive() && operatorTypesAreResolved ? context.currentTraitImpl : nullptr;
@@ -2450,7 +2431,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 },
                 {
                     .assocName = v.name.c_str(),
-                    .assocType = v.name == "" || lateClosureReturn ? nullptr : v.leftTy,
+                    .assocType = v.name == "" ? nullptr : v.leftTy,
                     .assocParams = v.name == "" ? nullptr : &v.atyPp,
                     .allowInferInputs = true,
                     .excludedImpl = excludedCurrentOperatorImpl,
@@ -2458,37 +2439,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 }
             );
         }
-        if (!lateClosureReturn && hasResponse && responseApplicable) {
-            lateClosureReturn = registerLateClosureOutput(responseApplicable->getImplType(context.crate.types));
-            if (lateClosureReturn) {
-                const auto isLateOutputRelation = [&](const HIRType* left, const HIRType* right) {
-                    const auto matches = [&](const HIRType* actual, const HIRType* expected) {
-                        return actual == expected || context.ivars.typesEqual(context.getType(actual), context.getType(expected));
-                    };
-                    return (matches(left, v.leftTy) && matches(right, lateClosureReturn))
-                        || (matches(right, v.leftTy) && matches(left, lateClosureReturn));
-                };
-                SolverSlotValues retainedSlots;
-                for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
-                    if (!isLateOutputRelation(response.slots.typeInputs[i], response.slots.types[i])) {
-                        retainedSlots.typeInputs.push_back(response.slots.typeInputs[i]);
-                        retainedSlots.types.push_back(response.slots.types[i]);
-                    }
-                }
-                retainedSlots.valueInputs = std::move(response.slots.valueInputs);
-                retainedSlots.values = std::move(response.slots.values);
-                response.slots = std::move(retainedSlots);
-
-                ThinVector<SolverTypeEquality> retainedEqualities;
-                for (const auto& equality : response.equalities) {
-                    if (!isLateOutputRelation(equality.left, equality.right)) {
-                        retainedEqualities.push_back(equality);
-                    }
-                }
-                response.equalities = std::move(retainedEqualities);
-            }
-        }
-
         if (hasResponse) {
             /* An ambiguous operator response may already expose the selected
              * impl's input equalities while its nested obligations still
@@ -3533,9 +3483,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             }
             const bool toNever = context.crate.edition >= ASTEdition::Rust2024;
             DEBUG(infer->index << StringView(": diverging and unsolved - never-type fallback to ") << (toNever ? StringView("`!`") : StringView("`()`")));
-            if (!toNever) {
-                context.recordNeverFallback(infer->index);
-            }
             context.equateTypes(Span(), type, toNever ? context.crate.types.diverge() : context.crate.types.unit());
             return true;
         }
@@ -4078,17 +4025,6 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                 }
                 return true;
             };
-
-            // TODO: Should ! end up in an ivar?
-            if (lT->is_Diverge() && rT->is_Diverge()) {
-                return;
-            } else if (rT->is_Diverge()) {
-                if (const auto* rE = ri->opt_Infer()) {
-                    this->ivars.setIvarTo(rE->index, lT);
-                }
-                return;
-            } else {
-            }
 
             if (lT->tag() != rT->tag()) {
                 ERROR(sp, E0000, StringView("Type mismatch between ") << this->ivars.fmtType(lT) << StringView(" and ") << this->ivars.fmtType(rT));
@@ -6059,36 +5995,6 @@ void Context::registerSolverObligation(const Span& sp, const HIRType* type, HIRT
     }
 }
 
-void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRType* expected) {
-    for (auto& obligation : closureReturnObligations) {
-        if (obligation.closure != closure) {
-            continue;
-        }
-        equateTypes(sp, obligation.expected, expected);
-        resolve.setClosureReturnExpectation(closure, getType(obligation.expected));
-        return;
-    }
-    closureReturnObligations.pushBack(ClosureReturnObligation{closure, std::move(expected)});
-    resolve.setClosureReturnExpectation(closure, getType(expected));
-    ivars.markChange();
-}
-
-const HIRType* Context::closureReturnExpectation(const HIRExprNodeClosure* closure) const {
-    for (const auto& obligation : closureReturnObligations) {
-        if (obligation.closure == closure) {
-            return getType(obligation.expected);
-        }
-    }
-    return nullptr;
-}
-
-void Context::recordNeverFallback(unsigned index) {
-    while (index >= neverFallbackIvars.length()) {
-        neverFallbackIvars.pushBack(false);
-    }
-    neverFallbackIvars.mut(index) = true;
-}
-
 void Context::markDivergingIvar(const HIRType* destination) {
     /* Upstream `apply_adjustments` only records a general type variable
        (`is_ty_var`): an integer or float variable has its own fallback. */
@@ -6100,24 +6006,6 @@ void Context::markDivergingIvar(const HIRType* destination) {
         DEBUG(StringView("- IVar ") << infer->index << StringView(" is diverging"));
         divergingIvars.pushBack(infer->index);
     }
-}
-
-bool Context::usedNeverFallback(const HIRType* type) const {
-    const auto* infer = type->opt_Infer();
-    if (!infer || infer->index == ~0u) {
-        return false;
-    }
-    unsigned index = infer->index;
-    for (size_t count = 0; count < ivars.ivars.size(); count++) {
-        if (index < neverFallbackIvars.length() && neverFallbackIvars[index]) {
-            return true;
-        }
-        if (index >= ivars.ivars.size() || !ivars.ivars[index].isAlias()) {
-            return false;
-        }
-        index = ivars.ivars[index].alias;
-    }
-    BUG(Span(), StringView("Loop detected while checking never fallback for ivar ") << infer->index);
 }
 
 void Context::applySolverResponse(const Span& sp, const SolverResponse& response, std::vector<HIRExprNodeP>* coercionInputs) {
@@ -6167,7 +6055,9 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
         }
         auto normalizedLeft = expandAssociatedTypes(sp, resolvedLeft);
         auto normalizedRight = expandAssociatedTypes(sp, resolvedRight);
-        equateTypes(sp, normalizedLeft, normalizedRight);
+        /* Solver equalities also constrain a settled `!` output. Only expression
+           coercions may turn a diverging value into a different type. */
+        equateTypesInner(sp, normalizedLeft, normalizedRight);
     };
     for (size_t i = 0; i < response.slots.types.size(); i++) {
         applyTypeEquality(response.slots.typeInputs[i], response.slots.types[i]);
@@ -9347,9 +9237,6 @@ auto ExprVisitorApply::visit(HIRExprNodeClosure& node) -> void {
     for (auto& arg : node.args) {
         arg.second = this->checkTypeResolvedTop(node.span(), arg.second);
     }
-    if (const auto* expected = context.closureReturnExpectation(&node)) {
-        node.returnType = expected;
-    }
     node.returnType = this->checkTypeResolvedTop(node.span(), node.returnType);
     HIRExprVisitorDef::visit(node);
 }
@@ -10514,14 +10401,6 @@ auto IvarCoercionIndex::buildComponents() -> void {
     }
     for (const auto& obligation : context.solverObligations) {
         collectIvars(obligation.type, members, true);
-        unite();
-    }
-    for (const auto& obligation : context.closureReturnObligations) {
-        for (const auto& argument : obligation.closure->args) {
-            collectIvars(argument.second, members, true);
-        }
-        collectIvars(obligation.closure->returnType, members, true);
-        collectIvars(obligation.expected, members, true);
         unite();
     }
     for (size_t i = 0; i < count; i++) {

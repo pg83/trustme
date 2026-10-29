@@ -3784,8 +3784,7 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         }
                         const HIRPathParams pp(crate.types.tuple(mv$(args)));
                         HIRTraitPath::assocListT types;
-                        const auto* returnType = closureReturnExpectation(nodeP);
-                        types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, returnType ? returnType : nodeP->returnType}));
+                        types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, nodeP->returnType}));
                         return callback.visit(SolverImpl(type, mv$(pp), mv$(types)));
                     }
                     break;
@@ -4182,31 +4181,6 @@ bool TraitResolution::isDefiningFcnOrigin(const HIRPath& origin) const {
         }
     }
     return false;
-}
-
-void TraitResolution::setClosureReturnExpectation(const HIRExprNodeClosure* closure, const HIRType* type) {
-    for (size_t i = 0; i < closureReturnExpectations.length(); i++) {
-        auto& expectation = closureReturnExpectations.mut(i);
-        if (expectation.closure != closure) {
-            continue;
-        }
-        if (expectation.type != type) {
-            expectation.type = type;
-            solverEnvGeneration++;
-        }
-        return;
-    }
-    closureReturnExpectations.pushBack(ClosureReturnExpectation{closure, type});
-    solverEnvGeneration++;
-}
-
-const HIRType* TraitResolution::closureReturnExpectation(const HIRExprNodeClosure* closure) const {
-    for (const auto& expectation : closureReturnExpectations) {
-        if (expectation.closure == closure) {
-            return expectation.type;
-        }
-    }
-    return nullptr;
 }
 
 void TraitResolution::addDefiningOpaqueAlias(const HIRSimplePath& path) {
@@ -12745,12 +12719,6 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
         if (!useCandidateResponse && !typeHasUfcsUnknown(candidateOutput)) {
             candidateOutput = resolve_.expandAssociatedTypes(span(), std::move(candidateOutput));
         }
-        const bool callableOutput = requirement.first == "Output" && (requirement.second.sourceTrait.path == resolve_.langFn() || requirement.second.sourceTrait.path == resolve_.langFnMut() || requirement.second.sourceTrait.path == resolve_.langFnOnce());
-        const auto* candidateOutputInfer = candidateOutput->opt_Infer();
-        const auto* resolvedCandidateOutput = candidateOutputInfer && candidateOutputInfer->index == ~0u ? candidateOutput : resolve_.ivars.getType(candidateOutput);
-        if (callableOutput && resolvedCandidateOutput->is_Diverge()) {
-            continue;
-        }
         const auto* candidatePattern = useCandidateResponse ? candidateOutput : requirement.second.type;
         const auto* responseValue = useCandidateResponse ? requirement.second.type : candidateOutput;
         const auto binding = this->unifyCandidateParams(candidate, *candidateParams, [&](auto& relations) {
@@ -12801,17 +12769,6 @@ auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const H
                 if (const auto* path = output->opt_Path(); path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown()) {
                     continue;
                 }
-            }
-            const bool callableOutput = requirement.first == "Output" && (requirement.second.sourceTrait.path == resolve_.langFn() || requirement.second.sourceTrait.path == resolve_.langFnMut() || requirement.second.sourceTrait.path == resolve_.langFnOnce());
-            const auto* outputInfer = output->opt_Infer();
-            const auto* resolvedOutput = outputInfer && outputInfer->index == ~0u ? output : resolve_.ivars.getType(output);
-            /* A closure whose body diverges still has its return type to learn from
-               where it is used, so a `!` read off the closure node itself binds nothing
-               yet.  The `Output` of an impl is what it says: a closure's own impl, once
-               its return type is settled as `!`, gives `A` that value (`repeat_with(||
-               panic!())` is an iterator of `!`). */
-            if (callableOutput && resolvedOutput->is_Diverge() && !response.isTraitImpl()) {
-                continue;
             }
             relations.type(requirement.second.type, output);
         }
@@ -13445,10 +13402,6 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
         required = normalizeGoalInput(required);
         const auto relation = this->relateTypes(candidate, output, required);
         if (relation == Certainty::NoSolution) {
-            if (resolve_.ivars.getType(output)->is_Diverge()) {
-                result = Certainty::Ambiguous;
-                continue;
-            }
             return Certainty::NoSolution;
         }
         if (relation == Certainty::Ambiguous) {

@@ -130,14 +130,7 @@ struct Context {
        deferral again each pass. */
     stl::Vector<std::pair<const HIRType*, const HIRType*>> deferredRigidProjections;
 
-    struct ClosureReturnObligation {
-        const HIRExprNodeClosure* closure;
-        const HIRType* expected;
-    };
-
-    stl::Vector<ClosureReturnObligation> closureReturnObligations;
     ThinVector<SolverObligation> solverObligations;
-    stl::Vector<bool> neverFallbackIvars;
     /* Inference variables `!` was coerced into - upstream's `diverging_type_vars`;
        whichever variable each has since been unified with is the root that falls
        back. */
@@ -194,10 +187,6 @@ struct Context {
 
     void applySolverResponse(const Span& sp, const SolverResponse& response, std::vector<HIRExprNodeP>* coercionInputs = nullptr);
     void registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait);
-    void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, const HIRType* expected);
-    const HIRType* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
-    void recordNeverFallback(unsigned index);
-    bool usedNeverFallback(const HIRType* type) const;
     void markDivergingIvar(const HIRType* destination);
     const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input);
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params);
