@@ -2855,8 +2855,16 @@ namespace {
                 break;
             }
             case HIRType::TAG_Array: {
-                BUG(span, StringView("Array in an external delegation signature"));
-                break;
+                const auto& array = type->as_Array();
+                ASTExprNode* size;
+                if (const auto* known = array.size.opt_Known()) {
+                    size = makeAstExprNode<ASTExprNodeInteger>(pool, U128(*known), CORETYPE_UINT);
+                } else if (const auto* generic = array.size.as_Unevaluated().opt_Generic()) {
+                    size = makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(generic->name));
+                } else {
+                    TODO(span, StringView("Unevaluated array size in an external delegation signature: ") << array.size);
+                }
+                return mkType(pool, ASTTypeTags::SizedArray(), span, HIRTypeToAST(context, span, array.inner), size);
             }
             case HIRType::TAG_Slice: {
                 auto& e = (*type).as_Slice();
