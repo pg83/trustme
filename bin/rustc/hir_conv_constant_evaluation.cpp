@@ -1353,7 +1353,14 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                     size_t len;
 
                     P(MIREvalCallStackEntry& localState, const MIRParam& p) {
-                        auto vr = localState.getLval(p.as_LValue());
+                        MIREvalValueRef vr;
+                        if (const auto* place = p.opt_LValue()) {
+                            vr = localState.getLval(*place);
+                        } else {
+                            auto storage = MIREvalAllocationPtr::allocateScratch(localState.valuePool, 2 * (TargetGetPointerBits() / 8));
+                            vr = MIREvalValueRef(storage);
+                            localState.writeParam(vr, p);
+                        }
                         auto ptr = vr.readPtr(localState.state);
                         this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
                         this->data = this->len ? ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true) : nullptr;
@@ -1364,35 +1371,9 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
 
                 auto ptrL = P(localState, valL);
                 auto ptrR = P(localState, valR);
-                const auto length = std::min(ptrL.len, ptrR.len);
-                int cmp = length ? memcmp(ptrL.data, ptrR.data, length) : 0;
-                if (cmp == 0) {
-                    if (ptrL.len != ptrR.len) {
-                        cmp = ptrL.len < ptrR.len ? -1 : 1;
-                    }
-                }
-                switch (op) {
-                    case MIRBinOp::EQ:
-                        dst.writeByte(state, cmp == 0);
-                        break;
-                    case MIRBinOp::NE:
-                        dst.writeByte(state, cmp != 0);
-                        break;
-                    case MIRBinOp::GT:
-                        dst.writeByte(state, cmp > 0);
-                        break;
-                    case MIRBinOp::GE:
-                        dst.writeByte(state, cmp >= 0);
-                        break;
-                    case MIRBinOp::LT:
-                        dst.writeByte(state, cmp < 0);
-                        break;
-                    case MIRBinOp::LE:
-                        dst.writeByte(state, cmp <= 0);
-                        break;
-                    default:
-                        MIR_BUG(state, StringView("BinOp ") << int(op) << StringView(" on ") << ty << StringView(" - Byte slice or &str"));
-                }
+                MIR_ASSERT(state, op == MIRBinOp::EQ, StringView("Non-equality BinOp on byte slice or &str"));
+                const bool equal = ptrL.len == ptrR.len && (ptrL.len == 0 || memcmp(ptrL.data, ptrR.data, ptrL.len) == 0);
+                dst.writeByte(state, equal);
                 break;
             } else {
                 MIR_BUG(state, StringView("BinOp on ") << ty);

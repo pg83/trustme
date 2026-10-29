@@ -2450,8 +2450,8 @@ HIRType HIRType::cloneData() const {
 
 HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tCbResolveType resolvePlaceholder) const {
     const HIRType* self = this;
-    const auto& left = resolvePlaceholder.getType(sp, self);
-    const auto& right = resolvePlaceholder.getType(sp, x);
+    const HIRType* left = resolvePlaceholder.getType(sp, self);
+    const HIRType* right = resolvePlaceholder.getType(sp, x);
 
     if (left->is_Infer() && left == right) {
         return HIRCompare::Equal;
@@ -2470,6 +2470,12 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
         if (right->is_Generic() && (right->as_Generic().binding >> 8) == 2) {
             return HIRCompare::Fuzzy;
         }
+    }
+
+    if (!left->is_Infer() && right->is_Infer()) {
+        const auto* concrete = left;
+        left = right;
+        right = concrete;
     }
 
     if (const auto* e = left->opt_Infer()) {
@@ -2548,66 +2554,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                     case HIRType::TAG_Path: {
                         auto& re = (*right).as_Path();
                         return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                    }
-                }
-        }
-        UNREACHABLE();
-    }
-
-    if (const auto* re = right->opt_Infer()) {
-        switch (re->tyClass) {
-            case HIRInferClass::None:
-                return HIRCompare::Fuzzy;
-            case HIRInferClass::Integer:
-                switch ((*left).tag()) {
-                    default:
-                        return HIRCompare::Unequal;
-                    case HIRType::TAG_Primitive: {
-                        auto& le = (*left).as_Primitive();
-                        switch (le) {
-                            case HIRCoreType::I8:
-                            case HIRCoreType::U8:
-                            case HIRCoreType::I16:
-                            case HIRCoreType::U16:
-                            case HIRCoreType::I32:
-                            case HIRCoreType::U32:
-                            case HIRCoreType::I64:
-                            case HIRCoreType::U64:
-                            case HIRCoreType::I128:
-                            case HIRCoreType::U128:
-                            case HIRCoreType::Isize:
-                            case HIRCoreType::Usize:
-                                return HIRCompare::Fuzzy;
-                            default:
-                                return HIRCompare::Unequal;
-                        }
-                        break;
-                    }
-                    case HIRType::TAG_Path: {
-                        auto& le = (*left).as_Path();
-                        return le.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                    }
-                }
-            case HIRInferClass::Float:
-                switch ((*left).tag()) {
-                    default:
-                        return HIRCompare::Unequal;
-                    case HIRType::TAG_Primitive: {
-                        auto& le = (*left).as_Primitive();
-                        switch (le) {
-                            case HIRCoreType::F16:
-                            case HIRCoreType::F32:
-                            case HIRCoreType::F64:
-                            case HIRCoreType::F128:
-                                return HIRCompare::Fuzzy;
-                            default:
-                                return HIRCompare::Unequal;
-                        }
-                        break;
-                    }
-                    case HIRType::TAG_Path: {
-                        auto& le = (*left).as_Path();
-                        return le.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
                     }
                 }
         }
