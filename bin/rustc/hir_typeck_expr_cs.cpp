@@ -1967,10 +1967,37 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         return expectation;
     }
 
+    bool coerceDivergingBorrowOperand(Context& context, const HIRType* expected, HIRExprNodeP& expression) {
+        if (auto* borrow = cast<HIRExprNodeBorrow>(expression.get())) {
+            const auto* pointee = borrowOperandExpectationOf(context, borrow->span(), *borrow->value, expected);
+            if (!pointee) {
+                return false;
+            }
+            if (!isSyntacticPlaceExpression(*borrow->value) && context.getType(borrow->value->resType)->is_Diverge()) {
+                context.markDivergingIvar(pointee);
+                borrow->value->resType = pointee;
+            } else if (!coerceDivergingBorrowOperand(context, pointee, borrow->value)) {
+                return false;
+            }
+            borrow->resType = context.crate.types.borrow(borrow->type, borrow->value->resType);
+            return true;
+        }
+        if (auto* block = cast<HIRExprNodeBlock>(expression.get())) {
+            if (block->valueNode && coerceDivergingBorrowOperand(context, expected, block->valueNode)) {
+                block->resType = block->valueNode->resType;
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool checkCoerce(Context& context, const Context::Coercion& v) {
         HIRExprNodeP& nodePtr = *v.rightNodePtr;
         const auto& sp = v.span();
         const auto& tyDst = context.ivars.getType(v.leftTy);
+        if (coerceDivergingBorrowOperand(context, tyDst, nodePtr)) {
+            context.ivars.markChange();
+        }
         const auto& tySrc = context.ivars.getType(v.sourceType());
         TRACE_FUNCTION_FR(v << StringView(" - ") << context.ivars.fmtType(tyDst) << StringView(" := ") << context.ivars.fmtType(tySrc), v << StringView(" - ") << context.ivars.fmtType(v.leftTy) << StringView(" := ") << context.ivars.fmtType(nodePtr->resType));
 
