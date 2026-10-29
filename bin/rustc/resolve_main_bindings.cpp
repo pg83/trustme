@@ -4345,22 +4345,6 @@ namespace {
                 auto it = findHygienicItem(mod->macroItems, node.name(), nodeName);
                 if (it != mod->macroItems.end()) {
                     ieP = &it->second;
-                } else {
-                    const ASTModule::MacroImport* found = nullptr;
-                    for (const auto& a : mod->macroImports) {
-                        if (a.name == nodeName || (nodeName != node.name() && a.name == node.name())) {
-                            found = &a;
-                        }
-                    }
-                    if (found && found->ref.is_MacroRules()) {
-                        DEBUG(StringView("in ") << mod->path() << StringView(" ") << node.name() << StringView(" imported using: ") << path << StringView(" = ") << found->path);
-                        BUG_ASSERT(!path.sameLookupPath(found->path));
-                        path = found->path;
-                        path.bindings.macro.set(found->path, ASTPathBindingMacro::make_MacroRules({nullptr, found->ref.as_MacroRules()}));
-                        DEBUG(StringView("macro_export? -> ") << path);
-                        ResolveIndexModuleNormalisePath(crate, sp, path, loc);
-                        return true;
-                    }
                 }
             } break;
         }
