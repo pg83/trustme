@@ -150,7 +150,6 @@ public:
     const MIRFunction& getMirOrError(const Span& sp) const;
     MIRFunction& getMirOrErrorMut(const Span& sp);
 
-    const MIRFunction* getExtMir() const;
     MIRFunction* getExtMirMut();
 
     const HIRType* resultType() const;

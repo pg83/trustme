@@ -7520,6 +7520,7 @@ if not system_rustc_mode:
         "specialization_inherited_type_order",
         "named_variadic_function_body",
         "expanded_extern_block_declarations",
+        "assert_struct_update_text",
     )
     for _stem in (
         "macro_clones_patterns",

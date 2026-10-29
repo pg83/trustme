@@ -1589,17 +1589,6 @@ MIRLValue MIRLValue::cloneUnwrapped(unsigned count) const {
     return MIRLValue(root.clone(), std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));
 }
 
-bool MIRLValue::isEitherSubset(const MIRLValue& other) const {
-    if (!(root == other.root)) {
-        return false;
-    }
-    if (other.wrappers.size() > wrappers.size()) {
-        return std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
-    } else {
-        return std::equal(other.wrappers.begin(), other.wrappers.end(), wrappers.begin());
-    }
-}
-
 MIRLValue::RefCommon::RefCommon(const MIRLValue& lv, size_t wrapperCount)
     : lv_(&lv)
     , wrapperCount_(wrapperCount)

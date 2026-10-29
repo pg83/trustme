@@ -434,8 +434,6 @@ public:
         return isConst_;
     }
 
-    bool hasNamedItem(const RcString& name, bool& outIsFcn) const;
-
     ASTTrait clone() const;
 };
 
@@ -692,8 +690,6 @@ public:
     std::vector<ImplItem>& items() {
         return items_;
     }
-
-    bool hasNamedItem(const RcString& name) const;
 
 private:
 };

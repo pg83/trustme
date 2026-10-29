@@ -248,7 +248,6 @@ public:
     }
 
     static const char* typestr(enum eTokenType type);
-    static eTokenType typefromstr(const std::string& s);
 
 };
 

@@ -75,16 +75,6 @@ MIRFunction& HIRExprPtr::getMirOrErrorMut(const Span& sp) {
     return *this->mir;
 }
 
-const MIRFunction* HIRExprPtr::getExtMir() const {
-    if (this->node) {
-        return nullptr;
-    }
-    if (!this->mir) {
-        return nullptr;
-    }
-    return &*this->mir;
-}
-
 MIRFunction* HIRExprPtr::getExtMirMut() {
     if (this->node) {
         return nullptr;

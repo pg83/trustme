@@ -426,7 +426,6 @@ namespace {
         return cmp != HIRCompare::Unequal;
     }
 
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<const HIRType*>& left, const ThinVector<const HIRType*>& right);
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const HIRParamsList<const HIRType*>& left, const HIRParamsList<const HIRType*>& right);
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const Vector<const HIRType*>& left, const Vector<const HIRType*>& right);
 
@@ -627,22 +626,6 @@ namespace {
             }
         }
         UNREACHABLE();
-    }
-
-    ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const ThinVector<const HIRType*>& le, const ThinVector<const HIRType*>& re) {
-        auto rv = ::OrdEqual;
-        BUG_ASSERT(le.size() == re.size());
-        for (unsigned int i = 0; i < le.size(); i++) {
-            auto a = typeOrdSpecific(context, sp, le[i], re[i]);
-            if (a != ::OrdEqual) {
-                if (rv != ::OrdEqual && a != rv) {
-                    context.mixed = true;
-                    return ::OrdEqual;
-                }
-                rv = a;
-            }
-        }
-        return rv;
     }
 
     ::Ordering typelistOrdSpecific(TypeOrdContext& context, const Span& sp, const HIRParamsList<const HIRType*>& le, const HIRParamsList<const HIRType*>& re) {

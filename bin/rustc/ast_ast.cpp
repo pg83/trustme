@@ -148,16 +148,6 @@ bool ASTTrait::isMarker() const {
     return isMarker_;
 }
 
-bool ASTTrait::hasNamedItem(const RcString& name, bool& outIsFcn) const {
-    for (const auto& i : items_) {
-        if (i.name == name) {
-            outIsFcn = i.data.is_Function();
-            return true;
-        }
-    }
-    return false;
-}
-
 ASTTrait ASTTrait::clone() const {
     auto rv = ASTTrait(params_.clone(), supertraits_, lifetimes_);
     rv.isConst_ = isConst_;
@@ -259,15 +249,6 @@ void ASTImpl::addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool
 
 void ASTImpl::addMacroInvocation(ASTMacroInvocation item) {
     items_.push_back(ImplItem{item.span(), {}, ASTVisibility::makeGlobal(), false, "", "", box$(ASTItem::make_MacroInv(mv$(item)))});
-}
-
-bool ASTImpl::hasNamedItem(const RcString& name) const {
-    for (const auto& it : this->items()) {
-        if (it.name == name) {
-            return true;
-        }
-    }
-    return false;
 }
 
 ASTUseItem ASTUseItem::clone() const {

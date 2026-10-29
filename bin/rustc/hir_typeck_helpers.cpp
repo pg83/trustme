@@ -299,19 +299,6 @@ namespace {
         return true;
     }
 
-    bool typeListEqual(const HMTypeInferrence& context, const ThinVector<const HIRType*>& l, const ThinVector<const HIRType*>& r) {
-        if (l.size() != r.size()) {
-            return false;
-        }
-
-        for (unsigned int i = 0; i < l.size(); i++) {
-            if (!context.typesEqual(l[i], r[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     bool typeListEqual(const HMTypeInferrence& context, const HIRParamsList<const HIRType*>& l, const HIRParamsList<const HIRType*>& r) {
         if (l.size() != r.size()) {
             return false;

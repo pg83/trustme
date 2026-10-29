@@ -517,18 +517,6 @@ const char* Token::typestr(enum eTokenType type) {
     return ">>BUGCHECK: BADTOK<<";
 }
 
-enum eTokenType Token::typefromstr(const std::string& s) {
-    if (s == "") {
-        return TOK_NULL;
-    }
-#define _(t)     \
-    if (s == #t) \
-        return t;
-#include "parse_eTokenType.enum.inc"
-#undef _
-    return TOK_NULL;
-}
-
 void printEscapedLiteral(ZeroCopyOutput& os, eTokenType type, const u8* value, size_t size) {
     const auto bytes = StringView(value, size);
     switch (type) {

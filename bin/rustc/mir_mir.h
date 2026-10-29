@@ -268,8 +268,6 @@ struct MIRLValue {
         return root == other.root && other.wrappers.size() >= wrappers.size() && std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
     }
 
-    bool isEitherSubset(const MIRLValue& other) const;
-
     class RefCommon {
     protected:
         const MIRLValue* lv_;

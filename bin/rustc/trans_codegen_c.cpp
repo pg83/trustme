@@ -6110,7 +6110,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView(" );\n");
         return;
     } else if (m.matchesTemplate({"btl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-        of << indent << StringView("__asm__(\".att_syntax prefix; bt %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"");
+        of << indent << StringView("__asm__ volatile(\".att_syntax prefix; btl %%%k2, (%%%1); setc %%%0; .intel_syntax noprefix\"");
         of << StringView(" : \"=r\"(");
         emitLvalue(m.output(2));
         of << StringView(")");
@@ -6119,10 +6119,10 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView("), \"r\"(");
         emitParam(m.input(1));
         of << StringView(")");
-        of << StringView(");\n");
+        of << StringView(" : \"memory\", \"cc\");\n");
         return;
     } else if (m.matchesTemplate({"btcl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-        of << indent << StringView("__asm__(\".att_syntax prefix; btc %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"");
+        of << indent << StringView("__asm__ volatile(\".att_syntax prefix; btcl %%%k2, (%%%1); setc %%%0; .intel_syntax noprefix\"");
         of << StringView(" : \"=r\"(");
         emitLvalue(m.output(2));
         of << StringView(")");
@@ -6131,10 +6131,10 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView("), \"r\"(");
         emitParam(m.input(1));
         of << StringView(")");
-        of << StringView(");\n");
+        of << StringView(" : \"memory\", \"cc\");\n");
         return;
     } else if (m.matchesTemplate({"btrl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-        of << indent << StringView("__asm__(\".att_syntax prefix; btr %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"");
+        of << indent << StringView("__asm__ volatile(\".att_syntax prefix; btrl %%%k2, (%%%1); setc %%%0; .intel_syntax noprefix\"");
         of << StringView(" : \"=r\"(");
         emitLvalue(m.output(2));
         of << StringView(")");
@@ -6143,10 +6143,10 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView("), \"r\"(");
         emitParam(m.input(1));
         of << StringView(")");
-        of << StringView(");\n");
+        of << StringView(" : \"memory\", \"cc\");\n");
         return;
     } else if (m.matchesTemplate({"btsl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-        of << indent << StringView("__asm__(\".att_syntax prefix; bts %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"");
+        of << indent << StringView("__asm__ volatile(\".att_syntax prefix; btsl %%%k2, (%%%1); setc %%%0; .intel_syntax noprefix\"");
         of << StringView(" : \"=r\"(");
         emitLvalue(m.output(2));
         of << StringView(")");
@@ -6155,7 +6155,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << StringView("), \"r\"(");
         emitParam(m.input(1));
         of << StringView(")");
-        of << StringView(");\n");
+        of << StringView(" : \"memory\", \"cc\");\n");
         return;
     } else {
         Vector<unsigned> argMappings;
