@@ -2511,6 +2511,30 @@ namespace {
     void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName);
     void ReplaceDelegatedSelf(ASTPath& path, const RcString& replacementName);
 
+    void ReplaceDelegatedSelf(ASTExprNode*& expression, const RcString& replacementName) {
+        struct Visitor final: ASTNodeVisitorDef {
+            const RcString& replacementName;
+
+            explicit Visitor(const RcString& replacementName)
+                : replacementName(replacementName)
+            {
+            }
+
+            void visit(ASTExprNodeNamedValue& node) override {
+                ReplaceDelegatedSelf(node.path, replacementName);
+            }
+
+            void visit(ASTExprNodeCallPath& node) override {
+                ReplaceDelegatedSelf(node.path, replacementName);
+                ASTNodeVisitorDef::visit(node);
+            }
+        } visitor(replacementName);
+        if (expression) {
+            expression = expression->clone();
+            expression->visit(visitor);
+        }
+    }
+
     void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName) {
         for (auto& param : params.entries) {
             switch (param.tag()) {
@@ -2526,6 +2550,7 @@ namespace {
                     break;
                 }
                 case ASTPathParamEnt::TAG_Value: {
+                    ReplaceDelegatedSelf(param.as_Value(), replacementName);
                     break;
                 }
                 case ASTPathParamEnt::TAG_AssociatedTyEqual: {
@@ -2537,6 +2562,7 @@ namespace {
                 case ASTPathParamEnt::TAG_AssociatedValueEqual: {
                     auto& e = param.as_AssociatedValueEqual();
                     ReplaceDelegatedSelf(e.first.args(), replacementName);
+                    ReplaceDelegatedSelf(e.second, replacementName);
                     break;
                 }
                 case ASTPathParamEnt::TAG_AssociatedTyBound: {
@@ -2613,6 +2639,7 @@ namespace {
             case TypeData::TAG_Array: {
                 auto& e = type->data.as_Array();
                 ReplaceDelegatedSelf(e.inner, replacementName);
+                ReplaceDelegatedSelf(e.size, replacementName);
                 break;
             }
             case TypeData::TAG_Slice: {
@@ -2668,6 +2695,9 @@ namespace {
         ReplaceDelegatedSelf(function.rettype(), replacementName);
         for (auto& arg : function.args()) {
             ReplaceDelegatedSelf(arg.ty, replacementName);
+        }
+        for (auto*& type : mutRange(function.params().bareBoundTypes)) {
+            ReplaceDelegatedSelf(type, replacementName);
         }
         for (auto& param : function.params().params) {
             switch (param.tag()) {

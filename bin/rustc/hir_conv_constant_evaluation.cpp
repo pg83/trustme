@@ -5574,13 +5574,10 @@ auto MIREvalCallStackEntry::readParamFloatBits(unsigned bits, const MIRParam& p)
                 }
                 case 128:
                     return U128(value.bitsLo(), value.bitsHi());
-                default:
-                    MIR_BUG(state, StringView("Unexpected float size: ") << bits);
             }
-            break;
         }
     }
-    abort();
+    UNREACHABLE();
 }
 
 auto MIREvalCallStackEntry::readParamUint(unsigned bits, const MIRParam& p) -> U128 {
