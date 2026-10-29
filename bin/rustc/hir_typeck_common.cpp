@@ -296,11 +296,6 @@ const HIRType* Monomorphiser::monomorphType(const Span& sp, const HIRType* tpl, 
                     inner = TypeDataErasedTypeInner::Data_Alias{this->monomorphPathParams(sp, ee.params, allowInfer), ee.inner};
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto ee = e.inner.as_Known();
-                    inner = this->monomorphType(sp, ee, allowInfer);
-                    break;
-                }
             }
 
             return types.internFolded(tpl, HIRType::make_ErasedType(HIRType::Data_ErasedType{e.isSized, mv$(traits), mv$(inner), this->monomorphPathParams(sp, e.use, allowInfer), e.usePresent}));
@@ -490,6 +485,9 @@ const HIRType* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTy
 
 const HIRType* MonomorphiserPP::getType(const Span& sp, const HIRGenericRef& ty) const /*override*/
 {
+    if (ty.binding == GENERICErasedSelf) {
+        return types.generic(ty);
+    }
     if (ty.isSelf()) {
         if (const auto* s = this->getSelfType()) {
             return s;
@@ -875,13 +873,6 @@ auto TyVisitor<W>::visitType(const HIRType* ty) -> bool {
                         }
                         break;
                     }
-                    case TypeDataErasedTypeInner::TAG_Known: {
-                        const auto ee = e.inner.as_Known();
-                        if (visitType(ee)) {
-                            return true;
-                        }
-                        break;
-                    }
                     case TypeDataErasedTypeInner::TAG_Alias: {
                         auto& ee = e.inner.as_Alias();
                         if (visitPathParams(ee.params)) {
@@ -1157,11 +1148,6 @@ auto TyRewriter::rewriteType(const HIRType* type) -> const HIRType* {
                             case TypeDataErasedTypeInner::TAG_Fcn: {
                                 auto& inner = tuMatch.as_Fcn();
                                 rewritePath(inner.origin);
-                                break;
-                            }
-                            case TypeDataErasedTypeInner::TAG_Known: {
-                                auto& inner = tuMatch.as_Known();
-                                inner = rewriteType(inner);
                                 break;
                             }
                             case TypeDataErasedTypeInner::TAG_Alias: {

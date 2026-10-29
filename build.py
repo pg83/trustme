@@ -7470,6 +7470,7 @@ for _release, _dir, _prefix in (
 debug_trace_tests = []
 if not system_rustc_mode:
     debug_dump_stems = (
+        "repeated_opaque_alias_return",
         "a_fragment_reaches_a_proc_macro_as_an_invisible_group",
         "const_generic_coroutine_tait",
         "macro_stmt_item_repetition",

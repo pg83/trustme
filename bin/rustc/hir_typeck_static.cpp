@@ -392,9 +392,6 @@ const HIRType* StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, cons
                     revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &alias.params, nullptr).monomorphType(sp, alias.inner->type);
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known:
-                    revealed = erased.inner.as_Known();
-                    break;
             }
 
             return revealed;
@@ -707,11 +704,6 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
             }
             expandAssociatedTypesParams(sp, e.use);
             switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
-                    ee = expandAssociatedTypesInner(sp, ee);
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& ee = e.inner.as_Fcn();
                     expandAssociatedTypesPath(sp, ee.origin);

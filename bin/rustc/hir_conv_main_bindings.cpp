@@ -48,6 +48,7 @@ namespace {
         bool inImplTraitBinding = false;
         const HIRType* selfType = nullptr;
         IntMap<const HIRType*> boundTypes;
+        IntMap<unsigned int> erasedIndices;
         bool typeUsesContext = false;
 
         HIRItemPath* fcnPath = nullptr;
@@ -965,6 +966,7 @@ BindVisitor::BindVisitor(const WireBoard& wb, ObjPool* pool)
     , ms(wb)
     , inExpr(0)
     , boundTypes(pool)
+    , erasedIndices(pool)
 {
     curModule.ptr = &crate.rootModule;
     curModule.path = &rootPath;
@@ -1378,7 +1380,13 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                         UNREACHABLE();
                     }
                 }
-                ee->index = fcnErasedCount++;
+                /* Alias expansion can repeat one opaque argument. Keep its
+                   source identity while assigning function-local indices. */
+                auto* index = erasedIndices.find(ee->index);
+                if (!index) {
+                    index = erasedIndices.insert(ee->index, fcnErasedCount++);
+                }
+                ee->index = *index;
             }
 
             // - Add a un-namable generic parameter (TODO: Prevent this from being explicitly set when called)

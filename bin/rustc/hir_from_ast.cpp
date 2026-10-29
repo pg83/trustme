@@ -87,6 +87,8 @@ namespace {
         HIRCrate* crate = nullptr;
         const ASTCrate* astCrate = nullptr;
         ImplTraitSource implTraitSource;
+        /* Distinguish syntax occurrences before aliases duplicate their arguments. */
+        unsigned int nextErasedType = 0;
 
         HIRPublicity LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis);
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
@@ -1933,7 +1935,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                 }
                 inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{HIRPathParams(mv$(aliasParams)), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter, implTraitSource.paramsInner)});
             } else {
-                inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0};
+                inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), nextErasedType++};
             }
             return crate->types.intern(HIRType::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty->span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
         }
@@ -2872,7 +2874,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         HIRTraitPath iteratorPath;
         iteratorPath.path.path = crate->getLangItemPath(sp, "async_iterator");
         iteratorPath.typeBounds.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitPath::AtyEqual{iteratorPath.path.clone(), {}, itemType}));
-        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), nextErasedType++}}));
         return rv;
     }
 
@@ -2890,7 +2892,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         HIRTraitPath iteratorPath;
         iteratorPath.path.path = crate->getLangItemPath(sp, "iterator");
         iteratorPath.typeBounds.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitPath::AtyEqual{iteratorPath.path.clone(), {}, std::move(rv.returnType)}));
-        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), nextErasedType++}}));
     }
 
     if (f.isAsync()) {
@@ -2902,7 +2904,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         HIRTraitPath futurePath;
         futurePath.path.path = crate->getLangItemPath(sp, "future_trait");
         futurePath.typeBounds.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitPath::AtyEqual{futurePath.path.clone(), {}, std::move(rv.returnType)}));
-        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = crate->types.intern(HIRType::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), nextErasedType++}}));
     }
 
     return rv;

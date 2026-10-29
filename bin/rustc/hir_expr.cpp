@@ -647,10 +647,6 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
                 this->visitTraitPath(trait);
             }
             switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    e.inner.as_Known() = visitType(e.inner.as_Known());
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     this->visitPath(HIRVisitor::PathContext::TYPE, e.inner.as_Fcn().origin);
                     break;

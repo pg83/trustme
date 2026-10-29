@@ -771,10 +771,6 @@ const HIRType* HirDeserialiser::deserialiseType() {
                     erased.inner = TypeDataErasedTypeInner::make_Fcn({std::move(origin), static_cast<unsigned>(in.readCount())});
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    erased.inner = TypeDataErasedTypeInner::make_Known(deserialiseType());
-                    break;
-                }
                 default:
                     BUG(Span(), StringView("Bad tag for a serialised erased type - ") << innerTag);
             }
@@ -3378,10 +3374,6 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
                     const auto& fcn = e.inner.as_Fcn();
                     serialisePath(fcn.origin);
                     out.writeCount(fcn.index);
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    serialiseType(e.inner.as_Known());
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {

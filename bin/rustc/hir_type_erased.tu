@@ -13,7 +13,6 @@ generate(
             ("HIRPath", "origin"),
             ("unsigned int", "index"),
         ], copy=False),
-        v("Known", "const HIRType*"),
         v("Alias", fields=[
             ("HIRPathParams", "params"),
             ("std::shared_ptr<HIRTypeDataErasedTypeAliasInner>", "inner"),

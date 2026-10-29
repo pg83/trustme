@@ -869,15 +869,9 @@ const HIRType* HIRVisitor::visitType(const HIRType* ty) {
         case HIRType::TAG_ErasedType: {
             const auto& e = ty->as_ErasedType();
             bool cinner = false;
-            const HIRType* ninner = nullptr;
             HIRPathParams naliasParams;
             auto norigin = HIRPath(HIRSimplePath());
             switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    ninner = visitType(e.inner.as_Known());
-                    cinner = ninner != e.inner.as_Known();
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     cinner = walkTypesInPathParams(*this, e.inner.as_Alias().params, naliasParams);
                     break;
@@ -907,9 +901,6 @@ const HIRType* HIRVisitor::visitType(const HIRType* ty) {
             auto& ne = data.as_ErasedType();
             if (cinner) {
                 switch (ne.inner.tag()) {
-                    case TypeDataErasedTypeInner::TAG_Known:
-                        ne.inner.as_Known() = ninner;
-                        break;
                     case TypeDataErasedTypeInner::TAG_Alias:
                         ne.inner.as_Alias().params = mv$(naliasParams);
                         break;
@@ -1098,10 +1089,6 @@ void HIRVisitor::visitTypeDataChildren(HIRType& data) {
         case HIRType::TAG_ErasedType: {
             auto& e = data.as_ErasedType();
             switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    e.inner.as_Known() = visitType(e.inner.as_Known());
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     this->visitPathParams(e.inner.as_Alias().params);
                     break;

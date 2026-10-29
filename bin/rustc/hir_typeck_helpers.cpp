@@ -1340,11 +1340,6 @@ void HMTypeInferrence::printType(ZeroCopyOutput& os, const HIRType* tr, LList<co
                     os << StringView("#") << ee.index;
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto ee = e.inner.as_Known();
-                    printType(os, ee, stack);
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     break;
                 }
@@ -1485,11 +1480,6 @@ const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& ee = e.inner.as_Fcn();
                     H::expandIvarsPath(*this, ee.origin);
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
-                    ee = this->expandIvars(ee);
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -2233,10 +2223,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
                     auto& ee = e.inner.as_Fcn();
                     return pathContainsIvars(ee.origin, onlyUnbound);
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto ee = e.inner.as_Known();
-                    return typeContainsIvars(ee, onlyUnbound);
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     return false;
                 }
@@ -2440,11 +2426,6 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                     ASSERT_BUG(Span(), r.origin != HIRSimplePath(), StringView("Erased type with unset origin"));
                     return H::comparePath(*this, l.origin, r.origin);
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto l = le.inner.as_Known();
-                    const auto r = re.inner.as_Known();
-                    return typesEqual(l, r);
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     auto& l = le.inner.as_Alias();
                     auto& r = re.inner.as_Alias();
@@ -2536,9 +2517,6 @@ bool Unifier::opaqueCanReveal(const HIRType* type) const {
     const auto* erased = type->opt_ErasedType();
     if (!erased) {
         return false;
-    }
-    if (erased->inner.is_Known()) {
-        return true;
     }
     if (!resolve_) {
         return false;
@@ -2889,12 +2867,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         if ((left->is_Generic() && left->as_Generic().isPlaceholder()) || (right->is_Generic() && right->as_Generic().isPlaceholder())) {
             return this->defer(left, right);
         }
-        if (const auto* erased = left->opt_ErasedType(); erased && erased->inner.is_Known()) {
-            return this->unifyResolved(erased->inner.as_Known(), right);
-        }
-        if (const auto* erased = right->opt_ErasedType(); erased && erased->inner.is_Known()) {
-            return this->unifyResolved(left, erased->inner.as_Known());
-        }
         if (this->opaqueCanReveal(left) || this->opaqueCanReveal(right)) {
             return this->defer(left, right);
         }
@@ -3057,8 +3029,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                     }
                     return this->unifyParams(li.params, ri.params);
                 }
-                case TypeDataErasedTypeInner::TAG_Known:
-                    return this->unifyResolved(le.inner.as_Known(), re.inner.as_Known());
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     const auto& li = le.inner.as_Fcn();
                     const auto& ri = re.inner.as_Fcn();
@@ -3175,8 +3145,6 @@ bool Unifier::typeContainsLiveValueIvar(const HIRType* type, unsigned rootIndex)
             switch (erased->inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Fcn:
                     return this->pathContainsLiveValueIvar(erased->inner.as_Fcn().origin, rootIndex);
-                case TypeDataErasedTypeInner::TAG_Known:
-                    return this->typeContainsLiveValueIvar(erased->inner.as_Known(), rootIndex);
                 case TypeDataErasedTypeInner::TAG_Alias:
                     return this->paramsContainLiveValueIvar(erased->inner.as_Alias().params, rootIndex);
             }
@@ -3995,9 +3963,28 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
         }
         case HIRType::TAG_ErasedType: {
             auto& e = (*type).as_ErasedType();
-            for (const auto& traitPath : e.traits) {
+            struct BoundSelf final: MonomorphiserNop {
+                const HIRType* self;
+
+                BoundSelf(HIRTypeInterner& types, const HIRType* self)
+                    : MonomorphiserNop(types)
+                    , self(self)
+                {
+                }
+
+                const HIRType* getType(const Span&, const HIRGenericRef& generic) const override {
+                    return generic.binding == GENERICErasedSelf ? self : types.generic(generic);
+                }
+
+                const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer) const override {
+                    /* A nested opaque binds its own ErasedSelf. */
+                    return type->is_ErasedType() ? type : Monomorphiser::monomorphType(sp, type, allowInfer);
+                }
+            } monomorph(crate.types, type);
+            for (const auto& bound : e.traits) {
+                auto traitPath = monomorph.monomorphTraitpath(sp, bound, true);
                 if (trait == traitPath.path.path) {
-                    return callback.visit(SolverImpl(type, &traitPath.path.params, &traitPath.typeBounds, traitPath.constness));
+                    return callback.visit(SolverImpl(type, mv$(traitPath.path.params), mv$(traitPath.typeBounds), traitPath.constness));
                 }
 
                 bool rv = false;
@@ -4554,13 +4541,6 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
                     }
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto ee = e.inner.as_Known();
-                    if (hasAssociatedType(ee)) {
-                        return true;
-                    }
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     break;
                 }
@@ -4887,10 +4867,6 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                             break;
                         }
                     }
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    e.inner = TypeDataErasedTypeInner::make_Known(expandAssociatedTypesInplace(sp, e.inner.as_Known(), effects));
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -8843,7 +8819,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
 
     const auto* erased = inherentReceiver->opt_ErasedType();
     const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-    const bool opaqueCanReveal = !erased || (alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) || erased->inner.is_Known();
+    const bool opaqueCanReveal = !erased || (alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner));
     const bool inherentSourceAmbiguous = inherentInfer != nullptr && !traitRoutesAreComplete;
     /* Upstream (`ProbeScope::Single`): the call a delegation body lowers to has one
        candidate, the named trait's declaration; the inherent, where-clause and object
@@ -10288,9 +10264,6 @@ auto NextTraitGoalEvaluator::typeHasUnassignedInfer(const HIRType* input) const 
                 return true;
             }
         }
-        if (const auto* known = erased->inner.opt_Known()) {
-            return typeHasUnassignedInfer(*known);
-        }
         if (const auto* alias = erased->inner.opt_Alias()) {
             return paramsHaveUnassignedInfer(alias->params);
         }
@@ -10433,9 +10406,6 @@ auto NextTraitGoalEvaluator::typeHasUnknown(const HIRType* input) const -> bool 
             if (traitPathHasUnknownTypes(trait)) {
                 return true;
             }
-        }
-        if (const auto* known = erased->inner.opt_Known()) {
-            return typeHasUnknown(*known);
         }
         if (const auto* alias = erased->inner.opt_Alias()) {
             return paramsHaveUnknownTypes(alias->params);
@@ -11042,9 +11012,6 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
                     unifyPath(leftOrigin.origin, rightOrigin.origin);
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known:
-                    self(leftErased->inner.as_Known(), rightErased->inner.as_Known());
-                    break;
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     const auto& leftAlias = leftErased->inner.as_Alias();
                     const auto& rightAlias = rightErased->inner.as_Alias();

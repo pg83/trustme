@@ -134,11 +134,6 @@ namespace {
                 auto& be = b.as_Fcn();
                 return ae.index == be.index && exactPathEqual(ae.origin, be.origin);
             }
-            case TypeDataErasedTypeInner::TAG_Known: {
-                const auto ae = a.as_Known();
-                const auto be = b.as_Known();
-                return ae == be;
-            }
             case TypeDataErasedTypeInner::TAG_Alias: {
                 auto& ae = a.as_Alias();
                 auto& be = b.as_Alias();
@@ -417,11 +412,6 @@ namespace {
                             flags |= typeFlags(inner.origin);
                             break;
                         }
-                        case TypeDataErasedTypeInner::TAG_Known: {
-                            const auto inner = tuMatch.as_Known();
-                            addTypeFlags(flags, inner);
-                            break;
-                        }
                         case TypeDataErasedTypeInner::TAG_Alias: {
                             auto& inner = tuMatch.as_Alias();
                             flags |= typeFlags(inner.params);
@@ -683,11 +673,6 @@ namespace {
                             auto& inner = tuMatch.as_Fcn();
                             h = hashMix(h, hashPath(inner.origin));
                             h = hashMix(h, inner.index);
-                            break;
-                        }
-                        case TypeDataErasedTypeInner::TAG_Known: {
-                            const auto inner = tuMatch.as_Known();
-                            h = hashMix(h, hashTypeRef(inner));
                             break;
                         }
                         case TypeDataErasedTypeInner::TAG_Alias: {
@@ -1188,11 +1173,6 @@ void HIRType::fmt(ZeroCopyOutput& os) const {
             os << StringView("+use") << e.use;
             os << StringView("/*");
             switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto ee = e.inner.as_Known();
-                    os << StringView("= ") << ee;
-                    break;
-                }
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& ee = e.inner.as_Fcn();
                     os << StringView("fn ") << ee.origin << StringView("#") << ee.index;
@@ -1765,11 +1745,6 @@ bool HIRType::equalsIgnoringRegions(const HIRType* x) const {
 Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r) {
     ORD(static_cast<unsigned int>(l.tag()), static_cast<unsigned int>(r.tag()));
     switch (l.tag()) {
-        case TypeDataErasedTypeInner::TAG_Known: {
-            const auto le = l.as_Known();
-            const auto re = r.as_Known();
-            return le->ordIgnoringRegions(re);
-        }
         case TypeDataErasedTypeInner::TAG_Alias: {
             auto& le = l.as_Alias();
             auto& re = r.as_Alias();
@@ -2127,27 +2102,9 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
             return cmp;
         }
         case HIRType::TAG_ErasedType: {
-            auto& te = (*v).as_ErasedType();
-            auto& xe = (*x).as_ErasedType();
-            if (te.inner.tag() != xe.inner.tag()) {
-                return HIRCompare::Unequal;
-            }
-            switch (te.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto l = te.inner.as_Known();
-                    const auto r = xe.inner.as_Known();
-                    return l->matchTestGenericsFuzz(sp, r, resolvePlaceholder, *this);
-                }
-                case TypeDataErasedTypeInner::TAG_Alias: {
-                    UNREACHABLE();
-                }
-                case TypeDataErasedTypeInner::TAG_Fcn: {
-                    auto& l = te.inner.as_Fcn();
-                    auto& r = xe.inner.as_Fcn();
-                    return l.index == r.index ? this->cmpPath(sp, l.origin, r.origin, resolvePlaceholder) : HIRCompare::Unequal;
-                }
-            }
-            UNREACHABLE();
+            auto& l = v->as_ErasedType().inner.as_Fcn();
+            auto& r = x->as_ErasedType().inner.as_Fcn();
+            return l.index == r.index ? this->cmpPath(sp, l.origin, r.origin, resolvePlaceholder) : HIRCompare::Unequal;
         }
         case HIRType::TAG_Array: {
             auto& te = (*v).as_Array();
@@ -2431,11 +2388,6 @@ HIRType HIRType::cloneData() const {
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& ee = e.inner.as_Fcn();
                     inner = TypeDataErasedTypeInner::Data_Fcn{ee.origin.clone(), ee.index};
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto ee = e.inner.as_Known();
-                    inner = ee;
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -2731,11 +2683,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                 return HIRCompare::Unequal;
             }
             switch (le.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    const auto l = le.inner.as_Known();
-                    const auto r = re.inner.as_Known();
-                    return l->compareWithPlaceholders(sp, r, resolvePlaceholder);
-                }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     auto& l = le.inner.as_Alias();
                     auto& r = re.inner.as_Alias();

@@ -4106,12 +4106,6 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                             equalityTypeparams(lee.params, ree.params);
                             break;
                         }
-                        case TypeDataErasedTypeInner::TAG_Known: {
-                            const auto lee = lE.inner.as_Known();
-                            const auto ree = rE.inner.as_Known();
-                            equateTypesInner(sp, lee, ree);
-                            break;
-                        }
                     }
                     break;
                 }
@@ -7355,6 +7349,9 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         }
 
         const HIRType* getType(const Span& sp, const HIRGenericRef& e) const override {
+            if (e.binding == GENERICErasedSelf) {
+                return context.crate.types.generic(e);
+            }
             if (e.name == "Self" || e.isSelf()) {
                 if (selfTy) {
                     return selfTy;

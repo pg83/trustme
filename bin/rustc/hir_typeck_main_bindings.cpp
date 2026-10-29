@@ -311,11 +311,6 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
             {
                 auto& tuMatch = e.inner;
                 switch (tuMatch.tag()) {
-                    case TypeDataErasedTypeInner::TAG_Known: {
-                        auto& inner = tuMatch.as_Known();
-                        inner = this->visitType(inner);
-                        break;
-                    }
                     case TypeDataErasedTypeInner::TAG_Alias: {
                         auto& inner = tuMatch.as_Alias();
                         this->visitPathParams(inner.params);
