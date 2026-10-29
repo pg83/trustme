@@ -66,14 +66,11 @@ namespace {
         HIRCrate& crate;
         StaticTraitResolve resolve;
         const TransList& transList;
-        std::deque<const HIRType*> todoList;
         HIRTypeRefSet doneList;
 
         HIRSimplePath langClone;
 
         State(const WireBoard& wb, HIRCrate& crate, const TransList& transList);
-
-        void enqueueType(const HIRType* ty);
     };
 
     struct CloneCleanupState {
@@ -2057,13 +2054,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             TransAutoImplClone(state, ty);
         }
 
-        while (!state.todoList.empty()) {
-            auto ty = std::move(state.todoList.front());
-            state.todoList.pop_back();
-
-            TransAutoImplClone(state, mv$(ty));
-        }
-
         auto implListIt = crate.traitImpls.find(state.langClone);
         for (const auto& ty : state.doneList) {
             BUG_ASSERT(implListIt != crate.traitImpls.end());
@@ -3311,13 +3301,6 @@ State::State(const WireBoard& wb, HIRCrate& crate, const TransList& transList)
     , transList(transList)
 {
     langClone = crate.getLangItemPathOpt("clone");
-}
-
-auto State::enqueueType(const HIRType* ty) -> void {
-    if (this->transList.autoCloneImpls.count(ty) == 0 && this->doneList.count(ty) == 0) {
-        this->doneList.insert(ty);
-        this->todoList.push_back(ty);
-    }
 }
 
 Builder::Builder(const State& state, MIRFunction& mir)

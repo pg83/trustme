@@ -2356,25 +2356,6 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
                 }
             }
         } while (!mods.empty());
-
-        for (const auto& mac : crate.rootModule_.macroImports) {
-            if (mac.isPub) {
-                if (!mac.ref.is_MacroRules()) {
-                    continue;
-                }
-                auto v = std::make_pair(mac.name, mac.ref.as_MacroRules());
-
-                auto it = exportedMacros.find(mac.name);
-                if (it == exportedMacros.end()) {
-                    DEBUG(StringView("- Import ") << mac.name << StringView("! (from \"") << v.second->sourceCrate << StringView("\")"));
-                    exportedMacros.insert(mv$(v));
-                } else if (v.second->rules.empty()) {
-                } else {
-                    DEBUG(StringView("- Replace ") << mac.name << StringView("! (from \"") << it->second->sourceCrate << StringView("\") with one from \"") << v.second->sourceCrate << StringView("\""));
-                    it->second = mv$(v.second);
-                }
-            }
-        }
     }
     ExpandStopProcMacroServers(crate);
 }
