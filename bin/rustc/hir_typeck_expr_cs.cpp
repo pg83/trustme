@@ -2244,29 +2244,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             }
             return concrete;
         };
-        const auto concreteCoercionTarget = [&](const HIRType* type) {
-            const auto* infer = context.getType(type)->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= coercionIndex.count) {
-                return static_cast<const HIRType*>(nullptr);
-            }
-            const HIRType* concrete = nullptr;
-            for (const auto& endpoint : coercionIndex[infer->index].endpoints) {
-                if (endpoint.obligation && endpoint.obligation->argumentSite) {
-                    continue;
-                }
-                if (endpoint.direction != SolverCoercionConstraint::Direction::InputIsSource || !coercionEndpointCanDetermineType(context, endpoint)) {
-                    continue;
-                }
-                const auto* targetType = context.getType(endpoint.other);
-                if (!targetType->is_Infer() && !targetType->is_Diverge()) {
-                    if (concrete && concrete != targetType && !concrete->equalsIgnoringRegions(targetType)) {
-                        return static_cast<const HIRType*>(nullptr);
-                    }
-                    concrete = targetType;
-                }
-            }
-            return concrete;
-        };
 
         bool hasSemanticOperatorImpl = false;
         bool sawCurrentOperatorImpl = false;
@@ -2362,7 +2339,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             const auto append = [&](const IvarCoercionEndpoint& endpoint) {
                 auto* other = context.getType(endpoint.other);
                 if (const auto* otherInfer = other->opt_Infer(); otherInfer && otherInfer->index != ~0u) {
-                    other = endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? concreteCoercionSource(other) : concreteCoercionTarget(other);
+                    other = endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? concreteCoercionSource(other) : nullptr;
                     if (!other) {
                         return;
                     }
