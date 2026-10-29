@@ -768,8 +768,7 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                                     return ResolveItemRefType::make_HirRoot(&*crate.externCrates.at(tmp.crate).hir);
                                 }
                                 case ResolveModuleRef::TAG_ImplicitPrelude: {
-                                    TODO(sp, StringView("ImplicitPrelude?"));
-                                    break;
+                                    UNREACHABLE();
                                 }
                                 case ResolveModuleRef::TAG_None: {
                                     break;

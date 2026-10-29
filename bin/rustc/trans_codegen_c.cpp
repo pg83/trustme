@@ -8223,7 +8223,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             case HIRCoreType::I128:
             case HIRCoreType::U128:
                 of << StringView("{");
-                of << StringView(" uint128_t v = ");
+                of << (options.emulatedI128 && ty->as_Primitive() == HIRCoreType::I128 ? StringView(" int128_t v = ") : StringView(" uint128_t v = "));
                 emitParam(e.args.at(0));
                 of << StringView(";");
                 of << StringView(" unsigned shift = ");
@@ -8329,7 +8329,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             case HIRCoreType::I128:
             case HIRCoreType::U128:
                 of << StringView("{");
-                of << StringView(" uint128_t v = ");
+                of << (options.emulatedI128 && ty->as_Primitive() == HIRCoreType::I128 ? StringView(" int128_t v = ") : StringView(" uint128_t v = "));
                 emitParam(e.args.at(0));
                 of << StringView(";");
                 of << StringView(" unsigned shift = ");
