@@ -1359,6 +1359,15 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
             return InteriorMutability::No;
         }
         case HIRType::TAG_NodeType: {
+            const auto capturesInteriorMutability = [&](const auto& captures) {
+                for (const auto* capture : captures) {
+                    auto rv = this->typeIsInteriorMutable(sp, capture);
+                    if (rv != InteriorMutability::No) {
+                        return rv;
+                    }
+                }
+                return InteriorMutability::No;
+            };
             auto& e = (*ty).as_NodeType();
             switch (e.tag()) {
                 case HIRTypeDataNodeType::TAG_Closure: {
@@ -1369,27 +1378,13 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     if (nodeP->isCopy) {
                         return InteriorMutability::No;
                     }
-                    for (const auto& c : nodeP->captures) {
-                        auto rv = this->typeIsInteriorMutable(sp, c->resType);
-                        if (rv != InteriorMutability::No) {
-                            return rv;
-                        }
-                    }
-                    return InteriorMutability::No;
+                    return capturesInteriorMutability(nodeP->typeckCaptureTypes);
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    const auto nodeP = e.as_Generator();
-                    for (const auto& c : nodeP->captures) {
-                        auto rv = this->typeIsInteriorMutable(sp, c->resType);
-                        if (rv != InteriorMutability::No) {
-                            return rv;
-                        }
-                    }
-                    return InteriorMutability::No;
+                    return capturesInteriorMutability(e.as_Generator()->avuCache.captureTypes);
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    TODO(sp, StringView("type_is_interior_mutable on async"));
-                    break;
+                    return capturesInteriorMutability(e.as_Async()->avuCache.captureTypes);
                 }
             }
             break;

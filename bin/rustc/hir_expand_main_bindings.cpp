@@ -1253,31 +1253,6 @@ void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& st
 
     for (const auto& entry : saved.closures) {
         auto& closure = *entry.first;
-        closure.typeckCaptureTypes.clear();
-        for (const auto& capture : closure.avuCache.capturedVars) {
-            const auto* type = variableTypes[capture.rootSlot];
-            for (const auto& field : capture.fields) {
-                if (field == RcString()) {
-                    const auto* reference = type->opt_Borrow();
-                    type = reference ? reference->inner : type->as_Pointer().inner;
-                    continue;
-                }
-                type = resolve.expandAssociatedTypes(closure.span(), resolve.getFieldType(closure.span(), type, field));
-            }
-            switch (capture.usage) {
-                case HIRValueUsage::Unknown:
-                case HIRValueUsage::Move:
-                    break;
-                case HIRValueUsage::Borrow:
-                    type = resolve.hirCrate().types.borrow(HIRBorrowType::Shared, type);
-                    break;
-                case HIRValueUsage::Mutate:
-                    type = resolve.hirCrate().types.borrow(HIRBorrowType::Unique, type);
-                    break;
-            }
-            closure.typeckCaptureTypes.pushBack(type);
-        }
-        closure.typeckCapturesKnown = true;
         closure.cls = entry.second;
         closure.avuCache = {};
     }
@@ -2421,6 +2396,32 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
 
     node.avuCache.capturedVars = std::move(scope.capturedVars);
     node.avuCache.localVars = std::move(scope.localVars);
+
+    node.typeckCaptureTypes.clear();
+    for (const auto& capture : node.avuCache.capturedVars) {
+        const auto* type = variableTypes[capture.rootSlot];
+        for (const auto& field : capture.fields) {
+            if (field == RcString()) {
+                const auto* reference = type->opt_Borrow();
+                type = reference ? reference->inner : type->as_Pointer().inner;
+                continue;
+            }
+            type = resolve_.expandAssociatedTypes(node.span(), resolve_.getFieldType(node.span(), type, field));
+        }
+        switch (capture.usage) {
+            case HIRValueUsage::Unknown:
+            case HIRValueUsage::Move:
+                break;
+            case HIRValueUsage::Borrow:
+                type = resolve_.hirCrate().types.borrow(HIRBorrowType::Shared, type);
+                break;
+            case HIRValueUsage::Mutate:
+                type = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, type);
+                break;
+        }
+        node.typeckCaptureTypes.pushBack(type);
+    }
+    node.typeckCapturesKnown = true;
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeGenerator& node) -> void {
@@ -3006,6 +3007,11 @@ auto AnnotateExprVisitorMark::applyCoroutine(const Span& sp, bool isMove, bool i
     for (const auto& cap : usedVariables) {
         if (cap.second.definedStack.empty()) {
             avuCache.capturedVars.pushBack(std::make_pair(cap.first, cap.second.usage));
+            const auto* type = variableTypes[cap.first];
+            if (cap.second.usage == HIRValueUsage::Borrow || cap.second.usage == HIRValueUsage::Mutate) {
+                type = resolve_.hirCrate().types.borrow(cap.second.usage == HIRValueUsage::Borrow ? HIRBorrowType::Shared : HIRBorrowType::Unique, type);
+            }
+            avuCache.captureTypes.pushBack(type);
         } else {
             avuCache.localVars.pushBack(cap.first);
         }

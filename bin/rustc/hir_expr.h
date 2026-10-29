@@ -717,6 +717,7 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     struct AvuCache {
         stl::Vector<unsigned int> localVars;
         stl::Vector<std::pair<unsigned int, HIRValueUsage>> capturedVars;
+        stl::Vector<const HIRType*> captureTypes;
     } avuCache;
 
     const HIRStruct* objPtr = nullptr;
