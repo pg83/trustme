@@ -16441,14 +16441,15 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             return type;
         };
-        const auto throughRelations = [&](const HIRType* type) {
+        const auto throughEqualities = [&](const HIRType* type, const ThinVector<SolverTypeEquality>& equalities) {
             for (unsigned depth = 0; depth < 8; depth++) {
                 bool changed = false;
                 type = cloneTyWith(crate.types, span(), type, [&](const HIRType* inner) -> const HIRType* {
-                    if (!inner->is_Infer()) {
+                    const auto* generic = inner->opt_Generic();
+                    if (!inner->is_Infer() && !(generic && generic->isSolverExistential())) {
                         return nullptr;
                     }
-                    for (const auto& equality : candidate.relationEqualities) {
+                    for (const auto& equality : equalities) {
                         const auto* other = equality.left == inner ? equality.right : equality.right == inner ? equality.left : nullptr;
                         if (other && !other->is_Infer() && !visitTyWith(other, [&](const HIRType* t) { return t == inner; })) {
                             changed = true;
@@ -16462,6 +16463,12 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 }
             }
             return type;
+        };
+        /* All coercions of a candidate constrain the same parameters. Once an
+           earlier element binds a pointee, the next element must coerce to that
+           pointee instead of exporting a second, contradictory binding. */
+        const auto throughRelations = [&](const HIRType* type) {
+            return throughEqualities(throughEqualities(type, candidate.relationEqualities), candidate.coercionEqualities);
         };
         const auto* self = throughRelations(throughHead(candidate.impl.getImplType(crate.types)));
         const auto& inputs = candidate.impl.getTraitParamsRef(crate.types);
@@ -16480,7 +16487,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             ThinVector<SolverTypeEquality> selectedEqualities;
             const auto evaluate = [&](const SolverCoercionConstraint& alternative) {
                 ASSERT_BUG(span(), alternative.isSelf || alternative.typeIndex < inputs.types.size(), StringView("coercion-constrained trait input is out of range"));
-                const auto* input = alternative.isSelf ? self : throughRelations(throughHead(inputs.types[alternative.typeIndex]));
+                const auto* input = throughRelations(alternative.isSelf ? self : throughHead(inputs.types[alternative.typeIndex]));
                 ThinVector<SolverTypeEquality> alternativeEqualities;
                 const auto alternativeResult = resolve_.evaluateCoercionConstraint(span(), alternative, input, &alternativeEqualities, nullptr, nullptr, nullptr, nullptr, true);
                 if (alternativeResult == Certainty::Proven || (alternativeResult == Certainty::Ambiguous && result == Certainty::NoSolution)) {
