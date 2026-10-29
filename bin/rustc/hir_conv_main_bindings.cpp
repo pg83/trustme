@@ -2496,40 +2496,9 @@ auto Expander::expandTraitList(const Span& sp, std::vector<HIRTraitPath>& list) 
         }
     }
 
-    if (ty->is_ErasedType() || ty->is_TraitObject()) {
+    if (ty->is_ErasedType()) {
         auto data = ty->cloneData();
-        if (auto* e = data.opt_ErasedType()) {
-            expandTraitList(sp, e->traits);
-        } else if (auto* e = data.opt_TraitObject(); e->trait.path != HIRSimplePath()) {
-            for (auto it = e->markers.begin(); it != e->markers.end();) {
-                if (!crate.getTypeitemByPath(sp, it->path).is_TraitAlias()) {
-                    ++it;
-                    continue;
-                }
-                auto n = ConvertHIRExpandAliasesGetTraitExpansionGP(sp, crate, *it, inExpr);
-                it = e->markers.erase(it);
-                for (auto& expanded : n) {
-                    ASSERT_BUG(sp, expanded.traitBounds.empty() && expanded.typeBounds.empty(), StringView("Trait alias with bounds used as a marker - ") << expanded);
-                    it = e->markers.insert(it, mv$(expanded.path));
-                    ++it;
-                }
-            }
-            if (crate.getTypeitemByPath(sp, e->trait.path.path).is_TraitAlias()) {
-                auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, e->trait, inExpr);
-                if (!n.empty()) {
-                    e->trait = mv$(n.front());
-                    for (size_t i = 1; i < n.size(); i++) {
-                        ASSERT_BUG(sp, n[i].traitBounds.empty() && n[i].typeBounds.empty(), StringView("Trait alias with bounds used as a marker - ") << n[i]);
-                        e->markers.push_back(mv$(n[i].path));
-                    }
-                } else if (!e->markers.empty()) {
-                    e->trait = HIRTraitPath{HIRGenericPath(mv$(e->markers.front())), {}, {}};
-                    e->markers.erase(e->markers.begin());
-                } else {
-                    e->trait = HIRTraitPath();
-                }
-            }
-        }
+        expandTraitList(sp, data.as_ErasedType().traits);
         ty = crate.types.intern(std::move(data));
     }
     ty = HIRVisitor::visitType(ty);
