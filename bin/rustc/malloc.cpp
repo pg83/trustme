@@ -266,35 +266,10 @@ namespace {
     }
 
     [[gnu::noinline]] void* allocateSlow(size_t n, size_t align) {
-        if (align <= 16) {
-            if (n <= SMALL_LIMIT) {
-                return refillClass(classIndex(n));
-            }
-            if (n <= RUN_LIMIT) {
-                return allocateRun(n);
-            }
-            return allocateLarge(n, align);
+        if (align <= 16 && n <= SMALL_LIMIT) {
+            return refillClass(classIndex(n));
         }
-        if (n <= SMALL_LIMIT && align <= SMALL_LIMIT) {
-            size_t index = classIndex(n < align ? align : n);
-            while (index < CLASSES && classSize(index) % align != 0) {
-                index++;
-            }
-            if (index < CLASSES) {
-                auto& state = classes[index];
-                if (auto* slot = state.freeList) {
-                    state.freeList = slot->next;
-                    return slot;
-                }
-                if (state.bump < state.end) {
-                    void* block = reinterpret_cast<void*>(state.bump);
-                    state.bump += state.size;
-                    return block;
-                }
-                return refillClass(index);
-            }
-        }
-        if (align <= PAGE && n <= RUN_LIMIT) {
+        if (n != 0 && align <= PAGE && n <= RUN_LIMIT) {
             return allocateRun(n);
         }
         return allocateLarge(n, align);
