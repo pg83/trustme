@@ -1120,20 +1120,6 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
 }
 
 HIRValueItem& HIRCrate::getValitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName) {
-    if (path.crateName() == "#intrinsics") {
-        ASSERT_BUG(sp, path.components().size() == 1, StringView(""));
-        if (path.components().back() == "offset_of") {
-            if (!intrinsicOffsetof.as_Function()) {
-                auto* v = pool->make<HIRFunction>(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}});
-                v->variadic = true;
-                v->params.types.push_back(HIRTypeParamDef{RcString::newInterned("T"), types.infer(), false});
-                v->params.paramKinds.pushBack(HIRGenericParamKind::Type);
-                intrinsicOffsetof = HIRValueItem::make_Function(v);
-            }
-            return intrinsicOffsetof;
-        }
-        TODO(sp, StringView("Get intrinsic ") << path.components().back());
-    }
     if (path.crateName() == crateName && path.components().size() == 1) {
         auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) { return v.first == path.components().back(); });
         if (i != newValues.end()) {
@@ -1164,14 +1150,6 @@ const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePa
     } else {
         BUG(sp, StringView("Function path ") << path << StringView(" didn't point to an function (") << ti.tagStr() << StringView(")"));
     }
-}
-
-HIRFunction& HIRCrate::getFunctionByPathMut(const Span& sp, const HIRSimplePath& path) {
-    auto& ti = getValitemByPathMut(sp, path);
-    if (ti.is_Function()) {
-        return *ti.as_Function();
-    }
-    BUG(sp, StringView("Function path ") << path << StringView(" didn't point to an function (") << ti.tagStr() << StringView(")"));
 }
 
 bool HIRCrate::functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const {
@@ -2027,14 +2005,6 @@ const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePa
     } else {
         BUG(sp, StringView("`const` path ") << path << StringView(" didn't point to an enum"));
     }
-}
-
-HIRConstant& HIRCrate::getConstantByPathMut(const Span& sp, const HIRSimplePath& path) {
-    auto& ti = getValitemByPathMut(sp, path);
-    if (ti.is_Constant()) {
-        return *ti.as_Constant();
-    }
-    BUG(sp, StringView("`const` path ") << path << StringView(" didn't point to a constant"));
 }
 
 HIRFunction& HIRCrate::findFunctionMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRFunction& function) {

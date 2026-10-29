@@ -5206,17 +5206,22 @@ namespace {
                             break;
                         }
                     }
-                } else if (const auto* se = stmt.opt_SetDropFlag()) {
+                } else if (auto* se = stmt.opt_SetDropFlag()) {
                     if (se->other == ~0u) {
                         knownDropFlags[se->idx] = se->newVal;
                     } else {
                         auto it = knownDropFlags.find(se->other);
                         if (it != knownDropFlags.end()) {
-                            knownDropFlags[se->idx] = se->newVal != it->second;
+                            se->newVal = se->newVal != it->second;
+                            se->other = ~0u;
+                            knownDropFlags[se->idx] = se->newVal;
+                            changed = true;
                         } else {
                             knownDropFlags.erase(se->idx);
                         }
                     }
+                } else if (const auto* se = stmt.opt_LoadDropFlag()) {
+                    knownDropFlags.erase(se->idx);
                 }
 
                 struct ForgetWritten final: public LvalueVisitor {

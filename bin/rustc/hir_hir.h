@@ -946,13 +946,11 @@ public:
     const HIRValueItem& getValitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false) const;
     HIRValueItem& getValitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false);
     const HIRFunction& getFunctionByPath(const Span& sp, const HIRSimplePath& path) const;
-    HIRFunction& getFunctionByPathMut(const Span& sp, const HIRSimplePath& path);
     bool functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const;
 
     const HIRStatic& getStaticByPath(const Span& sp, const HIRSimplePath& path) const;
 
     const HIRConstant& getConstantByPath(const Span& sp, const HIRSimplePath& path) const;
-    HIRConstant& getConstantByPathMut(const Span& sp, const HIRSimplePath& path);
 
     HIRFunction& findFunctionMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRFunction& function);
     HIRStatic& findStaticMut(const WireBoard& wb, const Span& sp, const HIRPath& path, const HIRStatic& item);
