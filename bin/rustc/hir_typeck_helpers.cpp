@@ -2483,7 +2483,9 @@ bool HMTypeInferrence::ivarOccursIn(unsigned int slot, const HIRType* type) cons
 }
 
 bool HMTypeInferrence::containsLiveIvar(const HIRType* type, unsigned int rootIndex) const {
-    if (const auto* infer = type->opt_Infer(); infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && infer->index >= ivars.size()) {
+    /* A coroutine signature can still contain a wildcard before enumeration
+       assigns its inference slot. Only live slots of this table can recur. */
+    if (const auto* infer = type->opt_Infer(); infer && (infer->index == ~0u || isAliasInputInfer(infer->index) || infer->index >= ivars.size())) {
         return false;
     }
     const auto* resolved = this->getType(type);

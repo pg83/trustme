@@ -7518,6 +7518,7 @@ if not system_rustc_mode:
         "macro_rules_reexport_alias",
         "const_heap_intrinsics",
         "specialization_inherited_type_order",
+        "named_variadic_function_body",
     )
     for _stem in (
         "macro_clones_patterns",

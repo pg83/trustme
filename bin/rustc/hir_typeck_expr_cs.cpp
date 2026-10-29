@@ -4049,33 +4049,21 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
         if (ivarIdx < ivarsSized.length() && ivarsSized[ivarIdx]) {
             this->requireSized(sp, src);
         }
-        if (visitTyWith(src, [&](const HIRType* ity) {
-            return ity == dst;
-        })) {
+        if (ivars.ivarOccursIn(ivarIdx, src)) {
             auto newSrc = cloneTyWith(crate.types, sp, src, [&](const HIRType* tpl) -> const HIRType* {
                 if (tpl->is_Path() && tpl->as_Path().binding.is_Unbound()) {
-                    if (visitTyWith(src, [&](const HIRType* ity) {
-                        return ity == dst;
-                    })) {
+                    if (ivars.ivarOccursIn(ivarIdx, tpl)) {
                         const auto& pe = tpl->as_Path().path.data.as_UfcsKnown();
                         const auto* outTy = this->ivars.newIvarTr();
                         this->equateTypesAssoc(sp, outTy, pe.trait.path, pe.trait.params.clone(), pe.type, pe.item.c_str(), pe.params, false);
                         return outTy;
-                    } else {
                     }
                 }
                 return nullptr;
             });
-            ASSERT_BUG(
-                sp,
-                !visitTyWith(
-                    newSrc,
-                    [&](const HIRType* ity) {
-                return ity == dst;
+            if (ivars.ivarOccursIn(ivarIdx, newSrc)) {
+                ERROR(sp, E0000, StringView("Cannot infer recursive type: ") << dst << StringView(" = ") << newSrc);
             }
-                ),
-                StringView("")
-            );
             this->ivars.setIvarTo(ivarIdx, std::move(newSrc));
         } else {
             this->ivars.setIvarTo(ivarIdx, src);
