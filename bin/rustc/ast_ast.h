@@ -769,8 +769,6 @@ public:
     std::vector<AsmLine> lines;
     std::vector<Operand> operands;
     AsmOptions options;
-
-    ASTGlobalAsm clone() const;
 };
 
 class ASTModule {

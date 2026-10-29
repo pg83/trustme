@@ -284,26 +284,6 @@ ASTExternBlock ASTExternBlock::clone() const {
     return result;
 }
 
-ASTGlobalAsm ASTGlobalAsm::clone() const {
-    std::vector<Operand> clonedOperands;
-    clonedOperands.reserve(operands.size());
-    for (const auto& operand : operands) {
-        switch (operand.tag()) {
-            case ASTGlobalAsmOperand::TAG_Const: {
-                const auto expr = operand.as_Const();
-                clonedOperands.push_back(Operand::make_Const(expr->clone()));
-                break;
-            }
-            case ASTGlobalAsmOperand::TAG_Sym: {
-                auto& path = operand.as_Sym();
-                clonedOperands.push_back(Operand::make_Sym(path));
-                break;
-            }
-        }
-    }
-    return ASTGlobalAsm{lines, std::move(clonedOperands), options};
-}
-
 ASTModule::ASTModule() = default;
 
 ASTModule::ASTModule(ASTAbsolutePath path)
@@ -406,10 +386,6 @@ ASTItem ASTItem::clone() const {
         case ASTItem::TAG_ExternBlock: {
             return ASTItem(as_ExternBlock().clone());
         }
-        case ASTItem::TAG_GlobalAsm: {
-            auto& e = (*this).as_GlobalAsm();
-            return ASTItem(e.clone());
-        }
         case ASTItem::TAG_Impl: {
             return ASTItem(as_Impl().clone());
         }
@@ -455,6 +431,10 @@ ASTItem ASTItem::clone() const {
             auto& e = (*this).as_Static();
             return ASTItem(e.clone());
         }
+        case ASTItem::TAG_GlobalAsm:
+            /* global_asm! produces this item after fragment cloning, in an
+             * owning token stream that moves it into its destination module. */
+            break;
     }
     UNREACHABLE();
 }

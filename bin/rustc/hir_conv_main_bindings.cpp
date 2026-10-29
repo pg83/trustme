@@ -4082,22 +4082,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
 
         pp = KillPlaceholders(crate.types).monomorphPathParams(sp, pp, true);
         DEBUG(StringView("FOUND impl from ") << (probe.candidate ? probe.candidate->traitPath : traitPath.path));
-        if (auto* innerE = pd.opt_UfcsKnown()) {
-            BUG_ASSERT(pp.types.size() == innerE->trait.params.types.size());
-            HIRPathParamsBuilder traitParams(innerE->trait.params);
-            for (unsigned int i = 0; i < pp.types.size(); i++) {
-                auto& eTy = traitParams.types[i];
-                const auto& thisTy = pp.types[i];
-                if (eTy->is_Infer() && eTy->as_Infer().index == ~0u) {
-                } else if (eTy != thisTy) {
-                    eTy = crate.types.infer();
-                } else {
-                }
-            }
-            innerE->trait.params = HIRPathParams(mv$(traitParams));
-        } else {
-            pd = getUfcsKnown(pc, mv$(e), HIRGenericPath(traitPath.path, mv$(pp)), trait);
-        }
+        pd = getUfcsKnown(pc, mv$(e), HIRGenericPath(traitPath.path, mv$(pp)), trait);
         return false;
     });
     return pd.is_UfcsKnown();
