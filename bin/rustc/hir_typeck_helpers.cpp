@@ -16953,9 +16953,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (selected->impl.getType(crate.types, assocName, itemParams) == nullptr) {
                 for (const Candidate* source = selected->specializationItemSource; source; source = source->specializationItemSource) {
                     const auto* sourceImpl = source->impl.traitImpl;
-                    if (!sourceImpl) {
-                        break;
-                    }
                     const auto it = sourceImpl->types.find(assocName);
                     if (it == sourceImpl->types.end()) {
                         continue;
@@ -16964,9 +16961,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         break;
                     }
                     auto inherited = source->impl.getType(crate.types, assocName, itemParams);
-                    if (inherited == nullptr) {
-                        break;
-                    }
                     auto implType = selected->impl.getImplType(crate.types);
                     auto traitParams = selected->impl.getTraitParams(crate.types);
                     auto sourceTrait = HIRGenericPath(trait, traitParams.clone());
