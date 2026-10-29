@@ -616,7 +616,8 @@ namespace {
                         }
                         const auto& ti = crate.getTypeitemByPath(sp, path.path);
                         if (const auto* t = ti.opt_Trait()) {
-                            for (const auto& pt : t->parentTraits) {
+                            const auto& parents = t->allParentTraits.empty() ? t->parentTraits : t->allParentTraits;
+                            for (const auto& pt : parents) {
                                 if (containsTrait(sp, crate, pt.path, desPath)) {
                                     return true;
                                 }

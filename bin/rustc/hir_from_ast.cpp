@@ -1492,13 +1492,14 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             } else if (pb.is_TraitAlias()) {
                 const auto& pbe = pb.as_TraitAlias();
                 if (pbe.hir) {
+                    const auto params = withDefaults(sp, path.params, pbe.hir->params);
+                    auto aliasMonomorph = MonomorphStatePtr(ctx.crate->types, subject, &params, nullptr);
                     for (const auto& subTrait : pbe.hir->traits) {
-                        auto p = ms.monomorphGenericpath(sp, subTrait.path);
+                        auto p = aliasMonomorph.monomorphGenericpath(sp, subTrait.path, /*allow_infer=*/true);
                         const auto& t = ctx.crate->getTraitByPath(sp, p.path);
-                        auto selfTy = ctx.crate->types.self();
-                        auto rv = findSourceTraitHir(sp, p, t, name, ns, MonomorphStatePtr(ctx.crate->types, selfTy, &p.params, nullptr));
+                        auto rv = findSourceTraitHir(sp, p, t, name, ns, MonomorphiserNop(ctx.crate->types));
                         if (rv != HIRGenericPath()) {
-                            return rv;
+                            return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                         }
                     }
                     return HIRGenericPath();
