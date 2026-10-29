@@ -8,6 +8,7 @@ units are compile-only, as are units with `//@ compile-only`.
 
 Environment: RUSTC, CC.
 """
+import hashlib
 import os
 import re
 import shlex
@@ -53,6 +54,7 @@ def main() -> int:
         raise RuntimeError(f"unsupported unit crate type: {crate_type}")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
     aux_builds = re.findall(r"^//@\s*aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE)
+    aux_search = set(re.findall(r"^//@\s*aux-search:\s*(\S+)\s*$", source_text, re.MULTILINE))
     proc_macro_aux_builds = re.findall(
         r"^//@\s*proc-macro-aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE
     )
@@ -106,7 +108,11 @@ def main() -> int:
         for aux in aux_builds:
             aux_src = os.path.join(os.path.dirname(src), "aux", aux)
             aux_name = os.path.splitext(os.path.basename(aux))[0]
-            aux_rlib = os.path.join(work, f"lib{aux_name}.rlib")
+            suffix = ""
+            if aux_name in aux_search:
+                with open(aux_src, "rb") as aux_file:
+                    suffix = "-" + hashlib.file_digest(aux_file, "sha256").hexdigest()[:16]
+            aux_rlib = os.path.join(work, f"lib{aux_name}{suffix}.rlib")
             # an aux crate may name its own edition (`//@ edition: 2018` in the aux)
             with open(aux_src) as aux_file:
                 aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
@@ -117,7 +123,10 @@ def main() -> int:
                  "--edition", aux_edition, *dependency_args],
                 env=env,
             )
-            dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
+            if aux_name in aux_search:
+                dependency_args.extend(("-L", work, "--extern", aux_name))
+            else:
+                dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
         if chaos_match:
             rustc = lib.require_env("RUSTC_CHAOS")

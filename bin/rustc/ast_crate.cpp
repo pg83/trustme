@@ -218,7 +218,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
                 continue;
             }
             struct dirent* ent;
-            while ((ent = readdir(dp)) != nullptr && path == "") {
+            while ((ent = readdir(dp)) != nullptr) {
                 const auto* fname = ent->d_name;
 
                 size_t len = strlen(fname);
