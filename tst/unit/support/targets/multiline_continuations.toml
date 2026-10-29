@@ -11,3 +11,4 @@ arch = """x86_\
 	64"""
 [backend.c]
 variant = "gnu"
+linker-opts-post = ["-Wl,--gc-sections"]
