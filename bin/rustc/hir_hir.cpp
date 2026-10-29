@@ -350,14 +350,23 @@ namespace {
 
     struct ImplMatcher: public HIRMatchGenerics {
         Vector<const HIRType*>& implTypes;
+        struct ValueMapping {
+            unsigned binding;
+            HIRConstGeneric value;
+            const ValueMapping* next;
+        };
+        const ValueMapping* implValues = nullptr;
+        ObjPool* valuePool = nullptr;
 
         ImplMatcher(Vector<const HIRType*>& buf, const HIRGenericParams& implGenerics);
+        ImplMatcher(Vector<const HIRType*>& buf, const HIRGenericParams& implGenerics, ObjPool& valuePool);
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType resolveCb) override;
 
         HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
 
         const HIRType* mappedType(unsigned binding) const;
+        const HIRConstGeneric* mappedValue(unsigned binding) const;
     };
 
     struct TypeOrdContext {
@@ -1450,7 +1459,7 @@ bool HIRMarkerImpl::matchesType(const HIRType* type, tCbResolveType tyRes) const
 
 bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& parent, HIRSpecializationBoundCallback& cb) const {
     Vector<const HIRType*> parentMappings;
-    ImplMatcher parentMatcher(parentMappings, parent.params);
+    ImplMatcher parentMatcher(parentMappings, parent.params, types.objectPool());
     if (!matchImplHead(sp, parent, *this, parentMatcher)) {
         return false;
     }
@@ -1466,6 +1475,11 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
         size_t count = 0;
         for (size_t i = 0; i < parent.params.types.size(); i++) {
             if (parentMatcher.mappedType(i)) {
+                count++;
+            }
+        }
+        for (size_t i = 0; i < parent.params.values.size(); i++) {
+            if (parentMatcher.mappedValue(i)) {
                 count++;
             }
         }
@@ -1554,11 +1568,11 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     TypeOrdContext ordContext;
 
     Vector<const HIRType*> parentMappings;
-    ImplMatcher parentMatcher(parentMappings, other.params);
+    ImplMatcher parentMatcher(parentMappings, other.params, types.objectPool());
     const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
 
     Vector<const HIRType*> childMappings;
-    ImplMatcher childMatcher(childMappings, params);
+    ImplMatcher childMatcher(childMappings, params, types.objectPool());
     const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
 
     if (!parentMatchesChild && !childMatchesParent) {
@@ -2373,6 +2387,15 @@ ImplMatcher::ImplMatcher(Vector<const HIRType*>& buf, const HIRGenericParams& im
     implTypes.zero(implGenerics.types.size());
 }
 
+ImplMatcher::ImplMatcher(Vector<const HIRType*>& buf, const HIRGenericParams& implGenerics, ObjPool& valuePool)
+    : HIRMatchGenerics(valuePool)
+    , implTypes(buf)
+    , valuePool(&valuePool)
+{
+    implTypes.clear();
+    implTypes.zero(implGenerics.types.size());
+}
+
 auto ImplMatcher::matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType resolveCb) -> HIRCompare {
     BUG_ASSERT(g.binding < implTypes.length());
     if (implTypes[g.binding]) {
@@ -2383,12 +2406,36 @@ auto ImplMatcher::matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveT
 }
 
 auto ImplMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) -> HIRCompare {
-    // TODO
+    /* Candidate filtering leaves const obligations to the solver. Comparing
+       impl heads must remember repeated parameters, including array lengths
+       whose temporary literals the retaining constructor freezes in its pool. */
+    if (!valuePool) {
+        return HIRCompare::Equal;
+    }
+    if (const auto* mapped = mappedValue(g.binding)) {
+        if (*mapped == sz) {
+            return HIRCompare::Equal;
+        }
+        if (mapped->is_Infer() || sz.is_Infer() || mapped->is_Unevaluated() || sz.is_Unevaluated()) {
+            return HIRCompare::Fuzzy;
+        }
+        return HIRCompare::Unequal;
+    }
+    implValues = valuePool->make<ValueMapping>(ValueMapping{g.binding, sz.clone(), implValues});
     return HIRCompare::Equal;
 }
 
 auto ImplMatcher::mappedType(unsigned binding) const -> const HIRType* {
     return binding < implTypes.length() ? implTypes[binding] : nullptr;
+}
+
+auto ImplMatcher::mappedValue(unsigned binding) const -> const HIRConstGeneric* {
+    for (auto* mapping = implValues; mapping; mapping = mapping->next) {
+        if (mapping->binding == binding) {
+            return &mapping->value;
+        }
+    }
+    return nullptr;
 }
 
 ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
@@ -2409,6 +2456,11 @@ auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) c
 }
 
 auto ImplHeadMonomorphiser::getValue(const Span&, const HIRGenericRef& generic) const -> HIRConstGeneric {
+    if (generic.group() == 0) {
+        if (const auto* mapped = matcher.mappedValue(generic.binding)) {
+            return mapped->clone();
+        }
+    }
     complete_ = false;
     return HIRConstGeneric(generic);
 }
@@ -2420,24 +2472,4 @@ auto ImplHeadMonomorphiser::complete() const -> bool {
 template <>
 void stl::output<ZeroCopyOutput, HIRPublicity>(ZeroCopyOutput& out, const HIRPublicity& value) {
     value.fmt(out);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, HIRStruct::Repr>(ZeroCopyOutput& out, HIRStruct::Repr value) {
-    out << StringView("repr(");
-    switch (value) {
-        case HIRStruct::Repr::Rust:
-            out << StringView("Rust");
-            break;
-        case HIRStruct::Repr::C:
-            out << StringView("C");
-            break;
-        case HIRStruct::Repr::Simd:
-            out << StringView("simd");
-            break;
-        case HIRStruct::Repr::Transparent:
-            out << StringView("transparent");
-            break;
-    }
-    out << StringView(")");
 }
