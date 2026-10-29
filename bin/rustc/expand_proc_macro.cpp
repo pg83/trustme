@@ -244,7 +244,6 @@ namespace {
         std::string recvBytes();
         void recvBytesRaw(void* outVoid, size_t len);
         u64 recvV128u();
-        U128 recvV128uU128();
     };
 
     struct ReprintMarkers final: PprustMarkers {
@@ -731,20 +730,6 @@ u64 ProcMacroInv::recvV128u() {
     return v;
 }
 
-U128 ProcMacroInv::recvV128uU128() {
-    U128 v(0);
-    unsigned ofs = 0;
-    for (;;) {
-        auto b = recvU8();
-        v |= U128(b & 0x7F) << ofs;
-        if ((b & 0x80) == 0) {
-            break;
-        }
-        ofs += 7;
-    }
-    return v;
-}
-
 Position ProcMacroInv::getPosition() const {
     return Position(receivedFromInput ? parentSpan : thisSpan);
 }
@@ -848,103 +833,6 @@ Token ProcMacroInv::realGetToken_() {
             }
             return Token(TOK_LIFETIME, Ident(receivedHygiene, RcString::newInterned(val)));
         }
-        case TokenClass::String: {
-            auto val = this->recvBytes();
-            return Token(TOK_STRING, mv$(val), receivedHygiene);
-        }
-        case TokenClass::ByteString: {
-            auto val = this->recvBytes();
-            return Token(TOK_BYTESTRING, mv$(val), receivedHygiene);
-        }
-        case TokenClass::CharLit: {
-            auto val = this->recvV128u();
-            return Token(U128(val), CORETYPE_CHAR);
-        }
-        case TokenClass::UnsignedInt: {
-            ::eCoreType ty;
-            switch (this->recvU8()) {
-                case 0:
-                    ty = CORETYPE_ANY;
-                    break;
-                case 1:
-                    ty = CORETYPE_UINT;
-                    break;
-                case 8:
-                    ty = CORETYPE_U8;
-                    break;
-                case 16:
-                    ty = CORETYPE_U16;
-                    break;
-                case 32:
-                    ty = CORETYPE_U32;
-                    break;
-                case 64:
-                    ty = CORETYPE_U64;
-                    break;
-                case 128:
-                    ty = CORETYPE_U128;
-                    break;
-                default:
-                    BUG(this->parentSpan, StringView("Invalid integer size from child process"));
-            }
-            auto val = this->recvV128uU128();
-            return Token(val, ty);
-        }
-        case TokenClass::SignedInt: {
-            ::eCoreType ty;
-            switch (this->recvU8()) {
-                case 0:
-                    ty = CORETYPE_ANY;
-                    break;
-                case 1:
-                    ty = CORETYPE_INT;
-                    break;
-                case 8:
-                    ty = CORETYPE_I8;
-                    break;
-                case 16:
-                    ty = CORETYPE_I16;
-                    break;
-                case 32:
-                    ty = CORETYPE_I32;
-                    break;
-                case 64:
-                    ty = CORETYPE_I64;
-                    break;
-                case 128:
-                    ty = CORETYPE_I128;
-                    break;
-                default:
-                    BUG(this->parentSpan, StringView("Invalid integer size from child process"));
-            }
-            auto val = this->recvV128uU128();
-            if (val.truncateU64() & 1) {
-                val = ~(val >> 1) + 1;
-                TODO(this->parentSpan, StringView("Negative literal from proc macro, what?"));
-            } else {
-                val = (val >> 1);
-            }
-            return Token(val, ty);
-        }
-        case TokenClass::Float: {
-            ::eCoreType ty;
-            switch (this->recvU8()) {
-                case 0:
-                    ty = CORETYPE_ANY;
-                    break;
-                case 32:
-                    ty = CORETYPE_F32;
-                    break;
-                case 64:
-                    ty = CORETYPE_F64;
-                    break;
-                default:
-                    BUG(this->parentSpan, StringView("Invalid float size from child process"));
-            }
-            double val;
-            this->recvBytesRaw(&val, sizeof(val));
-            return Token::makeFloat(val, ty);
-        }
         case TokenClass::RawLiteral: {
             auto text = this->recvBytes();
             const bool negative = !text.empty() && text[0] == '-';
@@ -968,7 +856,6 @@ Token ProcMacroInv::realGetToken_() {
             return token;
         }
 
-            //    TODO(this->m_parent_span, StringView("Handle ints/floats/fragments from child process"));
     }
     BUG(this->parentSpan, StringView("Invalid token class from child process - ") << int(v));
 
