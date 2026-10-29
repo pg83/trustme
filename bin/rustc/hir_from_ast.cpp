@@ -930,10 +930,6 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 }
                 break;
             }
-            case ASTGenericBound::TAG_NotTrait: {
-                TODO(bound.span, StringView("Negative trait bounds"));
-                break;
-            }
             case ASTGenericBound::TAG_Equality: {
                 auto& e = bound.as_Equality();
                 rv.bounds.push_back(HIRGenericBound::make_TypeEquality({LowerHIRType(e.type), LowerHIRType(e.replacement)}));
@@ -2376,11 +2372,6 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                             } else {
                                 ERROR(item.span, E0000, StringView("MaybeTrait on unknown trait ") << trait.path);
                             }
-                            break;
-                        }
-                        case ASTGenericBound::TAG_NotTrait: {
-                            auto& _ = bound.as_NotTrait();
-                            TODO(item.span, StringView("Negative associated type bound"));
                             break;
                         }
                         case ASTGenericBound::TAG_Equality: {

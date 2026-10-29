@@ -2019,12 +2019,6 @@ namespace {
                     ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
                     break;
                 }
-                case ASTGenericBound::TAG_NotTrait: {
-                    auto& e = bound.as_NotTrait();
-                    ResolveAbsoluteType(context, e.type);
-                    ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
-                    break;
-                }
                 case ASTGenericBound::TAG_Equality: {
                     auto& e = bound.as_Equality();
                     ResolveAbsoluteType(context, e.type);
@@ -2722,12 +2716,6 @@ namespace {
                 }
                 case ASTGenericBound::TAG_MaybeTrait: {
                     auto& e = bound.as_MaybeTrait();
-                    ReplaceDelegatedSelf(e.type, replacementName);
-                    ReplaceDelegatedSelf(e.trait, replacementName);
-                    break;
-                }
-                case ASTGenericBound::TAG_NotTrait: {
-                    auto& e = bound.as_NotTrait();
                     ReplaceDelegatedSelf(e.type, replacementName);
                     ReplaceDelegatedSelf(e.trait, replacementName);
                     break;

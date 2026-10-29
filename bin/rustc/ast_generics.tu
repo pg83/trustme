@@ -42,10 +42,6 @@ generate(
             ("ASTType*", "type"),
             ("ASTPath", "trait"),
         ], deep=["type"], doc="Removed trait bound: \"Type: ?Trait\""),
-        v("NotTrait", fields=[
-            ("ASTType*", "type"),
-            ("ASTPath", "trait"),
-        ], deep=["type"], doc="Negative trait bound: \"Type: !Trait\""),
         v("Equality", fields=[
             ("ASTType*", "type"),
             ("ASTType*", "replacement"),

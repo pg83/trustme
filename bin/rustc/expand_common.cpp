@@ -1208,12 +1208,6 @@ namespace {
                     ExpandPath(es, mod, be.trait);
                     break;
                 }
-                case ASTGenericBound::TAG_NotTrait: {
-                    auto& be = bound.as_NotTrait();
-                    ExpandType(es, mod, be.type);
-                    ExpandPath(es, mod, be.trait);
-                    break;
-                }
                 case ASTGenericBound::TAG_Equality: {
                     auto& be = bound.as_Equality();
                     ExpandType(es, mod, be.type);

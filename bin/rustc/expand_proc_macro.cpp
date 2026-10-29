@@ -301,7 +301,6 @@ namespace {
 
         void visitParams(const ASTGenericParams& params);
 
-
         void visitBounds(const ASTGenericParams& params);
 
         void visitNode(const ASTExprNode& e);
@@ -2583,14 +2582,6 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
                     visitType(be.type);
                     pmi.sendSymbol(":");
                     pmi.sendSymbol("?");
-                    visitPath(be.trait);
-                    break;
-                }
-                case ASTGenericBound::TAG_NotTrait: {
-                    auto& be = e.as_NotTrait();
-                    visitType(be.type);
-                    pmi.sendSymbol(":");
-                    pmi.sendSymbol("!");
                     visitPath(be.trait);
                     break;
                 }
