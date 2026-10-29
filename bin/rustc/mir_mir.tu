@@ -172,7 +172,6 @@ generate(
         v("Unsigned", "stl::Vector<u64>"),
         v("Signed", "stl::Vector<i64>"),
         v("String", "std::vector<std::string>"),
-        v("ByteString", "std::vector<stl::Vector<u8>>"),
     ],
     extra="""
         MIRSwitchValues clone() const;

@@ -5526,35 +5526,6 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
         cb.emit(SIZE_MAX);
         of << StringView("\n");
         of << indent << StringView("} }\n");
-    } else if (const auto* ve = values.opt_ByteString()) {
-        of << indent << StringView("{ static SLICE_PTR switch_strings[] = {");
-        for (const auto& v : *ve) {
-            of << StringView(" {(void*)");
-            this->printEscapedString(v);
-            of << StringView(",") << v.length() << StringView("},");
-        }
-        of << StringView(" {0,0} };\n");
-        const HIRType* tmp;
-        const auto& ty = localMirRes.getLvalueType(val);
-        of << indent << StringView("switch( trustme_string_search_linear(");
-        if (const auto* a = ty->as_Borrow().inner->opt_Array()) {
-            auto len = a->size.as_Known();
-            of << StringView("make_sliceptr(");
-            emitLvalue(val);
-            of << StringView("->DATA, ") << len << StringView(")");
-        } else {
-            emitLvalue(val);
-        }
-        of << StringView(", ") << ve->size() << StringView(", switch_strings) ) {\n");
-        for (size_t i = 0; i < ve->size(); i++) {
-            of << indent << StringView("case ") << i << StringView(": ");
-            cb.emit(i);
-            of << StringView(" break;\n");
-        }
-        of << indent << StringView("default: ");
-        cb.emit(SIZE_MAX);
-        of << StringView("\n");
-        of << indent << StringView("} }\n");
     } else if (const auto* ve = values.opt_Unsigned()) {
         const bool emulatedU128 = options.emulatedI128 && ty == HIRCoreType::U128;
         if (emulatedU128) {

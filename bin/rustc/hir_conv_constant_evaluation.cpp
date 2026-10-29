@@ -2330,8 +2330,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 
             unsigned targetIdx = ~0u;
             const auto matchBytes = [&](const auto& values) {
-                const auto* array = ty->as_Borrow().inner->opt_Array();
-                const size_t length = array ? array->size.as_Known() : lit.slice(TargetGetPointerBits() / 8).readUsize(state);
+                const size_t length = lit.slice(TargetGetPointerBits() / 8).readUsize(state);
                 const auto* data = length ? pointerBytes(localState, lit.readPtr(state), length, "match").extReadBytes(state, length) : nullptr;
                 for (size_t i = 0; i < values.size(); i++) {
                     if (length == values[i].length() && (length == 0 || memcmp(data, values[i].data(), length) == 0)) {
@@ -2343,10 +2342,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             switch (e.values.tag()) {
                 case MIRSwitchValues::TAG_String: {
                     matchBytes(e.values.as_String());
-                    break;
-                }
-                case MIRSwitchValues::TAG_ByteString: {
-                    matchBytes(e.values.as_ByteString());
                     break;
                 }
                 case MIRSwitchValues::TAG_Unsigned: {

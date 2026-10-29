@@ -943,34 +943,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                         }
                         break;
                     } break;
-                    case MIRSwitchValues::TAG_ByteString: {
-                        auto& ve = e.values.as_ByteString();
-                        for (size_t j = 0; j < ve.size(); j++) {
-                            of << StringView("b\"");
-                            for (size_t i = 0; i < ve[j].length(); i++) {
-                                auto b = ve[j][i];
-                                switch (b) {
-                                    case '\\':
-                                        of << StringView("\\\\");
-                                        break;
-                                    case '\"':
-                                        of << StringView("\\\"");
-                                        break;
-                                    default:
-                                        if (' ' <= b && b < 0x7f) {
-                                            of << char(ve[j][i]);
-                                        } else {
-                                            of << StringView("\\x");
-                                            of << StringView("0123456789ABCDEF")[b >> 4];
-                                            of << StringView("0123456789ABCDEF")[b & 15];
-                                        }
-                                        break;
-                                }
-                            }
-                            of << StringView("\" = ") << e.targets[i] << StringView(",");
-                        }
-                    } break;
-                        break;
                     case MIRSwitchValues::TAG_Unsigned: {
                         auto& ve = e.values.as_Unsigned();
                         for (size_t i = 0; i < ve.length(); i++) {

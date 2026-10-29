@@ -293,34 +293,6 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                         }
                         break;
                     }
-                    case MIRSwitchValues::TAG_ByteString: {
-                        auto& ve = e.values.as_ByteString();
-                        for (unsigned int j = 0; j < e.targets.length(); j++) {
-                            os << StringView("b\"");
-                            for (size_t i = 0; i < ve[j].length(); i++) {
-                                auto b = ve[j][i];
-                                switch (b) {
-                                    case '\\':
-                                        os << StringView("\\\\");
-                                        break;
-                                    case '\"':
-                                        os << StringView("\\\"");
-                                        break;
-                                    default:
-                                        if (' ' <= b && b < 0x7f) {
-                                            os << char(ve[j][i]);
-                                        } else {
-                                            os << StringView("\\x");
-                                            os << StringView("0123456789ABCDEF")[b >> 4];
-                                            os << StringView("0123456789ABCDEF")[b & 15];
-                                        }
-                                        break;
-                                }
-                            }
-                            os << StringView("\" => bb") << e.targets[j] << StringView(", ");
-                        }
-                        break;
-                    }
                 }
                 os << StringView("_ => bb") << e.defTarget << StringView("}\n");
                 break;

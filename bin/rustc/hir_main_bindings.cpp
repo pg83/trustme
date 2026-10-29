@@ -1314,7 +1314,6 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
             return in.readI64();
         }))
         _(String, deserialiseVec<std::string>())
-        _(ByteString, deserialiseVec<Vector<u8>>())
 #undef _
         default:
             BUG(Span(), StringView("Bad tag for MIR::SwitchValues - ") << tag);
@@ -4347,11 +4346,6 @@ auto HirSerialiser::serialise(const MIRSwitchValues& sv) -> void {
         }
         case MIRSwitchValues::TAG_String: {
             auto& e = sv.as_String();
-            serialiseVec(e);
-            break;
-        }
-        case MIRSwitchValues::TAG_ByteString: {
-            auto& e = sv.as_ByteString();
             serialiseVec(e);
             break;
         }

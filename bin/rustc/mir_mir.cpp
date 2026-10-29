@@ -807,10 +807,6 @@ MIRSwitchValues MIRSwitchValues::clone() const {
             auto& ve = (*this).as_String();
             return ve;
         }
-        case MIRSwitchValues::TAG_ByteString: {
-            auto& ve = (*this).as_ByteString();
-            return ve;
-        }
     }
     UNREACHABLE();
 }
@@ -841,19 +837,6 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
             auto& bve = x.as_String();
             if (ave != bve) {
                 return false;
-            }
-            break;
-        }
-        case MIRSwitchValues::TAG_ByteString: {
-            auto& ave = (*this).as_ByteString();
-            auto& bve = x.as_ByteString();
-            if (ave.size() != bve.size()) {
-                return false;
-            }
-            for (size_t i = 0; i < ave.size(); ++i) {
-                if (::ord(ave[i], bve[i]) != OrdEqual) {
-                    return false;
-                }
             }
             break;
         }
