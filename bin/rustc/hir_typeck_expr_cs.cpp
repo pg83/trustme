@@ -585,7 +585,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         }
         Vector<const HIRType*> targets;
         for (const auto& coercion : context.linkCoerce) {
-            if (coercion->op != SolverCoercionOp::Coercion || context.ivars.getType(coercion->sourceType()) != closure) {
+            if (context.ivars.getType(coercion->sourceType()) != closure) {
                 continue;
             }
             const auto* destination = context.ivars.getType(coercion->leftTy);
@@ -659,9 +659,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
     }
 
     ArgumentBinding variableBinding(const Context& context, const IvarCoercionIndex& coercionIndex, const Context::Coercion& rule) {
-        if (rule.op != SolverCoercionOp::Coercion) {
-            return {};
-        }
         if (isArgumentOfOpenCall(context, rule.leftTy)) {
             return {};
         }
@@ -745,7 +742,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
            them all.  Sources all known and alike bind now; differing or still open
            ones stay the finalisation sweeps' joint decision. */
         for (const auto* other : coercionIndex[infer->index].coercions) {
-            if (other == &rule || other->op != SolverCoercionOp::Coercion) {
+            if (other == &rule) {
                 continue;
             }
             /* An assignment into the variable is not one of them: `check_expr_assign`
@@ -790,7 +787,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         if (rule.bindingOrder) {
             return OrderPlace{rule.bindingOrder, rule.bindingStart};
         }
-        if (rule.rightNodePtr && (*rule.rightNodePtr)->checkOrderEnd) {
+        if ((*rule.rightNodePtr)->checkOrderEnd) {
             /* A closure is what it is at its start (see `equateTypesCoerce`). */
             if (cast<HIRExprNodeClosure>(&**rule.rightNodePtr)) {
                 return OrderPlace{(*rule.rightNodePtr)->checkOrder, (*rule.rightNodePtr)->checkOrder};
@@ -879,7 +876,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             }
             const auto component = coercionIndex.componentOf(index);
             if (!cuts.empty() && !cuts[component].isNone() && place.after(cuts[component])
-                && (rule.coercesAfterItsValue || !rule.rightNodePtr || !(place.start <= cuts[component].start && place.end >= cuts[component].end)
+                && (rule.coercesAfterItsValue || !(place.start <= cuts[component].start && place.end >= cuts[component].end)
                     || !cutInsideClosureOf(context.crate.types, **rule.rightNodePtr, cuts[component]))) {
                 DEBUG(StringView("- Coercion R") << rule.ruleIdx << StringView(" at ") << place.end << StringView(" waits for the binding at ") << cuts[component].end);
                 return true;
@@ -1523,34 +1520,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         }
     };
 
-    CoerceResult checkUnsizeTys(Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, const Context::Coercion& rule) {
-        const auto& dst = context.ivars.getType(dstRaw);
-        const auto& src = context.ivars.getType(srcRaw);
-
-        TRACE_FUNCTION_F(StringView("dst=") << dst << StringView(", src=") << src);
-        if (context.ivars.typesEqual(dst, src)) {
-            return CoerceResult::Equality;
-        }
-
-        if (const auto* destinationInfer = dst->opt_Infer(); destinationInfer && destinationInfer->index < context.ivarsSized.length() && context.ivarsSized[destinationInfer->index]) {
-            return CoerceResult::Equality;
-        }
-
-        OpenStepOfRule openStep(context, &rule);
-        /* Type-only obligations have no expression to adjust and cannot autoderef. */
-        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Unsizing, false, false, &openStep);
-        if (solverResponse.effects.certainty == SolverCertainty::Proven) {
-            context.applySolverResponse(sp, solverResponse.effects);
-            const auto relation = solverResponse.adjustment.innerRelation == SolverCoercionRelation::None ? solverResponse.relation : solverResponse.adjustment.innerRelation;
-            return relation == SolverCoercionRelation::Equality ? CoerceResult::Equality : CoerceResult::Unsize;
-        }
-        if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
-            applyOpenCoercionEffects(context, sp, solverResponse.effects);
-            return CoerceResult::Unknown;
-        }
-        return CoerceResult::Equality;
-    }
-
     CoerceResult checkCoerceTys(const Context& context, const Span& sp, const HIRType* dst, const HIRType* srcR, Context* contextMut = nullptr, HIRExprNodeP* nodePtrPtr = nullptr, const Context::Coercion* rule = nullptr) {
         auto src = srcR;
         TRACE_FUNCTION_F(dst << StringView(" := ") << src);
@@ -1997,27 +1966,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
     }
 
     bool checkCoerce(Context& context, const Context::Coercion& v) {
-        if (!v.rightNodePtr) {
-            const auto& sp = v.span();
-            const auto* tyDst = context.getType(v.leftTy);
-            const auto* tySrc = context.getType(v.sourceType());
-            TRACE_FUNCTION_F(v << StringView(" - ") << context.ivars.fmtType(tyDst) << StringView(" := ") << context.ivars.fmtType(tySrc));
-            const auto result = v.op == SolverCoercionOp::Coercion
-                ? checkCoerceTys(context, sp, tyDst, tySrc, &context, nullptr, &v)
-                : checkUnsizeTys(context, sp, tyDst, tySrc, v);
-            switch (result) {
-                case CoerceResult::Fail:
-                case CoerceResult::Unknown:
-                    return false;
-                case CoerceResult::Equality:
-                    context.equateTypes(sp, tyDst, tySrc);
-                    return true;
-                case CoerceResult::Custom:
-                case CoerceResult::Unsize:
-                    return true;
-            }
-            UNREACHABLE();
-        }
         HIRExprNodeP& nodePtr = *v.rightNodePtr;
         const auto& sp = v.span();
         const auto& tyDst = context.ivars.getType(v.leftTy);
@@ -2221,7 +2169,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             return assoc.name != "" && assoc.order != 0 && context.getType(assoc.leftTy) == resolved && place.after(associatedPlace(assoc));
         });
         return projectionPending || std::any_of(context.linkCoerce.begin(), context.linkCoerce.end(), [&](const auto& other) {
-            return other && other.get() != &rule && other->rightNodePtr && other->op == SolverCoercionOp::Coercion && !other->assignmentSite
+            return other && other.get() != &rule && !other->assignmentSite
                 && context.getType(other->leftTy) == resolved && place.after(bindingPlace(*other));
         });
     }
@@ -2877,7 +2825,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
             DEBUG(StringView("Check Coerce R") << bound->ruleIdx << StringView(" - ") << bound->leftTy << StringView(" := ") << bound->sourceType());
             DEBUG(StringView("Testing ") << tL << StringView(" := ") << tR);
-            const auto response = context.resolve.evaluateCoercionGoal(sp, tL, tR, bound->op);
+            const auto response = context.resolve.evaluateCoercionGoal(sp, tL, tR, SolverCoercionOp::Coercion);
             if (response.effects.certainty == SolverCertainty::NoSolution) {
                 DEBUG(StringView("Solver rejected coercion candidate"));
                 return true;
@@ -5622,32 +5570,19 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
 
 }
 
-Context::Coercion::Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr)
+Context::Coercion::Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP& rightNode)
     : ruleIdx(ruleIdx)
-    , obligationSpan((*rightNodePtr)->span())
     , leftTy(leftTy)
-    , rightNodePtr(rightNodePtr)
-    , rightTy(nullptr)
-    , op(SolverCoercionOp::Coercion)
-{
-}
-
-Context::Coercion::Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op)
-    : ruleIdx(ruleIdx)
-    , obligationSpan(span)
-    , leftTy(leftTy)
-    , rightNodePtr(nullptr)
-    , rightTy(rightTy)
-    , op(op)
+    , rightNodePtr(&rightNode)
 {
 }
 
 const Span& Context::Coercion::span() const {
-    return rightNodePtr ? (*rightNodePtr)->span() : obligationSpan;
+    return (*rightNodePtr)->span();
 }
 
 const HIRType* Context::Coercion::sourceType() const {
-    return rightNodePtr ? (*rightNodePtr)->resType : rightTy;
+    return (*rightNodePtr)->resType;
 }
 
 void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite, bool callArgument) {
@@ -5659,7 +5594,7 @@ void Context::equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& 
     if (destinationRequiresSized) {
         this->requireSized(sp, nodePtr->resType);
     }
-    this->linkCoerce.push_back(std::make_unique<Coercion>(this->nextRuleIdx++, l, &nodePtr));
+    this->linkCoerce.push_back(std::make_unique<Coercion>(this->nextRuleIdx++, l, nodePtr));
     this->linkCoerce.back()->argumentSite = argumentSite;
     this->linkCoerce.back()->order = this->currentOrder;
     /* A call's argument - a constructor's too - is coerced after its own subtree, in
@@ -5745,18 +5680,6 @@ void Context::rememberCallExpectation(const HIRExprNode& node, const HIRType* ex
 const HIRType* Context::callExpectation(const HIRExprNode& node) const {
     const auto* found = this->callExpectations.find(reinterpret_cast<uintptr_t>(&node));
     return found ? *found : nullptr;
-}
-
-void Context::addCoercionObligation(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op) {
-    const auto duplicate = std::any_of(linkCoerce.begin(), linkCoerce.end(), [&](const auto& obligation) {
-        return !obligation->rightNodePtr && obligation->op == op && obligation->leftTy == destination && obligation->rightTy == source;
-    });
-    if (!duplicate) {
-        linkCoerce.push_back(std::make_unique<Coercion>(nextRuleIdx++, sp, destination, source, op));
-        linkCoerce.back()->order = currentOrder;
-        DEBUG(StringView("++ ") << *linkCoerce.back());
-        ivars.markChange();
-    }
 }
 
 void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& requestedTrait, HIRPathParams pp, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
@@ -6262,12 +6185,10 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
         registerSolverObligation(sp, obligation.type, obligation.trait.clone());
     }
     for (const auto& coercion : response.coercions) {
-        if (coercion.sourceInput != ~0u) {
-            if (coercionInputs && coercion.sourceInput < coercionInputs->size()) {
-                equateTypesCoerce(sp, coercion.destination, (*coercionInputs)[coercion.sourceInput]);
-            }
-        } else {
-            addCoercionObligation(sp, coercion.destination, coercion.source, coercion.op);
+        /* Method argument checking is the producer; response transformations
+           preserve the argument index until its expression can be adjusted. */
+        if (coercionInputs && coercion.sourceInput < coercionInputs->size()) {
+            equateTypesCoerce(sp, coercion.destination, (*coercionInputs)[coercion.sourceInput]);
         }
     }
 }
@@ -6328,7 +6249,7 @@ Vector<OrderPlace> argumentBindingCuts(const Context& context, const IvarCoercio
     };
     Vector<unsigned int> ivars;
     for (const auto& rule : context.linkCoerce) {
-        if (!rule->argumentSite || !rule->rightNodePtr || rule->bindingOrder == 0) {
+        if (!rule->argumentSite || rule->bindingOrder == 0) {
             continue;
         }
         const auto binding = argumentBinding(context, *rule);
@@ -6389,7 +6310,7 @@ bool associatedPastArgumentCut(const Context& context, const IvarCoercionIndex& 
 Vector<unsigned> argumentBindingOrders(const Context& context) {
     Vector<unsigned> orders;
     for (const auto& rule : context.linkCoerce) {
-        if (!rule->argumentSite || !rule->rightNodePtr || rule->order == 0) {
+        if (!rule->argumentSite || rule->order == 0) {
             continue;
         }
         orders.pushBack(rule->order);
@@ -6449,7 +6370,7 @@ bool associatedWaitsForArgumentBinding(const Context& context, const IvarCoercio
         return false;
     }
     for (const auto& coercion : context.linkCoerce) {
-        if (!coercion->argumentSite || !coercion->rightNodePtr || coercion->order != rule.order) {
+        if (!coercion->argumentSite || coercion->order != rule.order) {
             continue;
         }
         const auto binding = argumentBinding(context, *coercion);
@@ -6487,7 +6408,7 @@ bool anyOrderCut(const Context& context) {
         }
     }
     for (const auto& rule : context.linkCoerce) {
-        if (rule->argumentSite && rule->rightNodePtr && rule->bindingOrder != 0 && argumentBinding(context, *rule).destination) {
+        if (rule->argumentSite && rule->bindingOrder != 0 && argumentBinding(context, *rule).destination) {
             return true;
         }
     }
@@ -6866,7 +6787,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 for (size_t i = 0; i < context.linkCoerce.size();) {
                     auto ent = mv$(context.linkCoerce[i]);
                     if (ivarCoercionIndex && (!coercionCuts.empty() || ivarCoercionIndex->pendingNodeCut || ivarCoercionIndex->pendingObligationCut) && coercionPastArgumentCut(context, *ivarCoercionIndex, coercionCuts, cutIvars, *ent)) {
-                        if (ent->assignmentSite && !ent->expectationDelivered && ent->rightNodePtr) {
+                        if (ent->assignmentSite && !ent->expectationDelivered) {
                             const auto* placeType = context.getType(ent->leftTy);
                             if (!placeType->is_Infer()) {
                                 ent->expectationDelivered = true;
@@ -6878,12 +6799,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                         continue;
                     }
                     const auto& span = ent->span();
-                    if (ent->rightNodePtr) {
-                        auto& srcTy = (*ent->rightNodePtr)->resType;
-                        srcTy = context.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
-                    } else {
-                        ent->rightTy = context.expandAssociatedTypes(span, mv$(ent->rightTy));
-                    }
+                    auto& srcTy = (*ent->rightNodePtr)->resType;
+                    srcTy = context.expandAssociatedTypes(span, mv$(srcTy));
                     ent->leftTy = context.expandAssociatedTypes(span, mv$(ent->leftTy));
                     context.currentOrder = ent->bindingOrder ? ent->bindingOrder : ent->order;
                     const bool consumed = checkCoerce(context, *ent);
@@ -7006,9 +6923,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
             Vector<unsigned> cutIvars;
             for (const auto& rule : context.linkCoerce) {
-                if (!rule->rightNodePtr) {
-                    continue;
-                }
                 if (coercionPastPendingNode(context, *ivarCoercionIndex, cutIvars, *rule)) {
                     continue;
                 }
@@ -8919,7 +8833,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
                     if (hasPendingReceiverCoercion || infer->isLit()) {
                         break;
                     }
-                    if (!rule->argumentSite || !rule->rightNodePtr || node.checkOrderEnd == 0) {
+                    if (!rule->argumentSite || node.checkOrderEnd == 0) {
                         continue;
                     }
                     const auto argumentPlace = bindingPlace(*rule);
@@ -10428,7 +10342,7 @@ auto IvarCoercionIndex::refreshCoercion(Context::Coercion& bound) const -> void 
     }
     const auto* destination = context.getType(bound.leftTy);
     const auto* resolvedSource = context.getType(source);
-    const auto response = context.resolve.evaluateCoercionGoal(bound.span(), destination, resolvedSource, bound.op);
+    const auto response = context.resolve.evaluateCoercionGoal(bound.span(), destination, resolvedSource, SolverCoercionOp::Coercion);
     bound.deferred.clear();
     bound.alternativeGroups = 0;
     ThinVector<std::pair<unsigned, unsigned>> groups;
@@ -12969,11 +12883,7 @@ void stl::output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult
 template <>
 void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, const Context::Coercion& v) {
     os << StringView("R") << v.ruleIdx << StringView("@") << v.order << StringView("/") << v.bindingOrder << StringView(" ") << v.leftTy << StringView(" := ");
-    if (v.rightNodePtr) {
-        os << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << v.sourceType() << StringView(")");
-    } else {
-        os << v.sourceType() << StringView(" (type-only)");
-    }
+    os << static_cast<const void*>(v.rightNodePtr) << StringView(" ") << static_cast<const void*>(&**v.rightNodePtr) << StringView(" (") << v.sourceType() << StringView(")");
     return;
 }
 

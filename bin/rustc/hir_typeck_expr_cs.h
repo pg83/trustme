@@ -37,11 +37,8 @@ struct Context {
 
     struct Coercion {
         unsigned ruleIdx;
-        Span obligationSpan;
         const HIRType* leftTy;
         HIRExprNodeP* rightNodePtr;
-        const HIRType* rightTy;
-        SolverCoercionOp op;
         /* A call argument coerced into its parameter type: upstream
            `check_argument_types` binds a parameter variable to the argument at once. */
         bool argumentSite = false;
@@ -69,8 +66,7 @@ struct Context {
         ThinVector<SolverDeferredCoercion> deferred;
         unsigned alternativeGroups = 0;
 
-        Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP* rightNodePtr);
-        Coercion(unsigned ruleIdx, const Span& span, const HIRType* leftTy, const HIRType* rightTy, SolverCoercionOp op);
+        Coercion(unsigned ruleIdx, const HIRType* leftTy, HIRExprNodeP& rightNode);
 
         const Span& span() const;
         const HIRType* sourceType() const;
@@ -216,7 +212,6 @@ struct Context {
     stl::Vector<const HIRType*> expectedInputsForExpectedOutput(const Span& sp, const HIRType* expected, const stl::Vector<const HIRType*>& argTypes, size_t firstInput);
     void rememberCallExpectation(const HIRExprNode& node, const HIRType* expected);
     const HIRType* callExpectation(const HIRExprNode& node) const;
-    void addCoercionObligation(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op);
 
     void equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimplePath& trait, HIRPathParams params, const HIRType* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
