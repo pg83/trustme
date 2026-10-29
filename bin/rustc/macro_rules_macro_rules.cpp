@@ -658,6 +658,12 @@ namespace {
 
     bool consumeTypeTraitList(TokenStreamRO& lex) {
         do {
+            if (lex.consumeIf(TOK_RWORD_USE)) {
+                if (!opensAngle(lex.next()) || !consumeTtAngle(lex)) {
+                    return false;
+                }
+                continue;
+            }
             if (lex.consumeIf(TOK_LIFETIME)) {
                 continue;
             }

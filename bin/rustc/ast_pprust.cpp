@@ -1971,6 +1971,14 @@ void State::printType(const ASTType* ty) {
                 first = false;
                 this->printLifetimeName(lifetime.name().name);
             }
+            if (e->use) {
+                if (!first) {
+                    this->nbsp();
+                    this->wordSpace(StringView("+"));
+                }
+                this->word(StringView("use"));
+                this->printGenericArgs(*e->use, false);
+            }
             break;
         }
     }

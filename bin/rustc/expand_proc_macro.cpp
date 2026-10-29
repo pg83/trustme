@@ -296,6 +296,8 @@ namespace {
 
         void visitPathNode(const ASTPathNode& e, bool isExpr);
 
+        void visitPathParams(const ASTPathParams& args, bool isExpr);
+
         void visitPath(const ASTPath& path, bool isExpr = false);
 
         void visitParams(const ASTGenericParams& params);
@@ -2112,7 +2114,11 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
                 this->visitLifetime(lft);
             }
             if (te->use) {
-                TODO(Span(), StringView("`use`"));
+                if (needsPlus) {
+                    pmi.sendSymbol("+");
+                }
+                pmi.sendRword("use");
+                this->visitPathParams(*te->use, false);
             }
             break;
         }
@@ -2138,88 +2144,90 @@ auto ProcMacroVisitor::visitHrbs(const ASTHigherRankedBounds& hrbs) -> void {
 auto ProcMacroVisitor::visitPathNode(const ASTPathNode& e, bool isExpr) -> void {
     pmi.sendIdent(e.name().c_str());
     if (!e.args().isEmpty()) {
-        if (e.args().isRtn) {
-            pmi.sendSymbol("(");
-            pmi.sendSymbol("..");
-            pmi.sendSymbol(")");
-            return;
-        }
-        if (e.args().isParen) {
-            const auto t = e.args().entries.at(0).as_Type();
-            this->visitType(t);
-            auto& rv = e.args().entries.at(1).as_AssociatedTyEqual();
-            pmi.sendSymbol("->");
-            this->visitType(rv.second);
-            return;
-        }
-
-        if (isExpr) {
-            pmi.sendSymbol("::");
-        }
-        pmi.sendSymbol("<");
-        bool first = true;
-        for (const auto& ent : e.args().entries) {
-            if (ent.is_Null()) {
-                continue;
-            }
-            if (!first) {
-                pmi.sendSymbol(",");
-            }
-            first = false;
-            switch (ent.tag()) {
-                case ASTPathParamEnt::TAG_Null: {
-                    auto& _ = ent.as_Null();
-                    break;
-                }
-                case ASTPathParamEnt::TAG_Lifetime: {
-                    auto& l = ent.as_Lifetime();
-                    pmi.sendLifetime(l.name().name.c_str());
-                    break;
-                }
-                case ASTPathParamEnt::TAG_Type: {
-                    const auto t = ent.as_Type();
-                    this->visitType(t);
-                    break;
-                }
-                case ASTPathParamEnt::TAG_Value: {
-                    const auto n = ent.as_Value();
-                    pmi.sendSymbol("{");
-                    this->visitNode(*n);
-                    pmi.sendSymbol("}");
-                    break;
-                }
-                case ASTPathParamEnt::TAG_AssociatedTyEqual: {
-                    auto& a = ent.as_AssociatedTyEqual();
-                    visitPathNode(a.first, false);
-                    pmi.sendSymbol("=");
-                    this->visitType(a.second);
-                    break;
-                }
-                case ASTPathParamEnt::TAG_AssociatedValueEqual: {
-                    auto& a = ent.as_AssociatedValueEqual();
-                    visitPathNode(a.first, false);
-                    pmi.sendSymbol("=");
-                    this->visitNode(*a.second);
-                    break;
-                }
-                case ASTPathParamEnt::TAG_AssociatedTyBound: {
-                    auto& a = ent.as_AssociatedTyBound();
-                    visitPathNode(a.first, false);
-                    pmi.sendSymbol(":");
-                    for (const auto& p : a.second) {
-                        if (&p != a.second.data()) {
-                            pmi.sendSymbol("+");
-                        }
-                        this->visitHrbs(p.hrbs);
-                        this->visitBoundConstness(p.constness);
-                        this->visitPath(*p.path);
-                    }
-                    break;
-                }
-            }
-        }
-        pmi.sendSymbol(">");
+        this->visitPathParams(e.args(), isExpr);
     }
+}
+
+auto ProcMacroVisitor::visitPathParams(const ASTPathParams& args, bool isExpr) -> void {
+    if (args.isRtn) {
+        pmi.sendSymbol("(");
+        pmi.sendSymbol("..");
+        pmi.sendSymbol(")");
+        return;
+    }
+    if (args.isParen) {
+        const auto t = args.entries.at(0).as_Type();
+        this->visitType(t);
+        auto& rv = args.entries.at(1).as_AssociatedTyEqual();
+        pmi.sendSymbol("->");
+        this->visitType(rv.second);
+        return;
+    }
+
+    if (isExpr) {
+        pmi.sendSymbol("::");
+    }
+    pmi.sendSymbol("<");
+    bool first = true;
+    for (const auto& ent : args.entries) {
+        if (ent.is_Null()) {
+            continue;
+        }
+        if (!first) {
+            pmi.sendSymbol(",");
+        }
+        first = false;
+        switch (ent.tag()) {
+            case ASTPathParamEnt::TAG_Null:
+                UNREACHABLE();
+            case ASTPathParamEnt::TAG_Lifetime: {
+                auto& l = ent.as_Lifetime();
+                pmi.sendLifetime(l.name().name.c_str());
+                break;
+            }
+            case ASTPathParamEnt::TAG_Type: {
+                const auto t = ent.as_Type();
+                this->visitType(t);
+                break;
+            }
+            case ASTPathParamEnt::TAG_Value: {
+                const auto n = ent.as_Value();
+                pmi.sendSymbol("{");
+                this->visitNode(*n);
+                pmi.sendSymbol("}");
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                auto& a = ent.as_AssociatedTyEqual();
+                visitPathNode(a.first, false);
+                pmi.sendSymbol("=");
+                this->visitType(a.second);
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                auto& a = ent.as_AssociatedValueEqual();
+                visitPathNode(a.first, false);
+                pmi.sendSymbol("=");
+                this->visitNode(*a.second);
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                auto& a = ent.as_AssociatedTyBound();
+                visitPathNode(a.first, false);
+                pmi.sendSymbol(":");
+                for (const auto& p : a.second) {
+                    if (&p != a.second.data()) {
+                        pmi.sendSymbol("+");
+                    }
+                    this->visitHrbs(p.hrbs);
+                    this->visitBoundConstness(p.constness);
+                    this->visitPath(*p.path);
+                }
+                break;
+            }
+        }
+    }
+    pmi.sendSymbol(">");
 }
 
 auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
