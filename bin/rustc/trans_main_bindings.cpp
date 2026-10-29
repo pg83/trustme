@@ -106,14 +106,6 @@ namespace {
         MIRBasicBlockId pushCallDrop(const HIRType* ty);
     };
 
-    struct BindTranslationNominals final: public HIRVisitor {
-        const HIRCrate& crate;
-
-        explicit BindTranslationNominals(const HIRCrate& crate);
-
-        [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
-    };
-
     struct EnumState {
         HIRCrate& crate;
         StaticTraitResolve resolve;
@@ -449,10 +441,6 @@ namespace {
         }
     }
 
-    void bindTranslationNominals(const HIRCrate& crate, HIRPath& path) {
-        BindTranslationNominals visitor(crate);
-        visitor.visitPath(path, HIRVisitor::PathContext::VALUE);
-    }
 }
 
 struct MIRFunction::MIREnumCache {
@@ -1375,7 +1363,6 @@ static void TransEnumerateFillFromPath(EnumState& state, const HIRPath& path, co
 
 static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     Span sp;
-    bindTranslationNominals(state.crate, pathMono);
     TRACE_FUNCTION_F(pathMono);
     ASSERT_BUG(sp, !monomorphisePathNeeded(pathMono), StringView("Path ") << pathMono << StringView(" is generic"));
     // TODO: If already in the list, return early
@@ -3416,50 +3403,6 @@ auto Builder::pushCallDrop(const HIRType* ty) -> MIRBasicBlockId {
     );
     mir.blocks.push_back(MIRBasicBlock());
     return callBlock;
-}
-
-BindTranslationNominals::BindTranslationNominals(const HIRCrate& crate)
-    : HIRVisitor(nullptr, crate.types)
-    , crate(crate)
-{
-}
-
-[[nodiscard]] auto BindTranslationNominals::visitType(const HIRType* ty) -> const HIRType* {
-    auto data = ty->cloneData();
-    visitTypeDataChildren(data);
-
-    if (auto* pathTy = data.opt_Path()) {
-        if (pathTy->binding.is_Unbound() && pathTy->path.data.is_Generic()) {
-            const auto& path = pathTy->path.data.as_Generic().path;
-            const auto& item = crate.getTypeitemByPath(Span(), path);
-            switch (item.tag()) {
-                default:
-                    BUG(Span(), StringView("Nominal translation type points to ") << item.tagStr() << StringView(" - ") << ty);
-                case HIRTypeItem::TAG_ExternType: {
-                    auto& e = item.as_ExternType();
-                    pathTy->binding = HIRTypePathBinding::make_ExternType(&e);
-                    break;
-                }
-                case HIRTypeItem::TAG_Struct: {
-                    auto& e = item.as_Struct();
-                    pathTy->binding = HIRTypePathBinding::make_Struct(&e);
-                    break;
-                }
-                case HIRTypeItem::TAG_Union: {
-                    auto& e = item.as_Union();
-                    pathTy->binding = HIRTypePathBinding::make_Union(&e);
-                    break;
-                }
-                case HIRTypeItem::TAG_Enum: {
-                    auto& e = item.as_Enum();
-                    pathTy->binding = HIRTypePathBinding::make_Enum(&e);
-                    break;
-                }
-            }
-        }
-    }
-
-    return typeInterner().intern(mv$(data));
 }
 
 EnumState::EnumState(const WireBoard& wb)
