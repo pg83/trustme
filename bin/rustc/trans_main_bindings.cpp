@@ -306,22 +306,6 @@ namespace {
                     }
                     break;
                 }
-                case HIRType::TAG_Array: {
-                    auto& te = (*ty).as_Array();
-                    ASSERT_BUG(sp, te.size.as_Known() < 256, StringView("TODO: Is more than 256 elements sane for auto-generated non-Copy Clone impl? ") << ty);
-                    CloneCleanupState cleanup;
-                    std::vector<MIRParam> values;
-                    values.reserve(te.size.as_Known());
-                    for (size_t i = 0; i < te.size.as_Known(); i++) {
-                        auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
-                        values.push_back(cloneField(state, sp, mirFcn, cleanup, te.inner, mv$(fldLvalue)));
-                    }
-                    auto& bb = cloneOpenBlock(mirFcn);
-                    bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Array({mv$(values)})}));
-                    bb.terminator = MIRTerminator::make_Return({});
-                    appendCloneCleanup(mirFcn, cleanup);
-                    break;
-                }
                 case HIRType::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
                     BUG_ASSERT(te.length() > 0);
@@ -1497,8 +1481,6 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                         for (const auto& ity : *te) {
                             enumImpl(ity);
                         }
-                    } else if (const auto* te = innerTy->opt_Array()) {
-                        enumImpl(te->inner);
                     } else if (((*innerTy).is_Path() && ((*innerTy).as_Path().isClosure()))) {
                         const auto& gp = innerTy->as_Path().path.data.as_Generic();
                         const auto& str = state.crate.getStructByPath(sp, gp.path);
