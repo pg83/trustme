@@ -1483,9 +1483,6 @@ static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalVa
         const auto* array = dynamicTypeS->opt_Array();
         MIR_ASSERT(state, array && array->size.is_Known(), StringView("Pointer unsize to slice from ") << dynamicTypeS);
         dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
-    } else {
-        const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
-        MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero, StringView("Unhandled pointer metadata ") << metadataType << StringView(" for ") << dynamicTypeD);
     }
 }
 

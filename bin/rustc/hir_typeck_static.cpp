@@ -2421,9 +2421,6 @@ auto StaticTraitResolve::NextSolverBridge::selectInherentImpl(const Span& sp, co
 template <>
 void stl::output<ZeroCopyOutput, MetadataType>(ZeroCopyOutput& out, MetadataType value) {
     switch (value) {
-        case MetadataType::Unknown:
-            out << StringView("Unknown");
-            return;
         case MetadataType::None:
             out << StringView("None");
             return;
@@ -2436,6 +2433,7 @@ void stl::output<ZeroCopyOutput, MetadataType>(ZeroCopyOutput& out, MetadataType
         case MetadataType::TraitObject:
             out << StringView("TraitObject");
             return;
+        default:
+            UNREACHABLE();
     }
-    out << StringView("?");
 }

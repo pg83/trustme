@@ -7301,6 +7301,22 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         auto isPtr = [](const HIRType* ty) {
             return ty->is_Borrow() || ty->is_Pointer();
         };
+        size_t sourceSize;
+        size_t targetSize;
+        if (TargetGetSizeOf(localMirRes.sp, resolve_, tySrc, sourceSize)
+            && TargetGetSizeOf(localMirRes.sp, resolve_, tyDst, targetSize)
+            && sourceSize != targetSize) {
+            if (name == "transmute_unchecked") {
+                of << StringView("__builtin_unreachable();\n");
+                return;
+            }
+            if (isPtr(tySrc) && isPtr(tyDst)) {
+                const auto sourceMetadata = metadataType(tySrc->is_Pointer() ? tySrc->as_Pointer().inner : tySrc->as_Borrow().inner);
+                const auto targetMetadata = metadataType(tyDst->is_Pointer() ? tyDst->as_Pointer().inner : tyDst->as_Borrow().inner);
+                ERROR(localMirRes.sp, E0000, StringView("cannot transmute between types of different sizes: ") << tySrc << StringView(" (") << sourceMetadata << StringView(") -> ") << tyDst << StringView(" (") << targetMetadata << StringView(")"));
+            }
+            ERROR(localMirRes.sp, E0000, StringView("cannot transmute between types of different sizes: ") << tySrc << StringView(" (") << sourceSize << StringView(" bytes) -> ") << tyDst << StringView(" (") << targetSize << StringView(" bytes)"));
+        }
         if (this->typeIsBadZst(tyDst)) {
             return;
         }
@@ -7326,14 +7342,11 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             auto srcMeta = metadataType(tySrc->is_Pointer() ? tySrc->as_Pointer().inner : tySrc->as_Borrow().inner);
             auto dstMeta = metadataType(tyDst->is_Pointer() ? tyDst->as_Pointer().inner : tyDst->as_Borrow().inner);
             if (srcMeta == MetadataType::None || srcMeta == MetadataType::Zero) {
-                MIR_ASSERT(*mirRes, dstMeta == MetadataType::None || dstMeta == MetadataType::Zero, StringView("Transmuting to fat pointer from thin: ") << tySrc << StringView(" -> ") << tyDst);
                 emitLvalue(e.retVal);
                 of << StringView(" = (");
                 emitCtype(tyDst);
                 of << StringView(")");
                 emitParam(e.args.at(0));
-            } else if (dstMeta == MetadataType::None || dstMeta == MetadataType::Zero) {
-                MIR_BUG(*mirRes, StringView("Transmuting from fat pointer to thin: (") << srcMeta << StringView("->") << dstMeta << StringView(") ") << tySrc << StringView(" -> ") << tyDst);
             } else if (srcMeta != dstMeta) {
                 emitLvalue(e.retVal);
                 of << StringView(".PTR = ");

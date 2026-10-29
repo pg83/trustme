@@ -3266,6 +3266,9 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
     auto implGenerics = resolve_.setImplGenerics(impl.type, impl.params);
     HIRVisitor::visitTraitImpl(traitPath, impl);
 
+    if (traitPath == langUnsize_) {
+        ERROR(sp, E0000, StringView("Unsize shouldn't be manually implemented"));
+    }
     if (impl.type->is_Path()) {
         const HIRType* implType = impl.type;
         if (!implType->as_Path().path.data.is_Generic()) {
@@ -3292,10 +3295,7 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
         }
         if (markingsPtr) {
             HIRTraitMarkings& markings = *markingsPtr;
-            if (traitPath == langUnsize_) {
-                DEBUG(StringView("Type ") << impl.type << StringView(" can Unsize"));
-                ERROR(sp, E0000, StringView("Unsize shouldn't be manually implemented"));
-            } else if (traitPath == langDrop_) {
+            if (traitPath == langDrop_) {
                 // TODO: Check that there's only one impl, and that it covers the same set as the type.
                 markings.hasDropImpl = true;
                 markings.hasConstDropImpl = markings.hasConstDropImpl || impl.isConst;
