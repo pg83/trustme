@@ -7527,6 +7527,7 @@ if not system_rustc_mode:
         "const_closure_captures_and_dispatch",
         "compiler_box_expression",
         "local_async_drop_glue",
+        "const_array_size_of_captured_callable",
     )
     for _stem in (
         "macro_clones_patterns",

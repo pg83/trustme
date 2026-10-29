@@ -601,6 +601,14 @@ namespace {
         return true;
     }
 
+    struct PendingNodeLayout {};
+
+    void deferUnloweredLayout(const HIRType* type) {
+        if (visitTyWith(type, [](const HIRType* inner) { return inner->is_NodeType(); })) {
+            throw PendingNodeLayout{};
+        }
+    }
+
     RcString anonConstBodyName(const WireBoard& wb, HIRExprPtr& expr) {
         auto& state = *expr.state;
         if (state.anonConstIndex == 0) {
@@ -635,6 +643,18 @@ namespace {
         ms.ppImpl = &value.paramsImpl;
         ms.ppMethod = &value.paramsItem;
         return eval.evaluateConstant(HIRItemPath(state.modPath, name.c_str()), expr, type, std::move(ms));
+    }
+
+    bool tryEvaluateConstgeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRType* type, const HIRConstGenericUnevaluated& value, EncodedLiteral& result) {
+        /* A concrete substitution can still name an unextracted closure. Defer
+           only if evaluation actually needs its unavailable layout: a reference
+           to that closure, or a capture-free closure, already has a known size. */
+        try {
+            result = evaluateConstgeneric(sp, wb, crate, type, value);
+            return true;
+        } catch (const PendingNodeLayout&) {
+            return false;
+        }
     }
 
 #include "hir_conv_ent_ptr_tu.h"
@@ -2428,6 +2448,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (TargetGetSizeOf(state.sp, this->resolve, ty, sizeVal)) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
                     } else {
+                        deferUnloweredLayout(ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                 } else if (te->name == "size_of_val") {
@@ -2437,12 +2458,14 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (ty->is_TraitObject()) {
                         sizeVal = readTraitObjectVtableUsize(1);
                     } else if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
+                        deferUnloweredLayout(ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << ty);
                     }
                     if (sizeVal == SIZE_MAX) {
                         size_t itemSize;
                         if (const auto* slice = ty->opt_Slice()) {
                             if (!TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
+                                deferUnloweredLayout(slice->inner);
                                 BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << slice->inner);
                             }
                         } else if (ty == HIRCoreType::Str) {
@@ -2462,6 +2485,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
+                        deferUnloweredLayout(ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
@@ -2474,6 +2498,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
+                        deferUnloweredLayout(ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "offset_of") {
@@ -3628,7 +3653,11 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
         if (!predicted) {
             fprintf(stderr, "PREDICATE ATTEMPT [ConvertConstGeneric4]\n");
         }
-        cg = freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, *cge));
+        EncodedLiteral evaluated;
+        if (!tryEvaluateConstgeneric(sp, wb, crate, ty, *cge, evaluated)) {
+            return;
+        }
+        cg = freezeEncodedLiteral(*wb.pool, mv$(evaluated));
         if (!predicted) {
             fprintf(stderr, "PREDICATE MISS [ConvertConstGeneric4]\n");
         }
@@ -3691,7 +3720,11 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
         if (!predicted && !wb.ctfe->capsOracle()) {
             continue;
         }
-        v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, ue)));
+        EncodedLiteral evaluated;
+        if (!tryEvaluateConstgeneric(sp, wb, crate, ty, ue, evaluated)) {
+            continue;
+        }
+        v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, mv$(evaluated)));
         params = HIRPathParams(next);
         if (!predicted) {
             fprintf(stderr, "PREDICATE MISS [MethodParams]\n");
@@ -5315,6 +5348,11 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
                 item.valueState = HIRConstant::ValueState::Generic;
             } else {
                 item.valueState = HIRConstant::ValueState::InProgress;
+                STD_DEFER {
+                    if (item.valueState == HIRConstant::ValueState::InProgress) {
+                        item.valueState = HIRConstant::ValueState::Unknown;
+                    }
+                };
                 item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, item.type, std::move(tempMs));
                 item.valueState = HIRConstant::ValueState::Known;
             }
@@ -5819,7 +5857,11 @@ auto Expander::evalulateConstGeneric(const Span& sp, const HIRType* ty, HIRConst
         if (!predicted && !wb.ctfe->capsOracle()) {
             return;
         }
-        v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
+        EncodedLiteral evaluated;
+        if (!tryEvaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated(), evaluated)) {
+            return;
+        }
+        v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, mv$(evaluated)));
         if (!predicted) {
             fprintf(stderr, "PREDICATE MISS [evalulateConstGeneric]\n");
         }
@@ -6078,7 +6120,10 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
             }
             return;
         }
-        auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
+        EncodedLiteral val;
+        if (!tryEvaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated, val)) {
+            return;
+        }
         as = val.readUsize(0);
         if (!predicted) {
             fprintf(stderr, "PREDICATE MISS [visitArraysize]\n");
@@ -6108,7 +6153,11 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
                 if (!predicted && !wb.ctfe->capsOracle()) {
                     return;
                 }
-                value = freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
+                EncodedLiteral evaluated;
+                if (!tryEvaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated, evaluated)) {
+                    return;
+                }
+                value = freezeEncodedLiteral(*wb.pool, mv$(evaluated));
             }
         };
         for (auto& range : e.pattern.alternatives) {
@@ -6178,6 +6227,11 @@ auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
             item.valueState = HIRConstant::ValueState::Generic;
         } else {
             item.valueState = HIRConstant::ValueState::InProgress;
+            STD_DEFER {
+                if (item.valueState == HIRConstant::ValueState::InProgress) {
+                    item.valueState = HIRConstant::ValueState::Unknown;
+                }
+            };
             item.valueRes = eval.evaluateConstant(p, item.value, item.type, monomorphState.clone());
             item.valueState = HIRConstant::ValueState::Known;
             DEBUG(StringView("constant: ") << item.type << StringView(" = ") << item.valueRes);
