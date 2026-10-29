@@ -212,6 +212,7 @@ const HIRType* TransParams::monomorph(const ::StaticTraitResolve& resolve, const
 TransParams::TransParams(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , gdefImpl(nullptr)
+    , selfType(nullptr)
     , forceMonomorphisation(false)
 {
 }
@@ -220,6 +221,7 @@ TransParams::TransParams(HIRTypeInterner& types, const Span& sp)
     : MonomorphiserPP(types)
     , sp(sp)
     , gdefImpl(nullptr)
+    , selfType(nullptr)
     , forceMonomorphisation(false)
 {
 }
