@@ -1686,7 +1686,12 @@ namespace {
                 auto& e = type->data.as_Pattern();
                 ResolveAbsoluteType(context, e.inner);
                 if (e.pattern) {
+                    auto rootBlock = context.enterRootblock();
+                    context.pushBlock();
+                    context.startPatbind();
                     ResolveAbsolutePattern(context, true, *e.pattern);
+                    context.endPatbind();
+                    context.popBlock();
                 }
                 break;
             }
@@ -3291,28 +3296,8 @@ namespace {
                     break;
                 }
                 case ASTItem::TAG_ExternBlock: {
-                    auto& e = i->data.as_ExternBlock();
-                    for (auto& i2 : e.items()) {
-                        switch (i2.data.tag()) {
-                            case ASTItem::TAG_None: {
-                                break;
-                            }
-                            case ASTItem::TAG_Function: {
-                                auto& e2 = i2.data.as_Function();
-                                ResolveAbsoluteFunction(itemContext, e2);
-                                break;
-                            }
-                            case ASTItem::TAG_Static: {
-                                auto& e2 = i2.data.as_Static();
-                                ResolveAbsoluteStatic(itemContext, e2);
-                                break;
-                            }
-                            default: {
-                                BUG(i->span, StringView("Unexpected item in ExternBlock - ") << i2.data.tagStr());
-                                break;
-                            }
-                        }
-                    }
+                    /* ExpandMod moves the declarations into the enclosing module. */
+                    ASSERT_BUG(i->span, i->data.as_ExternBlock().items().empty(), StringView("Extern block items were not expanded"));
                     break;
                 }
                 case ASTItem::TAG_Impl: {

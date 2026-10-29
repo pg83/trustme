@@ -1523,8 +1523,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         }
     };
 
-    // TODO: Add a (two?) callback(s) that handle type equalities (and possible equalities) so this function doesn't have to mutate the context
-    CoerceResult checkUnsizeTys(const Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, Context* contextMut, HIRExprNodeP* nodePtrPtr = nullptr, const Context::Coercion* rule = nullptr) {
+    CoerceResult checkUnsizeTys(Context& context, const Span& sp, const HIRType* dstRaw, const HIRType* srcRaw, const Context::Coercion& rule) {
         const auto& dst = context.ivars.getType(dstRaw);
         const auto& src = context.ivars.getType(srcRaw);
 
@@ -1537,37 +1536,16 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             return CoerceResult::Equality;
         }
 
-        OpenStepOfRule openStep(context, rule);
-        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Unsizing, nodePtrPtr != nullptr, false, rule ? &openStep : nullptr);
-        if (nodePtrPtr && solverResponse.reachedAutoderefLimit) {
-            ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
-        }
+        OpenStepOfRule openStep(context, &rule);
+        /* Type-only obligations have no expression to adjust and cannot autoderef. */
+        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Unsizing, false, false, &openStep);
         if (solverResponse.effects.certainty == SolverCertainty::Proven) {
-            if (contextMut) {
-                contextMut->applySolverResponse(sp, solverResponse.effects);
-            }
-            if (solverResponse.adjustment.kind == SolverCoercionAdjustmentKind::SourceAutoderef) {
-                ASSERT_BUG(sp, nodePtrPtr && contextMut && !solverResponse.adjustment.sourceAutoderef.empty(), StringView("Source autoderef coercion has no adjustment target"));
-                auto& nodePtr = *nodePtrPtr;
-                addCoerceBorrow(*contextMut, nodePtr, solverResponse.adjustment.sourceAutoderef.back(), [&](auto& valueNode) -> void {
-                    for (const auto* type : solverResponse.adjustment.sourceAutoderef) {
-                        auto span = valueNode->span();
-                        ASSERT_BUG(span, !valueNode->resType->is_Array(), StringView("Array->Slice shouldn't be in deref coercions"));
-                        valueNode = HIRExprNodeP(context.crate.pool->make<HIRExprNodeDeref>(mv$(span), mv$(valueNode)));
-                        DEBUG(StringView("- Deref ") << static_cast<const void*>(&*valueNode) << StringView(" -> ") << type);
-                        valueNode->resType = type;
-                        context.ivars.getType(valueNode->resType);
-                    }
-                });
-                return solverResponse.adjustment.innerRelation == SolverCoercionRelation::Equality ? CoerceResult::Custom : CoerceResult::Unsize;
-            }
+            context.applySolverResponse(sp, solverResponse.effects);
             const auto relation = solverResponse.adjustment.innerRelation == SolverCoercionRelation::None ? solverResponse.relation : solverResponse.adjustment.innerRelation;
             return relation == SolverCoercionRelation::Equality ? CoerceResult::Equality : CoerceResult::Unsize;
         }
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
-            if (contextMut) {
-                applyOpenCoercionEffects(*contextMut, sp, solverResponse.effects);
-            }
+            applyOpenCoercionEffects(context, sp, solverResponse.effects);
             return CoerceResult::Unknown;
         }
         return CoerceResult::Equality;
@@ -2026,7 +2004,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             TRACE_FUNCTION_F(v << StringView(" - ") << context.ivars.fmtType(tyDst) << StringView(" := ") << context.ivars.fmtType(tySrc));
             const auto result = v.op == SolverCoercionOp::Coercion
                 ? checkCoerceTys(context, sp, tyDst, tySrc, &context, nullptr, &v)
-                : checkUnsizeTys(context, sp, tyDst, tySrc, &context, nullptr, &v);
+                : checkUnsizeTys(context, sp, tyDst, tySrc, v);
             switch (result) {
                 case CoerceResult::Fail:
                 case CoerceResult::Unknown:

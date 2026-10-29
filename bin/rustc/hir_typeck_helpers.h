@@ -891,26 +891,12 @@ public:
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params, SolverResponseCallback* effects = nullptr) const;
 
     bool iterateBoundsTraitsCb(const Span& sp, const HIRType* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const;
-    bool iterateBoundsTraitsCb(const Span& sp, const HIRType* type, TraitBoundCallback& cb) const;
-    bool iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& cb) const;
     bool iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, TraitPathCallback& cb) const;
 
     template <typename F>
     bool iterateBoundsTraits(const Span& sp, const HIRType* type, const HIRSimplePath& trait, F f) const {
         TraitBoundCb<F> cb(f);
         return iterateBoundsTraitsCb(sp, type, trait, cb);
-    }
-
-    template <typename F>
-    bool iterateBoundsTraits(const Span& sp, const HIRType* type, F f) const {
-        TraitBoundCb<F> cb(f);
-        return iterateBoundsTraitsCb(sp, type, cb);
-    }
-
-    template <typename F>
-    bool iterateBoundsTraits(const Span& sp, F f) const {
-        TraitBoundCb<F> cb(f);
-        return iterateBoundsTraitsCb(sp, cb);
     }
 
     template <typename F>

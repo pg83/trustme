@@ -3383,41 +3383,6 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
     return false;
 }
 
-bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type, TraitBoundCallback& cb) const {
-    for (const auto& b : traitBounds()) {
-        const HIRType* boundType = b.first.first;
-        auto relation = probeTypeRelation(sp, boundType, type);
-        const HIRType* normalizedBound;
-        if (relation == SolverCertainty::NoSolution && this->hasAssociatedType(boundType) && !normalizingBoundType) {
-            normalizingBoundType = true;
-            STD_DEFER {
-                normalizingBoundType = false;
-            };
-            normalizedBound = this->expandAssociatedTypes(sp, boundType);
-            if (normalizedBound != boundType) {
-                boundType = normalizedBound;
-                relation = probeTypeRelation(sp, boundType, type);
-            }
-        }
-        if (relation == SolverCertainty::NoSolution) {
-            continue;
-        }
-        if (cb.visit(boundType, b.first.second, b.second)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& cb) const {
-    for (const auto& b : traitBounds()) {
-        if (cb.visit(b.first.first, b.first.second, b.second)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, TraitPathCallback& cb) const {
     HIRGenericPath traitPath;
     DEBUG(StringView("Checking ATY bounds on ") << pe.trait << StringView(" :: ") << pe.item);
