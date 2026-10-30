@@ -38,17 +38,9 @@ namespace {
 
 #include "macro_rules_capture_tu.h"
 
-    inline ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const CapturedVal& x);
-    inline ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const CaptureLayer& x);
-
     struct ParameterMappings {
         struct CapturedVar {
             CaptureLayer topLayer;
-
-            friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const CapturedVar& x) {
-                os << StringView("CapturedVar { ") << x.topLayer << StringView(" }");
-                return os;
-            }
         };
 
         loopCountsT loopCounts;
@@ -264,27 +256,6 @@ namespace {
 
         bool operator==(eTokenType tt) const;
     };
-
-    inline ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const CapturedVal& x) {
-        os << x.frag;
-        return os;
-    }
-
-    inline ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const CaptureLayer& x) {
-        switch (x.tag()) {
-            case CaptureLayer::TAG_Vals: {
-                auto& e = x.as_Vals();
-                os << StringView("[") << e << StringView("]");
-                break;
-            }
-            case CaptureLayer::TAG_Nested: {
-                auto& e = x.as_Nested();
-                os << StringView("{") << e << StringView("}");
-                break;
-            }
-        }
-        return os;
-    }
 
     unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
     void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
@@ -3889,7 +3860,6 @@ ParameterMappings::ParameterMappings()
 
 auto ParameterMappings::mappings() const -> const std::vector<CapturedVar>& {
     return mappings_;
-    DEBUG(StringView("m_mappings = {") << mappings_ << StringView("}"));
 }
 
 auto ParameterMappings::layerCount() const -> size_t {
@@ -4170,16 +4140,6 @@ void stl::output<ZeroCopyOutput, std::vector<MacroExpansionConcatEnt>>(ZeroCopyO
 }
 
 template <>
-void stl::output<ZeroCopyOutput, CapturedVal>(ZeroCopyOutput& out, const CapturedVal& value) {
-    operator<<(out, value);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, ParameterMappings::CapturedVar>(ZeroCopyOutput& out, const ParameterMappings::CapturedVar& value) {
-    operator<<(out, value);
-}
-
-template <>
 void stl::output<ZeroCopyOutput, ContentLoopVariableUse>(ZeroCopyOutput& out, const ContentLoopVariableUse& value) {
     operator<<(out, value);
 }
@@ -4335,21 +4295,6 @@ void stl::output<ZeroCopyOutput, std::vector<MacroExpansionEnt>>(ZeroCopyOutput&
 
 template <>
 void stl::output<ZeroCopyOutput, std::vector<SimplePatEnt>>(ZeroCopyOutput& out, const std::vector<SimplePatEnt>& values) {
-    outCont(out, values);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, std::vector<CapturedVal>>(ZeroCopyOutput& out, const std::vector<CapturedVal>& values) {
-    outCont(out, values);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, std::vector<CaptureLayer>>(ZeroCopyOutput& out, const std::vector<CaptureLayer>& values) {
-    outCont(out, values);
-}
-
-template <>
-void stl::output<ZeroCopyOutput, std::vector<ParameterMappings::CapturedVar>>(ZeroCopyOutput& out, const std::vector<ParameterMappings::CapturedVar>& values) {
     outCont(out, values);
 }
 
