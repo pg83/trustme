@@ -2792,37 +2792,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << argTy);
                     }
                     auto argVal = localState.getLval(e.args.at(0).as_LValue());
-                    const auto& fcnArg = e.args.at(1);
-                    HIRPath* fcnPath = nullptr;
-
-                    switch (fcnArg.tag()) {
-                        case MIRParam::TAG_LValue: {
-                            auto& e = fcnArg.as_LValue();
-                            auto fcnVal = localState.getLval(e).readPtr(state);
-                            MIR_ASSERT(state, fcnVal.first == EncodedLiteral::PTR_BASE, StringView(""));
-
-                            const auto* fcnSr = fcnVal.second.asStaticref();
-                            MIR_ASSERT(state, fcnSr, StringView(""));
-                            fcnPath = localState.valuePool->make<HIRPath>(fcnSr->path().clone());
-                            break;
-                        }
-                        case MIRParam::TAG_Borrow: {
-                            MIR_BUG(state, StringView("Invalid argument for function pointer to `const_eval_select`: ") << fcnArg);
-                            break;
-                        }
-                        case MIRParam::TAG_Constant: {
-                            auto& e = fcnArg.as_Constant();
-                            if (const auto* ce = e.opt_Function()) {
-                                fcnPath = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, *ce->p));
-                            } else if (const auto* ce = e.opt_ItemAddr()) {
-                                MIR_ASSERT(state, ce->offset == U128(0), StringView("Function pointer has a non-zero offset: ") << ce->offset);
-                                fcnPath = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, **ce));
-                            } else {
-                                MIR_BUG(state, StringView("Invalid argument for function pointer to `const_eval_select`: ") << fcnArg);
-                            }
-                            break;
-                        }
+                    const auto* callbackType = localState.monomorphExpand(te->params.types.at(1));
+                    const auto* callback = callbackType->opt_NamedFunction();
+                    if (!callback) {
+                        ERROR(state.sp, E0000, StringView("const_eval_select const callback must be a function item"));
                     }
+                    if (const auto* function = callback->def.opt_Function(); function && !(*function)->isConst) {
+                        ERROR(state.sp, E0000, StringView("const_eval_select const callback must be a const fn"));
+                    }
+                    auto* fcnPath = localState.valuePool->make<HIRPath>(callback->path.clone());
 
                     std::vector<MIREvalAllocationPtr> callArgs;
                     callArgs.reserve(repr->fields.size());

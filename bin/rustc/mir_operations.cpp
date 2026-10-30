@@ -7700,12 +7700,27 @@ void MIROptimiseCrateInlining(const WireBoard& wb, HIRCrate& crate, TransList& l
             for (auto& block : fcn.blocks) {
                 if (auto* te = block.terminator.opt_Call()) {
                     if (te->fcn.is_Intrinsic() && te->fcn.as_Intrinsic().name == "const_eval_select") {
-                        size_t nArgs = te->fcn.as_Intrinsic().params.types.at(0)->as_Tuple().length();
+                        const auto& params = te->fcn.as_Intrinsic().params;
+                        const auto* constCallback = params.types.at(1)->opt_NamedFunction();
+                        if (!constCallback) {
+                            ERROR(Span(), E0000, StringView("const_eval_select const callback must be a function item"));
+                        }
+                        if (const auto* function = constCallback->def.opt_Function(); function && !(*function)->isConst) {
+                            ERROR(Span(), E0000, StringView("const_eval_select const callback must be a const fn"));
+                        }
+                        size_t nArgs = params.types.at(0)->as_Tuple().length();
                         const MIRLValue arg = te->args.at(0).as_LValue().clone();
-                        const HIRPath& fcnPath = *te->args.at(2).as_Constant().as_Function().p;
-
-                        DEBUG(fcnPath);
-                        te->fcn = fcnPath.clone();
+                        if (const auto* runtimeCallback = params.types.at(2)->opt_NamedFunction()) {
+                            te->fcn = runtimeCallback->path.clone();
+                        } else if (!params.types.at(2)->is_Function()) {
+                            ERROR(Span(), E0000, StringView("const_eval_select runtime callback must be a function item or function pointer"));
+                        } else if (const auto* value = te->args.at(2).opt_LValue()) {
+                            te->fcn = value->clone();
+                        } else if (const auto* value = te->args.at(2).opt_Constant(); value && value->is_ItemAddr()) {
+                            te->fcn = (*value->as_ItemAddr()).clone();
+                        } else {
+                            ERROR(Span(), E0000, StringView("const_eval_select runtime callback must be a function item or function pointer"));
+                        }
                         te->args.clear();
                         te->args.reserve(nArgs);
                         for (size_t i = 0; i < nArgs; i++) {
