@@ -1,6 +1,6 @@
 // `for<T> T: Trait` quantifies a where predicate over a type that exists only
-// inside it. Nothing here models such a predicate, so it is parsed and dropped
-// -- previously the binder's name was left to resolve on its own and could not.
+// inside it. Preserve its scope while accepting declarations whose quantified
+// assumptions are only required when the function is used.
 //
 // Same shape as the upstream tests traits/non_lifetime_binders/basic.rs and
 // sized-late-bound-issue-114872.rs.

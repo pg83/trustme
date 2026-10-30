@@ -2035,16 +2035,9 @@ namespace {
                 }
             } else if (lex.getTokenIf(TOK_RWORD_FOR)) {
                 auto hrbs = ParseHRB(lex);
-                const bool bindsTypes = !hrbs.types.empty();
-
                 ASTType* type = ParseType(lex);
                 GET_CHECK_TOK(tok, lex, TOK_COLON);
-                if (bindsTypes) {
-                    ASTGenericParams dropped;
-                    ParseTypeBound(lex, dropped, mv$(type), mv$(hrbs), /*retainBareType=*/false);
-                } else {
-                    ParseTypeBound(lex, params, mv$(type), mv$(hrbs), /*retainBareType=*/true);
-                }
+                ParseTypeBound(lex, params, mv$(type), mv$(hrbs), /*retainBareType=*/true);
             } else {
                 ASTType* type = ParseType(lex);
                 GET_CHECK_TOK(tok, lex, TOK_COLON);

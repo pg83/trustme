@@ -11643,16 +11643,10 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
         const HIRType* probe;
     };
 
-    struct HrtbValueBinding {
-        HIRGenericRef generic;
-        unsigned probeIndex;
-    };
-
     struct InstantiateHrtb final: public MonomorphiserNop {
         HMTypeInferrence& table_;
 
         mutable Vector<HrtbTypeBinding> typeBindings;
-        mutable Vector<HrtbValueBinding> valueBindings;
 
         InstantiateHrtb(HIRTypeInterner& types, HMTypeInferrence& table)
             : MonomorphiserNop(types)
@@ -11675,17 +11669,8 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
         }
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
-            if (generic.group() != GENERICHrtb) {
-                return MonomorphiserNop::getValue(sp, generic);
-            }
-            for (const auto& binding : valueBindings) {
-                if (binding.generic.binding == generic.binding) {
-                    return HIRConstGeneric::make_Infer({binding.probeIndex});
-                }
-            }
-            const auto probeIndex = table_.newIvarVal();
-            valueBindings.pushBack(HrtbValueBinding{generic, probeIndex});
-            return HIRConstGeneric::make_Infer({probeIndex});
+            BUG_ASSERT(generic.group() != GENERICHrtb);
+            return MonomorphiserNop::getValue(sp, generic);
         }
     };
 
@@ -11779,13 +11764,11 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
         struct MaterializeHrtb final: public MonomorphiserNop {
             const HMTypeInferrence& table_;
             const Vector<HrtbTypeBinding>& typeBindings_;
-            const Vector<HrtbValueBinding>& valueBindings_;
 
-            MaterializeHrtb(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<HrtbTypeBinding>& typeBindings, const Vector<HrtbValueBinding>& valueBindings)
+            MaterializeHrtb(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<HrtbTypeBinding>& typeBindings)
                 : MonomorphiserNop(types)
                 , table_(table)
                 , typeBindings_(typeBindings)
-                , valueBindings_(valueBindings)
             {
             }
 
@@ -11803,24 +11786,9 @@ auto NextTraitGoalEvaluator::relateAssembledHead(CandidateSource source, const H
                 return MonomorphiserNop::monomorphType(sp, type, allowInfer);
             }
 
-            HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
-                if (const auto* infer = value.opt_Infer()) {
-                    for (const auto& binding : valueBindings_) {
-                        if (binding.probeIndex != infer->index) {
-                            continue;
-                        }
-                        const auto& resolved = table_.getValue(value);
-                        if (resolved == value) {
-                            return binding.generic;
-                        }
-                        return this->monomorphConstgeneric(sp, resolved, allowInfer);
-                    }
-                }
-                return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
-            }
         };
 
-        MaterializeHrtb materialize(crate.types, resolve_.ivars, instantiate.typeBindings, instantiate.valueBindings);
+        MaterializeHrtb materialize(crate.types, resolve_.ivars, instantiate.typeBindings);
         auto stableType = typeHasHrtb ? materialize.monomorphType(span(), candidateType, true) : originalCandidateType;
         auto stableParams = paramsHaveHrtb ? materialize.monomorphPathParams(span(), candidateParams, true) : originalCandidateParams.clone();
         HIRTraitPath::assocListT stableAssoc;
