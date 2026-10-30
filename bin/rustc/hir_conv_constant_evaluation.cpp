@@ -2062,6 +2062,11 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRRValue::TAG_DstMeta: {
             auto& e = sa.src.as_DstMeta();
+            if (const auto* array = state.getLvalueType(e.val)->opt_Array()) {
+                MIR_ASSERT(state, array->size.is_Known(), StringView("Array length is not concrete during const evaluation"));
+                dst.writeUint(state, TargetGetPointerBits(), U128(array->size.as_Known()));
+                break;
+            }
             auto v = localState.getLval(e.val);
             size_t ptrSize = TargetGetPointerBits() / 8;
             dst.copyFrom(state, v.slice(ptrSize));

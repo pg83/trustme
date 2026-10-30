@@ -2703,14 +2703,7 @@ auto Expander::visitPattern(HIRPattern& pat) -> void {
         default:
             break;
         case HIRPatternData::TAG_PathValue: {
-            auto& e = pat.data.as_PathValue();
-            auto newPath = expandAliasPath(sp, e.path);
-            if (newPath != HIRGenericPath()) {
-                DEBUG(StringView("Replacing ") << e.path << StringView(" with ") << newPath);
-                e.path = mv$(newPath);
-            }
-            e.binding = visitPatternPathBinding(sp, e.path);
-            break;
+            BUG(sp, StringView("Value path pattern bound before alias expansion"));
         }
         case HIRPatternData::TAG_PathTuple: {
             auto& e = pat.data.as_PathTuple();
