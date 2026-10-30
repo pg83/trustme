@@ -174,7 +174,11 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
             _(Pattern, ent.inner->print(os, isDebug); os << StringView(" is "); if (ent.notNull) { os << StringView("!null"); } else { os << *ent.pattern; })
             _(Generic, if (isDebug) os << StringView("/* arg */ "); os << ent.name; if (isDebug) os << StringView("/*") << ent.index << StringView("*/");)
             _(Path, ent->printPretty(os, true, isDebug);)
-            _(TraitObject, os << StringView("("); bool needsPlus = false; for (const auto& it : ent.traits) {
+        case TypeData::TAG_TraitObject: {
+            const auto& ent = data.as_TraitObject();
+            os << StringView("(");
+            bool needsPlus = false;
+            for (const auto& it : ent.traits) {
                 if (needsPlus) {
                     os << StringView("+");
                 }
@@ -186,7 +190,8 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
                     os << StringView("[const] ");
                 }
                 it.path->printPretty(os, true, isDebug);
-            } for (const auto& it : ent.lifetimes) {
+            }
+            for (const auto& it : ent.lifetimes) {
                 if (it.binding() != ASTLifetimeRef::BINDING_UNSPECIFIED) {
                     if (needsPlus) {
                         os << StringView("+");
@@ -194,7 +199,10 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
                     needsPlus = true;
                     os << it;
                 }
-            } os << StringView(")");)
+            }
+            os << StringView(")");
+            break;
+        }
             _(ErasedType, os << StringView("impl "); bool needsPlus = false; for (const auto& it : ent->traits) {
                 if (needsPlus) {
                     os << StringView("+");

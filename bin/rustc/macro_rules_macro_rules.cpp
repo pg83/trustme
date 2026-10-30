@@ -1679,8 +1679,11 @@ namespace {
                         if (mode != ItemConsumeMode::ItemFragment) {
                             return false;
                         }
-                        bool needSemicolon = (lex.next() != TOK_BRACE_OPEN);
-                        consumeTt(lex);
+                        lex.consume();
+                        const bool needSemicolon = (lex.next() != TOK_BRACE_OPEN);
+                        if (!consumeTt(lex)) {
+                            return false;
+                        }
                         if (needSemicolon) {
                             if (!lex.consumeIf(TOK_SEMICOLON)) {
                                 return false;
