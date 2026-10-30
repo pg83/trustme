@@ -3430,7 +3430,12 @@ namespace {
         DEBUG(StringView("Imports (mod = ") << mod.path() << StringView(")"));
         for (auto& i : mod.namespaceItems) {
             if (i.second.isImport) {
-                ResolveAbsolutePath(itemContext, sp, Context::LookupMode::Namespace, i.second.path);
+                /* Import metadata keeps the canonical item path rather than a projection at its use site. */
+                auto resolvedPath = ASTPath(i.second.path);
+                ResolveAbsolutePath(itemContext, sp, Context::LookupMode::Namespace, resolvedPath);
+                if (!resolvedPath.cls.is_UFCS()) {
+                    i.second.path = mv$(resolvedPath);
+                }
             }
         }
         for (auto& i : mod.typeItems) {
@@ -3442,6 +3447,12 @@ namespace {
             if (i.second.isImport) {
                 ResolveAbsolutePath(itemContext, sp, Context::LookupMode::Constant, i.second.path);
             }
+        }
+    }
+
+    void requireTraitImportFeature(const ASTCrate& crate, const Span& sp) {
+        if (!crate.features.count(RcString::newInterned("import_trait_associated_functions"))) {
+            ERROR(sp, E0000, StringView("Trait associated imports require #![feature(import_trait_associated_functions)]"));
         }
     }
 
@@ -4687,6 +4698,7 @@ namespace {
                             break;
                         }
                         case ASTPathBindingType::TAG_Trait: {
+                            requireTraitImportFeature(crate, span);
                             break;
                         }
                         default: {
@@ -5160,6 +5172,7 @@ namespace {
                             break;
                         }
                         case ASTPathBindingType::TAG_Trait: {
+                            requireTraitImportFeature(crate, sp2);
                             auto& e = bindings->type.binding.as_Trait();
                             BUG_ASSERT(e.trait_ || e.hir);
                             bool isValue = false;
@@ -5325,6 +5338,7 @@ namespace {
                         const auto& extCrate = *crate.externCrates.at(e.path.crateName()).hir;
                         const auto& ti = extCrate.getTypeitemByPath(span, e.path, /*ignore_crate*/ true, /*ignore_last*/ false);
                         if (const auto* tr = ti.opt_Trait()) {
+                            requireTraitImportFeature(crate, span);
                             i += 1;
                             if (i != nodes.size() - 1) {
                                 ERROR(span, E0000, StringView("Encountered trait at unexpected location in import"));
@@ -5391,6 +5405,7 @@ namespace {
                     break;
                 }
                 case HIRTypeItem::TAG_Trait: {
+                    requireTraitImportFeature(crate, span);
                     auto& e = it->second->ent.as_Trait();
                     i += 1;
                     if (i != nodes.size() - 1) {
@@ -5613,12 +5628,7 @@ namespace {
                     switch ((*itemPtr).tag()) {
                         case HIRMacroItem::TAG_Import: {
                             auto& e = (*itemPtr).as_Import();
-                            if (e.path.crateName() == crateBuiltinsName())
-                                ;
-                            else {
-                                BUG(span, StringView("Recursive import in ") << path << StringView(" - ") << it->second->ent.as_Import().path << StringView(" -> ") << e.path);
-                            }
-                            rv.macro.set(ap, ASTPathBindingMacro::make_MacroRules({nullptr, nullptr}));
+                            BUG(span, StringView("Recursive import in ") << path << StringView(" - ") << it->second->ent.as_Import().path << StringView(" -> ") << e.path);
                             break;
                         }
                         case HIRMacroItem::TAG_ProcMacro: {
@@ -5722,6 +5732,7 @@ namespace {
                     return ResolveUseGetBindingExt(span, crate, path, *e.crate_, i + 1);
                 }
                 case ASTPathBindingType::TAG_Trait: {
+                    requireTraitImportFeature(crate, span);
                     auto& e = b.type.binding.as_Trait();
                     ASSERT_BUG(span, e.trait_ || e.hir, StringView("nullptr trait pointer in node ") << i << StringView(" of ") << path);
                     i += 1;
