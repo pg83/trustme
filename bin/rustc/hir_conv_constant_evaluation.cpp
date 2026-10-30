@@ -4864,15 +4864,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
             return false;
         }
         case HIRType::TAG_Borrow: {
-            auto& te = (*ty).as_Borrow();
-            if (te.type != HIRBorrowType::Owned) {
-                return false;
-            }
-            auto pointer = value.readPtr(state);
-            MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, StringView("Invalid owned pointer while checking a constant drop"));
-            auto size = sizeOfOrBug(te.inner);
-            auto inner = MIREvalValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
-            return valueNeedsNonConstDrop(te.inner, inner);
+            MIR_BUG(state, StringView("Owned references cannot be dropped during constant evaluation: ") << ty);
         }
         case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();

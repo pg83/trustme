@@ -346,15 +346,12 @@ namespace {
                 break;
             }
             case HIRType::TAG_Function: {
-                if (/*const auto* re =*/right->opt_Function()) {
-                    if (left == right) {
-                        return ::OrdEqual;
-                    }
-                    TODO(sp, StringView("Function - ") << left << StringView(" vs ") << right);
-                } else {
-                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
-                }
-                break;
+                const auto* re = right->opt_Function();
+                ASSERT_BUG(sp, re, StringView("Mismatched types - ") << left << StringView(" and ") << right);
+                const auto& le = left->as_Function();
+                ASSERT_BUG(sp, le.isUnsafe == re->isUnsafe && le.isVariadic == re->isVariadic && le.abi == re->abi && le.trackCaller == re->trackCaller, StringView("Mismatched function signatures - ") << left << StringView(" and ") << right);
+                auto args = typelistOrdSpecific(context, sp, le.argTypes, re->argTypes);
+                return combineSpecificity(context, args, typeOrdSpecific(context, sp, le.rettype, re->rettype));
             }
             case HIRType::TAG_Tuple: {
                 auto& le = (*left).as_Tuple();
