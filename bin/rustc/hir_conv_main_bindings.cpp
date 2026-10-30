@@ -906,11 +906,15 @@ void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
 
     UfcsVisitor exp{wb, false};
     exp.visitCrate(crate);
+    wb.solverCache->overlaps.index.visit([](auto& head) { head = nullptr; });
+    wb.solverCache->specializations.index.visit([](auto& head) { head = nullptr; });
 }
 
 void ConvertHIRResolveUFCS(const WireBoard& wb, HIRCrate& crate) {
     UfcsVisitor exp{wb, true};
     exp.visitCrate(crate);
+    wb.solverCache->overlaps.index.visit([](auto& head) { head = nullptr; });
+    wb.solverCache->specializations.index.visit([](auto& head) { head = nullptr; });
 }
 
 void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr) {
@@ -3686,6 +3690,7 @@ auto UfcsVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     currentType_ = impl.type;
 
     impl.type = this->visitType(impl.type);
+    currentType_ = impl.type;
     resolve_.updateImplSelfMetadata(impl.type);
 
     HIRVisitor::visitTypeImpl(impl);
@@ -3712,6 +3717,7 @@ auto UfcsVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl&
     traits.push_back(std::make_pair(&traitPath, currentTrait));
 
     impl.type = this->visitType(impl.type);
+    currentType_ = impl.type;
     resolve_.updateImplSelfMetadata(impl.type);
 
     HIRVisitor::visitMarkerImpl(traitPath, impl);
@@ -3783,6 +3789,7 @@ auto UfcsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     traits.push_back(std::make_pair(&traitPath, currentTrait));
 
     impl.type = this->visitType(impl.type);
+    currentType_ = impl.type;
     resolve_.updateImplSelfMetadata(impl.type);
 
     // TODO: Handle resolution of all items in m_resolve.m_type_equalities

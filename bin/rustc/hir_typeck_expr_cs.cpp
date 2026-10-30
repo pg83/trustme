@@ -11796,7 +11796,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
     const auto expectedInputs = this->context.expectedInputsForExpectedOutput(sp, this->expectationFor(node), formalTypes, 0);
     Vector<const HIRType*> argumentExpectations;
     for (unsigned int i = 0; i < node.args.size(); i++) {
-        argumentExpectations.pushBack(this->coerceArgument(sp, formalTypes[i], expectedInputs[i], node.args[i], false));
+        argumentExpectations.pushBack(this->coerceArgument(sp, formalTypes[i], expectedInputs[i], node.args[i]));
     }
 
     auto _ = this->pushInnerCoerceScoped(true);
@@ -11973,7 +11973,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
             }
             desTy = &desTyCache;
         }
-        this->context.equateTypesCoerce(node.span(), *desTy, val.second);
+        this->context.equateTypesCoerce(node.span(), *desTy, val.second, true);
         this->context.linkCoerce.back()->coercesAfterItsValue = true;
         fieldTypes.pushBack(*desTy);
     }
@@ -12267,7 +12267,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeTuple& node) -> void {
         BUG_ASSERT(innerTys.length() == node.vals.size());
 
         for (unsigned int i = 0; i < innerTys.length(); i++) {
-            this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
+            this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i], true);
             if (!this->context.getType(innerTys[i])->is_Infer()) {
                 elementExpectations.mut(i) = innerTys[i];
             }

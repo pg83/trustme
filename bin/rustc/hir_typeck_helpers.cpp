@@ -3062,15 +3062,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                             return this->unifyParams(lp.params, rp.params);
                         }
                         case HIRPathData::TAG_UfcsUnknown: {
-                            const auto& lp = li.origin.data.as_UfcsUnknown();
-                            const auto& rp = ri.origin.data.as_UfcsUnknown();
-                            if (lp.item != rp.item) {
-                                return this->defer(left, right);
-                            }
-                            if (this->unifyResolved(lp.type, rp.type) == Outcome::Mismatch) {
-                                return Outcome::Mismatch;
-                            }
-                            return this->unifyParams(lp.params, rp.params);
+                            BUG(sp_, StringView("Opaque function origin is not resolved: ") << li.origin);
                         }
                     }
                     UNREACHABLE();
@@ -4509,8 +4501,7 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
-                    BUG(Span(), StringView("Encountered UfcsUnknown - ") << p);
-                    break;
+                    return true;
                 }
             }
             UNREACHABLE();
@@ -11892,7 +11883,7 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
        as IntoFuture>::Item,)>` for the closure of a generic method reads as
        `FnOnce<(u32,)>` once `I` is.  Left as written, it is a pending equality against
        `u32`, and the candidate stays ambiguous for good. */
-    candidateParams = candidateParams.mapTypes([&](const HIRType* type) -> const HIRType* {
+    const auto normalizeHeadType = [&](const HIRType* type) -> const HIRType* {
         if (!resolve_.hasAssociatedType(type)) {
             return type;
         }
@@ -11910,7 +11901,8 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         }
         resolve_.ivars.commit(probe);
         return normalized;
-    });
+    };
+    candidateParams = candidateParams.mapTypes(normalizeHeadType);
     for (size_t i = 0; i < candidateParams.types.size(); i++) {
         relation = unifier.unify(goalParams.types[i], candidateParams.types[i]);
         if (relation == Unifier::Outcome::Mismatch) {
@@ -11994,7 +11986,6 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     };
 
     MaterializeCandidate materialize(crate.types, resolve_.ivars, inferenceParams, stableExistentials);
-    outputParams = materialize.monomorphPathParams(span(), inferenceParams, true);
     headNormalizationAmbiguity = false;
     const auto isCanonicalTypeInput = [](const HIRType* type) {
         const auto* infer = type->opt_Infer();
@@ -12005,7 +11996,19 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         return infer && isSolverCanonicalInfer(infer->index);
     };
     bool unresolved = false;
+    Unifier pendingUnifier(span(), resolve_.ivars, &resolve_, {.distinctRigidProjections = true});
     for (const auto& equality : unifier.pending()) {
+        if (pendingUnifier.unify(normalizeHeadType(equality.left), normalizeHeadType(equality.right)) == Unifier::Outcome::Mismatch) {
+            return Certainty::NoSolution;
+        }
+    }
+    for (const auto& equality : unifier.pendingValues()) {
+        if (pendingUnifier.unifyValues(equality.left, equality.right) == Unifier::Outcome::Mismatch) {
+            return Certainty::NoSolution;
+        }
+    }
+    outputParams = materialize.monomorphPathParams(span(), inferenceParams, true);
+    for (const auto& equality : pendingUnifier.pending()) {
         const bool exportedDefiningOpaque = containsDefiningOpaque(equality.left) != containsDefiningOpaque(equality.right);
         const bool pendingUnresolved = !exportedDefiningOpaque && !isCanonicalTypeInput(equality.left) && !isCanonicalTypeInput(equality.right);
         unresolved |= pendingUnresolved;
@@ -12018,7 +12021,7 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         );
         DEBUG(StringView("head pending ") << equality.left << StringView(" = ") << equality.right << StringView(" materialized ") << headEqualities.back().left << StringView(" = ") << headEqualities.back().right);
     }
-    for (const auto& equality : unifier.pendingValues()) {
+    for (const auto& equality : pendingUnifier.pendingValues()) {
         const bool pendingUnresolved = !isCanonicalValueInput(equality.left) && !isCanonicalValueInput(equality.right);
         unresolved |= pendingUnresolved;
         headNormalizationAmbiguity |= pendingUnresolved;
