@@ -1,0 +1,9 @@
+# Select the x86 register table while retaining the supported host pointer width.
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+arch = "x86"
+[arch]
+pointer-bits = 64
+is-big-endian = false

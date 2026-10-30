@@ -286,15 +286,7 @@ namespace {
                 break;
             }
             case HIRType::TAG_Primitive: {
-                auto& le = (*left).as_Primitive();
-                if (const auto* re = right->opt_Primitive()) {
-                    if (le != *re) {
-                        BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
-                    }
-                    return ::OrdEqual;
-                } else {
-                    BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
-                }
+                BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 break;
             }
             case HIRType::TAG_Path: {
