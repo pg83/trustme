@@ -861,7 +861,6 @@ Token ProcMacroInv::realGetToken_() {
     }
     BUG(this->parentSpan, StringView("Invalid token class from child process - ") << int(v));
 
-    UNREACHABLE();
 }
 
 Token ProcMacroInv::takePendingSymbol() {
@@ -1967,7 +1966,6 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
             BUG(sp, ty);
-            break;
         }
         case TypeData::TAG_Any: {
             pmi.sendRword("_");
@@ -1988,7 +1986,6 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
         }
         case TypeData::TAG_Primitive: {
             TODO(sp, StringView("proc_macro send primitive - ") << ty);
-            break;
         }
         case TypeData::TAG_Function: {
             visitTypeAsText(ty);
@@ -2235,7 +2232,6 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             BUG(sp, StringView("Invalid path"));
-            break;
         }
         case ASTPathClass::TAG_Local: {
             auto& pe = path.cls.as_Local();
@@ -2321,7 +2317,6 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
             switch (param.tag()) {
                 case GenericParam::TAG_None: {
                     BUG(sp, StringView("Enountered GenericParam::None"));
-                    break;
                 }
                 case GenericParam::TAG_Lifetime: {
                     const auto& p = param.as_Lifetime();

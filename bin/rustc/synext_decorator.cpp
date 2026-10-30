@@ -4436,7 +4436,6 @@ auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const Wir
         }
         default: {
             TODO(sp, StringView("Handle #[derive] for other item types - ") << i.tagStr());
-            break;
         }
     }
 }

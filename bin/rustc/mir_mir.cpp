@@ -800,7 +800,6 @@ HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
                 BUG(sp, StringView("Encountered UfcsUnknown"));
-                break;
             }
         }
     }
@@ -866,11 +865,9 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
         }
         case MIRStatement::TAG_SaveDropFlag: {
             TODO(Span(), StringView("clone_bb SaveDropFlag"));
-            break;
         }
         case MIRStatement::TAG_LoadDropFlag: {
             TODO(Span(), StringView("clone_bb LoadDropFlag"));
-            break;
         }
     }
     UNREACHABLE();

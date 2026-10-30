@@ -96,7 +96,6 @@ namespace {
                     case HIRValueItem::TAG_Import: {
                         auto& e = item.as_Import();
                         BUG(sp, StringView("Value path pointed to import - ") << path << StringView(" = ") << e.path);
-                        break;
                     }
                     case HIRValueItem::TAG_Function: {
                         return item.as_Function()->params;
@@ -107,7 +106,6 @@ namespace {
                     case HIRValueItem::TAG_Static: {
                         // TODO: Return an empty set?
                         BUG(sp, StringView("Attepted to get parameters for static ") << path);
-                        break;
                     }
                     case HIRValueItem::TAG_StructConstructor: {
                         auto& e = item.as_StructConstructor();
@@ -127,15 +125,12 @@ namespace {
                 switch (item.tag()) {
                     case HIRTypeItem::TAG_Import: {
                         BUG(sp, StringView("Type path pointed to import - ") << path);
-                        break;
                     }
                     case HIRTypeItem::TAG_TypeAlias: {
                         BUG(sp, StringView("Type path pointed to type alias - ") << path);
-                        break;
                     }
                     case HIRTypeItem::TAG_TraitAlias: {
                         BUG(sp, StringView("Type path pointed to trait alias - ") << path);
-                        break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
                         return emptyParams;
@@ -143,7 +138,6 @@ namespace {
                     }
                     case HIRTypeItem::TAG_Module: {
                         BUG(sp, StringView("Type path pointed to module - ") << path);
-                        break;
                     }
                     case HIRTypeItem::TAG_Struct: {
                         auto& e = item.as_Struct();
@@ -451,7 +445,6 @@ auto TypecheckVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             BUG(Span(), StringView("Encountered unknown-trait UFCS path during outer typeck - ") << p);
-            break;
         }
     }
 }

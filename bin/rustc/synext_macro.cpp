@@ -2234,15 +2234,12 @@ auto CGlobalAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCr
             }
             case ASTAsmParam::TAG_Label: {
                 ERROR(sp, E0000, StringView("`label` is not allowed in `global_asm!`"));
-                break;
             }
             case ASTAsmParam::TAG_RegSingle: {
                 ERROR(sp, E0000, StringView("Only `sym` and `const` are allowed in `global_asm!`"));
-                break;
             }
             case ASTAsmParam::TAG_Reg: {
                 ERROR(sp, E0000, StringView("Only `sym` and `const` are allowed in `global_asm!`"));
-                break;
             }
         }
     }

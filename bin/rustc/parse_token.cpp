@@ -358,7 +358,6 @@ Token::Token(const Token& t)
         }
         case TokenData::TAG_Fragment: {
             BUG(Span(Span(), t.pos), StringView("Attempted to copy a fragment - ") << t);
-            break;
         }
     }
 }

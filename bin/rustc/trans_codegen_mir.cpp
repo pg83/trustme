@@ -1074,7 +1074,6 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<co
         switch (tuMatch.tag()) {
             case HIRType::TAG_Infer: {
                 BUG(Span(), StringView("") << x.e);
-                break;
             }
             case HIRType::TAG_Diverge: {
                 os << StringView("!");
@@ -1092,7 +1091,6 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<co
             }
             case HIRType::TAG_Generic: {
                 BUG(Span(), StringView("") << x.e);
-                break;
             }
             case HIRType::TAG_TraitObject: {
                 auto& te = tuMatch.as_TraitObject();
@@ -1102,7 +1100,6 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<co
             }
             case HIRType::TAG_ErasedType: {
                 BUG(Span(), StringView("") << x.e);
-                break;
             }
             case HIRType::TAG_Array: {
                 auto& te = tuMatch.as_Array();

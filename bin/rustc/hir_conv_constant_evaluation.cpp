@@ -950,7 +950,6 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
         }
         case TypeckValuePtr::TAG_EnumValue: {
             TODO(sp, StringView("Handle EnumValue - ") << path);
-            break;
         }
         case TypeckValuePtr::TAG_StructConstructor: {
             auto& e = v.as_StructConstructor();
@@ -958,7 +957,6 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
         }
         case TypeckValuePtr::TAG_StructConstant: {
             TODO(sp, StringView("Handle StructConstant - ") << path);
-            break;
         }
     }
     UNREACHABLE();
@@ -5893,11 +5891,9 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                 switch (vi.tag()) {
                     case HIRValueItem::TAG_Import: {
                         BUG(sp, StringView("Module Import"));
-                        break;
                     }
                     case HIRValueItem::TAG_Static: {
                         BUG(sp, StringView("Getting params definition for Static - ") << p);
-                        break;
                     }
                     case HIRValueItem::TAG_Constant: {
                         const auto& e = *vi.as_Constant();
@@ -5924,19 +5920,15 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                 switch (vi.tag()) {
                     case HIRTypeItem::TAG_Import: {
                         BUG(sp, StringView("Module Import"));
-                        break;
                     }
                     case HIRTypeItem::TAG_Module: {
                         BUG(sp, StringView("mod - ") << p);
-                        break;
                     }
                     case HIRTypeItem::TAG_TypeAlias: {
                         BUG(sp, StringView("type - ") << p);
-                        break;
                     }
                     case HIRTypeItem::TAG_TraitAlias: {
                         BUG(sp, StringView("trait= - ") << p);
-                        break;
                     }
                     case HIRTypeItem::TAG_Struct: {
                         auto& e = vi.as_Struct();
@@ -5956,7 +5948,6 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                     }
                     case HIRTypeItem::TAG_ExternType: {
                         BUG(sp, StringView("extern type - ") << p);
-                        break;
                     }
                 }
                 break;
@@ -6011,11 +6002,9 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                 switch (vi.tag()) {
                     case TypeckValuePtr::TAG_NotFound: {
                         BUG(sp, StringView("NotFound"));
-                        break;
                     }
                     case TypeckValuePtr::TAG_NotYetKnown: {
                         TODO(sp, StringView("NotYetKnown"));
-                        break;
                     }
                     case TypeckValuePtr::TAG_Static: {
                         auto& e = vi.as_Static();
@@ -6031,19 +6020,15 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                     }
                     case TypeckValuePtr::TAG_EnumConstructor: {
                         TODO(sp, StringView("Handle EnumConstructor - ") << p);
-                        break;
                     }
                     case TypeckValuePtr::TAG_EnumValue: {
                         TODO(sp, StringView("Handle EnumValue - ") << p);
-                        break;
                     }
                     case TypeckValuePtr::TAG_StructConstructor: {
                         TODO(sp, StringView("Handle StructConstructor - ") << p);
-                        break;
                     }
                     case TypeckValuePtr::TAG_StructConstant: {
                         TODO(sp, StringView("Handle StructConstant - ") << p);
-                        break;
                     }
                 }
                 break;
@@ -6057,7 +6042,6 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                     return it->second.generics;
                 }
                 BUG(sp, StringView("type - ") << p);
-                break;
             }
         }
         TODO(sp, StringView("visit_path[m_get_params] - ") << p);

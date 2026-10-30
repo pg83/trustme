@@ -2427,7 +2427,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         case HIRType::TAG_ErasedType: {
             BUG(sp, StringView("sizeof on an erased type - shouldn't exist"));
-            break;
         }
         case HIRType::TAG_Array: {
             auto& te = (*ty).as_Array();

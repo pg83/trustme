@@ -1422,19 +1422,15 @@ namespace {
             switch ((*curTy).tag()) {
                 case HIRType::TAG_Infer: {
                     BUG(sp, StringView("Ivar for in match type"));
-                    break;
                 }
                 case HIRType::TAG_Diverge: {
                     BUG(sp, StringView("Diverge in match type"));
-                    break;
                 }
                 case HIRType::TAG_Primitive: {
                     BUG(sp, StringView("Destructuring a primitive"));
-                    break;
                 }
                 case HIRType::TAG_Pattern: {
                     BUG(sp, StringView("Destructuring a pattern type"));
-                    break;
                 }
                 case HIRType::TAG_Tuple: {
                     auto& e = (*curTy).as_Tuple();
@@ -1465,22 +1461,18 @@ namespace {
                     switch (e.binding.tag()) {
                         case HIRTypePathBinding::TAG_Unbound: {
                             BUG(sp, StringView("Encounterd unbound path - ") << e.path);
-                            break;
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
                             BUG(sp, StringView("Destructuring an opaque type - ") << curTy);
-                            break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
                             BUG(sp, StringView("Destructuring an extern type - ") << curTy);
-                            break;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
                             const auto pbe = e.binding.as_Struct();
                             switch (pbe->data.tag()) {
                                 case HIRStructData::TAG_Unit: {
                                     BUG(sp, StringView("Destructuring an unit-like tuple - ") << curTy);
-                                    break;
                                 }
                                 case HIRStructData::TAG_Tuple: {
                                     auto& fields = pbe->data.as_Tuple();
@@ -1525,15 +1517,12 @@ namespace {
                 }
                 case HIRType::TAG_Generic: {
                     BUG(sp, StringView("Destructuring a generic - ") << curTy);
-                    break;
                 }
                 case HIRType::TAG_TraitObject: {
                     BUG(sp, StringView("Destructuring a trait object - ") << curTy);
-                    break;
                 }
                 case HIRType::TAG_ErasedType: {
                     BUG(sp, StringView("Destructuring an erased type - ") << curTy);
-                    break;
                 }
                 case HIRType::TAG_Array: {
                     auto& e = (*curTy).as_Array();
@@ -1573,19 +1562,15 @@ namespace {
                 }
                 case HIRType::TAG_Pointer: {
                     ERROR(sp, E0000, StringView("Attempting to match over a pointer"));
-                    break;
                 }
                 case HIRType::TAG_NamedFunction: {
                     ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-                    break;
                 }
                 case HIRType::TAG_Function: {
                     ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-                    break;
                 }
                 case HIRType::TAG_NodeType: {
                     ERROR(sp, E0000, StringView("Attempting to match over a magic type"));
-                    break;
                 }
             }
         }
@@ -1744,11 +1729,9 @@ namespace {
             switch ((*ty).tag()) {
                 case HIRType::TAG_Infer: {
                     BUG(sp, StringView("Hit _ in type - ") << ty);
-                    break;
                 }
                 case HIRType::TAG_Diverge: {
                     BUG(sp, StringView("Matching over !"));
-                    break;
                 }
                 case HIRType::TAG_Primitive: {
                     auto& te = (*ty).as_Primitive();
@@ -1899,7 +1882,6 @@ namespace {
                                 default: {
                                     BUG(sp, StringView("PatternRule for char is not Value or ValueRange"));
 
-                                    break;
                                 }
                             }
                             break;
@@ -1939,7 +1921,6 @@ namespace {
                                 default: {
                                     BUG(sp, StringView("PatternRule for float is not Value or ValueRange"));
 
-                                    break;
                                 }
                             }
                             break;
@@ -1962,32 +1943,26 @@ namespace {
                 }
                 case HIRType::TAG_Pattern: {
                     BUG(sp, StringView("Pattern type was not reduced to its base type"));
-                    break;
                 }
                 case HIRType::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     switch (te.binding.tag()) {
                         case HIRTypePathBinding::TAG_Unbound: {
                             BUG(sp, StringView("Encounterd unbound path - ") << te.path);
-                            break;
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
                             BUG(sp, StringView("Attempting to match over opaque type - ") << ty);
-                            break;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
                             /* The ruleset builder lowers struct patterns and
                                struct constants to field rules; Any was skipped. */
                             BUG(sp, StringView("Struct pattern was not lowered to field rules - ") << ty);
-                            break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
                             TODO(sp, StringView("Match over Union"));
-                            break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
                             TODO(sp, StringView("Match over ExternType"));
-                            break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
                             const auto pbe = te.binding.as_Enum();
@@ -2029,19 +2004,15 @@ namespace {
                 }
                 case HIRType::TAG_Generic: {
                     BUG(sp, StringView("Attempting to match a generic"));
-                    break;
                 }
                 case HIRType::TAG_TraitObject: {
                     BUG(sp, StringView("Attempting to match a trait object"));
-                    break;
                 }
                 case HIRType::TAG_ErasedType: {
                     BUG(sp, StringView("Attempting to match an erased type"));
-                    break;
                 }
                 case HIRType::TAG_Array: {
                     TODO(sp, StringView("Match directly on array?"));
-                    break;
                 }
                 case HIRType::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
@@ -2094,27 +2065,21 @@ namespace {
                 }
                 case HIRType::TAG_Tuple: {
                     TODO(sp, StringView("Match directly on tuple?"));
-                    break;
                 }
                 case HIRType::TAG_Borrow: {
                     TODO(sp, StringView("Match directly on borrow?"));
-                    break;
                 }
                 case HIRType::TAG_Pointer: {
                     BUG(sp, StringView("Attempting to match a pointer - ") << rule << StringView(" against ") << ty);
-                    break;
                 }
                 case HIRType::TAG_NamedFunction: {
                     BUG(sp, StringView("Attempting to match a function pointer - ") << rule << StringView(" against ") << ty);
-                    break;
                 }
                 case HIRType::TAG_Function: {
                     BUG(sp, StringView("Attempting to match a function pointer - ") << rule << StringView(" against ") << ty);
-                    break;
                 }
                 case HIRType::TAG_NodeType: {
                     BUG(sp, StringView("Attempting to match a magic type - ") << rule << StringView(" against ") << ty);
-                    break;
                 }
             }
         }
@@ -3432,7 +3397,6 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
     switch ((*ty).tag()) {
         case HIRType::TAG_Infer: {
             BUG(sp, StringView("Ivar for in match type"));
-            break;
         }
         case HIRType::TAG_Diverge: {
             this->pushRule(PatternRule::make_Any({}));
@@ -3528,12 +3492,9 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
                     BUG(sp, StringView("Encounterd unbound path - ") << e.path);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
                     TODO(sp, StringView("Can an opaque path type be matched with a literal?"));
-                    this->pushRule(PatternRule::make_Any({}));
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
                     auto* repr = TargetGetTypeRepr(sp, resolve, ty);
@@ -3549,11 +3510,9 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
                     TODO(sp, StringView("Match extern type"));
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
                     TODO(sp, StringView("Match union"));
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
                     auto* enmRepr = TargetGetTypeRepr(sp, resolve, ty);
@@ -3596,16 +3555,12 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         }
         case HIRType::TAG_Generic: {
             TODO(sp, StringView("Match generic with literal?"));
-            this->pushRule(PatternRule::make_Any({}));
-            break;
         }
         case HIRType::TAG_TraitObject: {
             TODO(sp, StringView("Match trait object with literal?"));
-            break;
         }
         case HIRType::TAG_ErasedType: {
             TODO(sp, StringView("Match erased type with literal?"));
-            break;
         }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
@@ -3624,7 +3579,6 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         }
         case HIRType::TAG_Slice: {
             TODO(sp, StringView("Match literal Slice"));
-            break;
         }
         case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
@@ -3715,15 +3669,12 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         }
         case HIRType::TAG_NamedFunction: {
             ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-            break;
         }
         case HIRType::TAG_Function: {
             ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-            break;
         }
         case HIRType::TAG_NodeType: {
             ERROR(sp, E0000, StringView("Attempting to match over a magic type"));
-            break;
         }
     }
 }
@@ -3770,7 +3721,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 default: {
                     BUG(sp, StringView("Invalid Value type in ") << pat);
-                    break;
                 }
             }
             UNREACHABLE();
@@ -3789,7 +3739,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 default: {
                     BUG(sp, StringView("Invalid signed Value type in ") << pat);
-                    break;
                 }
             }
             UNREACHABLE();
@@ -3808,7 +3757,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 default: {
                     BUG(sp, StringView("Invalid Value type in ") << pat);
-                    break;
                 }
             }
             UNREACHABLE();
@@ -4010,7 +3958,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     switch ((*ty).tag()) {
         case HIRType::TAG_Infer: {
             BUG(sp, StringView("Ivar for in match type"));
-            break;
         }
         case HIRType::TAG_Diverge: {
             // TODO: Marking as impossible (and not emitting) leads to exhuaustiveness failure.
@@ -4061,7 +4008,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         }
         case HIRType::TAG_Pattern: {
             BUG(sp, StringView("Pattern type was not reduced to its base type"));
-            break;
         }
         case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
@@ -4102,7 +4048,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 default: {
                     BUG(sp, StringView("Matching tuple with invalid pattern - ") << pat);
-                    break;
                 }
             }
             fieldPath.pop_back();
@@ -4162,7 +4107,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
                     BUG(sp, StringView("Encounterd unbound path - ") << e.path);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
                     switch (pat.data.tag()) {
@@ -4172,7 +4116,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         }
                         default: {
                             BUG(sp, StringView("Matching opaque type with invalid pattern - ") << pat);
-                            break;
                         }
                     }
                     break;
@@ -4199,7 +4142,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             }
                             default: {
                                 BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                                break;
                             }
                         }
                         break;
@@ -4348,7 +4290,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             // TODO: If the value of this constant isn't known at this point (i.e. it won't be until monomorphisation)
 
                             TODO(sp, StringView("Match enum with const - ") << pat);
-                            break;
                         }
                         case HIRPatternData::TAG_PathValue: {
                             auto& pe = pat.data.as_PathValue();
@@ -4434,7 +4375,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 default: {
                     BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                    break;
                 }
             }
             break;
@@ -4877,11 +4817,9 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
     switch ((*ty).tag()) {
         case HIRType::TAG_Infer: {
             BUG(sp, StringView("Hit _ in type - ") << ty);
-            break;
         }
         case HIRType::TAG_Diverge: {
             BUG(sp, StringView("Matching over !"));
-            break;
         }
         case HIRType::TAG_Primitive: {
             this->genDispatchPrimitive(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
@@ -4889,7 +4827,6 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
         }
         case HIRType::TAG_Pattern: {
             BUG(sp, StringView("Pattern type was not reduced to its base type"));
-            break;
         }
         case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();
@@ -4899,24 +4836,19 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
             switch (te.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
                     BUG(sp, StringView("Encounterd unbound path - ") << te.path);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
                     BUG(sp, StringView("Attempting to match over opaque type - ") << ty);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
                     /* Dispatch only sees non-Any rules after field lowering. */
                     BUG(sp, StringView("Struct pattern was not lowered to field rules - ") << ty);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
                     TODO(sp, StringView("Match over Union"));
-                    break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
                     TODO(sp, StringView("Match over ExternType - ") << ty);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
                     this->genDispatchEnum(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
@@ -4927,19 +4859,15 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
         }
         case HIRType::TAG_Generic: {
             BUG(sp, StringView("Attempting to match a generic"));
-            break;
         }
         case HIRType::TAG_TraitObject: {
             BUG(sp, StringView("Attempting to match a trait object"));
-            break;
         }
         case HIRType::TAG_ErasedType: {
             BUG(sp, StringView("Attempting to match an erased type"));
-            break;
         }
         case HIRType::TAG_Array: {
             BUG(sp, StringView("Array patterns must be decomposed before dispatch"));
-            break;
         }
         case HIRType::TAG_Slice: {
             this->genDispatchSlice(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
@@ -4947,11 +4875,9 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
         }
         case HIRType::TAG_Tuple: {
             BUG(sp, StringView("Match directly on tuple"));
-            break;
         }
         case HIRType::TAG_Borrow: {
             BUG(sp, StringView("Match directly on borrow"));
-            break;
         }
         case HIRType::TAG_Pointer: {
             auto valUsize = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
@@ -4961,16 +4887,13 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
         }
         case HIRType::TAG_NamedFunction: {
             BUG(sp, StringView("Attempting to match a function pointer - ") << ty);
-            break;
         }
         case HIRType::TAG_Function: {
             // TODO: Could this actually be valid?
             BUG(sp, StringView("Attempting to match a function pointer - ") << ty);
-            break;
         }
         case HIRType::TAG_NodeType: {
             BUG(sp, StringView("Attempting to match a magic type - ") << ty);
-            break;
         }
     }
 }
@@ -5501,7 +5424,6 @@ void MirBuilder::registerVariableState(unsigned int idx) {
             }
             case ScopeType::TAG_Split: {
                 BUG(Span(), StringView("Variable ") << idx << StringView(" introduced within a Split"));
-                break;
             }
             default: {
                 break;
@@ -5533,7 +5455,6 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
             }
             case ScopeType::TAG_Split: {
                 BUG(Span(), StringView("Variable ") << idx << StringView(" scheduled within a Split"));
-                break;
             }
             default: {
                 break;
@@ -5563,7 +5484,6 @@ void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
             }
             case ScopeType::TAG_Split: {
                 BUG(Span(), StringView("Argument ") << idx << StringView(" introduced within a Split"));
-                break;
             }
             default: {
                 break;
@@ -5795,7 +5715,6 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
             auto& e = val.as_Borrow();
             if (e.type == HIRBorrowType::Owned) {
                 TODO(sp, StringView("Move using &move"));
-                this->movedLvalue(sp, e.val);
             } else {
             }
             break;
@@ -6102,7 +6021,6 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
     }
     if (!sourceFound) {
         BUG(sp, val << StringView(" wasn't defined in a visible scope"));
-        return;
     }
 
     bool targetSeen = false;
@@ -6816,15 +6734,12 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     TODO(sp, StringView("Static - UfcsKnown - ") << e);
-                    break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
                     BUG(sp, StringView("Encountered UfcsUnknown in Static - ") << e);
-                    break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     TODO(sp, StringView("Static - UfcsInherent - ") << e);
-                    break;
                 }
             }
             break;
@@ -6870,7 +6785,6 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
                                     BUG(sp, StringView("Field on unit-like struct - ") << currentTy);
-                                    break;
                                 }
                                 case HIRStructData::TAG_Tuple: {
                                     auto& se = str.data.as_Tuple();
@@ -6942,7 +6856,6 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                     }
                     default: {
                         BUG(sp, StringView("Index on unexpected type - ") << currentTy);
-                        break;
                     }
                 }
                 break;
@@ -7136,8 +7049,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
     switch (lv.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
             BUG(sp, StringView("Move of return value"));
-            vs = &getSlotStateMut(sp, ~0u, SlotType::Local);
-            break;
         }
         case MIRLValue::Storage::TAG_Argument: {
             decltype(lv.root.as_Argument()) e = lv.root.as_Argument();
@@ -7173,7 +7084,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                     }
                     case VarState::TAG_MovedOut: {
                         BUG(sp, StringView("Field on value with MovedOut state - ") << lv);
-                        break;
                     }
                     case VarState::TAG_Partial: {
                         break;
@@ -7202,7 +7112,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
                                     BUG(sp, StringView("Field access of unit-like struct"));
-                                    break;
                                 }
                                 case HIRStructData::TAG_Tuple: {
                                     auto& se = str.data.as_Tuple();
@@ -11092,7 +11001,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
                         }
                         case MIRParam::TAG_Constant: {
                             TODO(node.span(), StringView(""));
-                            break;
                         }
                         case MIRParam::TAG_Borrow: {
                             auto& v = tuMatch.as_Borrow();
@@ -11117,7 +11025,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
                         }
                         case MIRParam::TAG_Borrow: {
                             TODO(node.span(), StringView("Borrow index?"));
-                            break;
                         }
                     }
                 }
@@ -11168,7 +11075,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
                         }
                         case MIRParam::TAG_Borrow: {
                             TODO(node.span(), StringView("box_new with a borrow input?"));
-                            break;
                         }
                     }
                 }
@@ -11411,7 +11317,6 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
             switch (vi.tag()) {
                 case HIRValueItem::TAG_Import: {
                     BUG(sp, StringView("All references via imports should be replaced"));
-                    break;
                 }
                 case HIRValueItem::TAG_Constant: {
                     const auto& e = *vi.as_Constant();
@@ -11432,11 +11337,9 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
                 }
                 case HIRValueItem::TAG_Function: {
                     BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-                    break;
                 }
                 case HIRValueItem::TAG_StructConstructor: {
                     BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-                    break;
                 }
             }
             break;
@@ -11453,18 +11356,15 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
                 }
                 case HIRTraitValueItem::TAG_Static: {
                     TODO(sp, StringView("Associated statics (non-rustc) - ") << node.path);
-                    break;
                 }
                 case HIRTraitValueItem::TAG_Function: {
                     BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-                    break;
                 }
             }
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("PathValue - Encountered UfcsUnknown - ") << node.path);
-            break;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& pe = node.path.data.as_UfcsInherent();
@@ -11642,7 +11542,6 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
             }
             case HIRTypePathBinding::TAG_ExternType: {
                 BUG(node.span(), StringView("_StructLiteral ExternType isn't valid?"));
-                break;
             }
             case HIRTypePathBinding::TAG_Struct: {
                 const auto e = tuMatch.as_Struct();

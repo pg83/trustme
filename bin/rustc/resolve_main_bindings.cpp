@@ -562,7 +562,6 @@ namespace {
             switch (it->second->ent.tag()) {
                 case HIRValueItem::TAG_Import: {
                     BUG(sp, StringView("HIR Import item pointed to an import"));
-                    break;
                 }
                 case HIRValueItem::TAG_Constant: {
                     pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
@@ -597,7 +596,6 @@ namespace {
             switch (it->second->ent.tag()) {
                 case HIRTypeItem::TAG_Import: {
                     BUG(sp, StringView("HIR Import item pointed to an import"));
-                    break;
                 }
                 case HIRTypeItem::TAG_Module: {
                     auto& e = it->second->ent.as_Module();
@@ -707,7 +705,6 @@ namespace {
                 }
                 case HIRTypeItem::TAG_TraitAlias: {
                     TODO(sp, StringView("Path referring to a trait alias - ") << path);
-                    break;
                 }
                 case HIRTypeItem::TAG_Trait: {
                     auto& e = it->second->ent.as_Trait();
@@ -1234,7 +1231,6 @@ namespace {
         switch (path.cls.tag()) {
             case ASTPathClass::TAG_Invalid: {
                 BUG(sp, StringView("Attempted resolution of invalid path"));
-                break;
             }
             case ASTPathClass::TAG_Local: {
                 auto& e = path.cls.as_Local();
@@ -1635,7 +1631,6 @@ namespace {
             }
             case TypeData::TAG_Macro: {
                 BUG(sp, StringView("Resolve_Absolute_Type - Encountered an unexpanded macro in type - ") << type);
-                break;
             }
             case TypeData::TAG_Primitive: {
                 break;
@@ -2063,7 +2058,6 @@ namespace {
             }
             case ASTPatternData::TAG_Macro: {
                 BUG(pat.span(), StringView("Resolve_Absolute_Pattern - Encountered Macro - ") << pat);
-                break;
             }
             case ASTPatternData::TAG_Any: {
                 break;
@@ -2085,7 +2079,6 @@ namespace {
             }
             case ASTPatternData::TAG_Guard: {
                 BUG(pat.span(), StringView("Guard pattern was not lifted before name resolution"));
-                break;
             }
             case ASTPatternData::TAG_Value: {
                 auto& e = pat.data().as_Value();
@@ -2182,55 +2175,42 @@ namespace {
                 }
                 case ASTItem::TAG_ExternBlock: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Impl: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_NegImpl: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_GlobalAsm: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Macro: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Use: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - Use"));
-                    break;
                 }
                 case ASTItem::TAG_Module: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - Module"));
-                    break;
                 }
                 case ASTItem::TAG_Crate: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - Crate"));
-                    break;
                 }
                 case ASTItem::TAG_Enum: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - Enum"));
-                    break;
                 }
                 case ASTItem::TAG_Trait: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_TraitAlias: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Struct: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - Struct"));
-                    break;
                 }
                 case ASTItem::TAG_Union: {
                     BUG(i.span, StringView("Resolve_Absolute_ImplItems - Union"));
-                    break;
                 }
                 case ASTItem::TAG_Type: {
                     auto& e = i.data.as_Type();
@@ -2403,55 +2383,42 @@ namespace {
                 }
                 case ASTItem::TAG_Impl: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_NegImpl: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_ExternBlock: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_GlobalAsm: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Macro: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Use: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Module: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Crate: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Enum: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Trait: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_TraitAlias: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Struct: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Union: {
                     BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                    break;
                 }
                 case ASTItem::TAG_Type: {
                     auto& e = (*i.data).as_Type();
@@ -2882,7 +2849,6 @@ namespace {
             }
             case HIRType::TAG_ErasedType: {
                 BUG(span, StringView("Erased type in an external delegation signature"));
-                break;
             }
             case HIRType::TAG_Array: {
                 const auto& array = type->as_Array();
@@ -2902,7 +2868,6 @@ namespace {
             }
             case HIRType::TAG_Pattern: {
                 BUG(span, StringView("Pattern type in an external delegation signature"));
-                break;
             }
             case HIRType::TAG_Tuple: {
                 auto& e = (*type).as_Tuple();
@@ -2922,7 +2887,6 @@ namespace {
             }
             case HIRType::TAG_NamedFunction: {
                 BUG(span, StringView("Named function type in an external delegation signature"));
-                break;
             }
             case HIRType::TAG_Function: {
                 auto& e = (*type).as_Function();
@@ -2934,7 +2898,6 @@ namespace {
             }
             case HIRType::TAG_NodeType: {
                 BUG(span, StringView("Node type in an external delegation signature"));
-                break;
             }
         }
         UNREACHABLE();
@@ -3686,7 +3649,6 @@ namespace {
                         }
                         case ASTPathBindingType::TAG_TypeParameter: {
                             BUG(sp, StringView("Import was bound to type parameter"));
-                            break;
                         }
                         case ASTPathBindingType::TAG_Primitive: {
                             _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
@@ -3736,11 +3698,9 @@ namespace {
                         }
                         case ASTPathBindingValue::TAG_Variable: {
                             BUG(sp, StringView("Import was bound to a variable"));
-                            break;
                         }
                         case ASTPathBindingValue::TAG_Generic: {
                             BUG(sp, StringView("Import was bound to a generic value"));
-                            break;
                         }
                         case ASTPathBindingValue::TAG_Struct: {
                             _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
@@ -3774,11 +3734,9 @@ namespace {
                         }
                         case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
                             TODO(sp, StringView("ProcMacroAttribute import"));
-                            break;
                         }
                         case ASTPathBindingMacro::TAG_ProcMacroDerive: {
                             TODO(sp, StringView("ProcMacroDerive import"));
-                            break;
                         }
                     }
                 } else {
@@ -3855,7 +3813,6 @@ namespace {
                     case HIRTypeItem::TAG_Import: {
                         auto& e = (*vep).as_Import();
                         TODO(sp, StringView("Get binding for HIR import? ") << e.path);
-                        break;
                     }
                     case HIRTypeItem::TAG_Module: {
                         auto& e = (*vep).as_Module();
@@ -4213,7 +4170,6 @@ namespace {
                 case HIRTypeItem::TAG_Import: {
                     auto& e = (*itemPtr).as_Import();
                     BUG(sp, StringView("Recursive import in ") << path << StringView(" - ") << it->second->ent.as_Import().path << StringView(" -> ") << e.path);
-                    break;
                 }
                 case HIRTypeItem::TAG_Enum: {
                     if (i != info.nodes.size() - 2) {
@@ -4234,7 +4190,6 @@ namespace {
                 }
                 default: {
                     BUG(sp, StringView("Path ") << path << StringView(" pointed to non-module in component ") << i);
-                    break;
                 }
             }
         }
@@ -4461,15 +4416,12 @@ namespace {
         switch (path.cls.tag()) {
             case ASTPathClass::TAG_Invalid: {
                 BUG(span, StringView("Invalid path class encountered"));
-                break;
             }
             case ASTPathClass::TAG_Local: {
                 BUG(span, StringView("Local path class in use statement"));
-                break;
             }
             case ASTPathClass::TAG_UFCS: {
                 BUG(span, StringView("UFCS path class in use statement"));
-                break;
             }
             case ASTPathClass::TAG_Relative: {
                 auto& e = path.cls.as_Relative();
@@ -4703,7 +4655,6 @@ namespace {
                         }
                         default: {
                             ERROR(span, E0000, StringView("Wildcard import of invalid item type - ") << useEnt.path);
-                            break;
                         }
                     }
                 } else {
@@ -4812,7 +4763,6 @@ namespace {
                             }
                             default: {
                                 BUG(Span(), StringView("Unexpected item in trait - ") << ti.data.tagStr());
-                                break;
                             }
                         }
                     }
@@ -4891,11 +4841,9 @@ namespace {
                     }
                     case ASTItem::TAG_MacroInv: {
                         BUG(span, StringView("Hit MacroInv in use resolution"));
-                        break;
                     }
                     case ASTItem::TAG_GlobalAsm: {
                         BUG(span, StringView("Hit GlobalAsm in use resolution"));
-                        break;
                     }
                     case ASTItem::TAG_Macro: {
                         break;
@@ -4906,15 +4854,12 @@ namespace {
                     }
                     case ASTItem::TAG_Impl: {
                         BUG(span, StringView("Hit Impl in use resolution"));
-                        break;
                     }
                     case ASTItem::TAG_NegImpl: {
                         BUG(span, StringView("Hit NegImpl in use resolution"));
-                        break;
                     }
                     case ASTItem::TAG_ExternBlock: {
                         BUG(span, StringView("Hit Extern in use resolution"));
-                        break;
                     }
                     case ASTItem::TAG_Crate: {
                         auto& e = item.data.as_Crate();
@@ -5496,7 +5441,6 @@ namespace {
                         case HIRTypeItem::TAG_Import: {
                             auto& e = (*itemPtr).as_Import();
                             BUG(span, StringView("Recursive import in ") << path << StringView(" - ") << it->second->ent.as_Import().path << StringView(" -> ") << e.path);
-                            break;
                         }
                         case HIRTypeItem::TAG_Module: {
                             auto& e = (*itemPtr).as_Module();
@@ -5569,7 +5513,6 @@ namespace {
                         case HIRValueItem::TAG_Import: {
                             auto& e = (*itemPtr).as_Import();
                             BUG(span, StringView("Recursive import in ") << path << StringView(" - ") << it->second->ent.as_Import().path << StringView(" -> ") << e.path);
-                            break;
                         }
                         case HIRValueItem::TAG_Constant: {
                             rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr}));
@@ -5629,7 +5572,6 @@ namespace {
                         case HIRMacroItem::TAG_Import: {
                             auto& e = (*itemPtr).as_Import();
                             BUG(span, StringView("Recursive import in ") << path << StringView(" - ") << it->second->ent.as_Import().path << StringView(" -> ") << e.path);
-                            break;
                         }
                         case HIRMacroItem::TAG_ProcMacro: {
                             auto& e = (*itemPtr).as_ProcMacro();
@@ -5723,7 +5665,6 @@ namespace {
                         return ASTPath::Bindings();
                     }
                     ERROR(span, E0000, StringView("Cannot find component ") << i << StringView(" of ") << path << StringView(" (") << b.type.binding << StringView(")"));
-                    break;
                 }
                 case ASTPathBindingType::TAG_Crate: {
                     auto& e = b.type.binding.as_Crate();

@@ -275,19 +275,15 @@ namespace {
             }
             case HIRType::TAG_Infer: {
                 BUG(sp, StringView("Hit infer"));
-                break;
             }
             case HIRType::TAG_Diverge: {
                 BUG(sp, StringView("Hit diverge"));
-                break;
             }
             case HIRType::TAG_NodeType: {
                 BUG(sp, StringView("Hit ") << left);
-                break;
             }
             case HIRType::TAG_Primitive: {
                 BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
-                break;
             }
             case HIRType::TAG_Path: {
                 auto& le = (*left).as_Path();
@@ -315,7 +311,6 @@ namespace {
                     }
                 }
                 TODO(sp, StringView("Path - ") << le.path << StringView(" and ") << right);
-                break;
             }
             case HIRType::TAG_TraitObject: {
                 auto& le = (*left).as_TraitObject();
@@ -339,11 +334,9 @@ namespace {
             }
             case HIRType::TAG_ErasedType: {
                 TODO(sp, StringView("ErasedType - ") << left);
-                break;
             }
             case HIRType::TAG_NamedFunction: {
                 BUG(sp, StringView("Hit function type"));
-                break;
             }
             case HIRType::TAG_Function: {
                 const auto* re = right->opt_Function();
@@ -1738,7 +1731,6 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
     switch (binding.tag()) {
         case HIRPatternPathBinding::TAG_Unbound: {
             BUG(sp, StringView("Unexpected unbound named pattern - ") << path);
-            break;
         }
         case HIRPatternPathBinding::TAG_Struct: {
             const auto be = binding.as_Struct();
@@ -1747,7 +1739,6 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
         }
         case HIRPatternPathBinding::TAG_Union: {
             BUG(sp, StringView("Tuple pattern used on union ") << path);
-            break;
         }
         case HIRPatternPathBinding::TAG_Enum: {
             auto& be = binding.as_Enum();

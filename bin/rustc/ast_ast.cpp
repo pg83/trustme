@@ -379,7 +379,6 @@ ASTItem ASTItem::clone() const {
         }
         case ASTItem::TAG_Macro: {
             TODO(Span(), StringView("Clone on Item::Macro"));
-            break;
         }
         case ASTItem::TAG_Use: {
             auto& e = (*this).as_Use();

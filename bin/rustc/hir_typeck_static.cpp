@@ -1153,7 +1153,6 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                         }
                     }
                     TODO(sp, StringView("type_is_impossible for enum ") << ty);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
                     /* A union's layout permits uninitialised storage, even
@@ -1615,7 +1614,6 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
                     BUG(sp, StringView("Unbound path"));
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
                     // Technically a bug, checked above
@@ -1681,7 +1679,6 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
         }
         case HIRType::TAG_Infer: {
             BUG(sp, StringView("type_needs_drop_glue on _"));
-            return false;
         }
         case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
@@ -1921,7 +1918,6 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
                                 }
                             }
                             BUG(sp, StringView("Unknown field `") << name << StringView("` on ") << ty);
-                            break;
                         }
                         case HIRStructData::TAG_Tuple: {
                             auto& se = pbe->data.as_Tuple();
@@ -1931,7 +1927,6 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
                         }
                         case HIRStructData::TAG_Unit: {
                             BUG(sp, StringView("Getting field from unit-like struct - ") << ty);
-                            break;
                         }
                     }
                     break;
@@ -1945,7 +1940,6 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
                         }
                     }
                     BUG(sp, StringView("Unknown field `") << name << StringView("` on ") << ty);
-                    break;
                 }
             }
             break;
@@ -1984,7 +1978,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             switch (v.tag()) {
                 case HIRValueItem::TAG_Import: {
                     BUG(sp, StringView("Module Import"));
-                    break;
                 }
                 case HIRValueItem::TAG_Constant: {
                     outParams.ppMethod = &pe.params;
@@ -2001,7 +1994,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 case HIRValueItem::TAG_StructConstant: {
                     outParams.ppImpl = &pe.params;
                     TODO(sp, StringView("StructConstant - ") << p);
-                    break;
                 }
                 case HIRValueItem::TAG_StructConstructor: {
                     auto& ve = v.as_StructConstructor();
@@ -2238,7 +2230,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("UfcsUnknown - ") << p);
-            break;
         }
     }
     UNREACHABLE();

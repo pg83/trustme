@@ -1235,7 +1235,6 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                 switch (item.tag()) {
                     case HIRTypeItem::TAG_TypeAlias: {
                         BUG(sp, StringView("TypeAlias encountered after `Resolve Type Aliases` - ") << ty);
-                        break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
                         auto& e3 = item.as_ExternType();
@@ -1319,7 +1318,6 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     }
                     default: {
                         ERROR(sp, E0000, StringView("Unexpected item type returned for ") << pe.path << StringView(" - ") << item.tagStr());
-                        break;
                     }
                 }
                 break;
@@ -3599,6 +3597,10 @@ auto UfcsVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     auto _ = resolve_.setItemGenerics(item.params);
     DeclaredTypeGuard declaredTypes(*this);
     HIRVisitor::visitFunction(p, item);
+    if (item.receiver == HIRFunction::Receiver::Custom) {
+        ASSERT_BUG(Span(), item.receiverType, StringView("Custom receiver without a receiver type"));
+        *item.receiverType = this->visitType(*item.receiverType);
+    }
     if (visitExprs_ && item.code) {
         recordLocalItemOwners(p, item.code);
     }
@@ -4667,7 +4669,6 @@ auto UfcsVisitor::visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPa
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 BUG(sp, StringView("UfcsUnknown still in pattern value - ") << pat);
-                break;
             }
             case HIRPathData::TAG_UfcsInherent: {
                 auto& pe = ve.path.data.as_UfcsInherent();

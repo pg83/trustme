@@ -441,7 +441,6 @@ auto Mangler::fmtPath(const HIRPath& p) -> void {
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(Span(), StringView("Non-encodable path ") << p);
-            break;
         }
     }
 }

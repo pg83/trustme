@@ -1186,7 +1186,6 @@ static void evaluateTranslationImplAndTraitParams(const Span& sp, const WireBoar
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("UfcsUnknown at translation: ") << path);
-            break;
         }
     }
 }
@@ -1212,7 +1211,6 @@ static void evaluateTranslationItemParams(const Span& sp, const WireBoard& wb, c
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("UfcsUnknown at translation: ") << path);
-            break;
         }
     }
 }
@@ -1393,7 +1391,6 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("UfcsUnknown - ") << pathMono);
-            break;
         }
     }
 
@@ -1429,7 +1426,6 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     switch (itemRef.tag()) {
         case EntPtr::TAG_NotFound: {
             BUG(sp, StringView("Item not found for ") << pathMono);
-            break;
         }
         case EntPtr::TAG_AutoGenerate: {
             if (pathAlreadyEnumerated(state, pathMono)) {
@@ -2577,15 +2573,12 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     }
                     case HIRType::TAG_TraitObject: {
                         TODO(sp, StringView("Drop glue for TraitObject? ") << ty);
-                        break;
                     }
                     case HIRType::TAG_Slice: {
                         TODO(sp, StringView("Drop glue for Slice? ") << ty);
-                        break;
                     }
                     case HIRType::TAG_NodeType: {
                         TODO(sp, StringView("Drop glue for NodeType? ") << ty);
-                        break;
                     }
                     case HIRType::TAG_Diverge: {
                         builder.terminateBlock(MIRTerminator::make_Unreachable({}));
@@ -3661,18 +3654,15 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
                 break;
             case HIRType::TAG_Infer: {
                 BUG(sp, StringView("`_` type hit in enumeration"));
-                break;
             }
             case HIRType::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 switch (te.binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
                         BUG(sp, StringView("Unbound type hit in enumeration - ") << ty);
-                        break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
                         BUG(sp, StringView("Opaque type hit in enumeration - ") << ty);
-                        break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
                         break;
@@ -3728,18 +3718,15 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
         switch ((*ty).tag()) {
             case HIRType::TAG_Infer: {
                 BUG(sp, StringView("`_` type hit in enumeration"));
-                break;
             }
             case HIRType::TAG_Generic: {
                 BUG(sp, StringView("Generic type hit in enumeration - ") << ty);
-                break;
             }
             case HIRType::TAG_ErasedType: {
                 break;
             }
             case HIRType::TAG_NodeType: {
                 BUG(sp, StringView("NodeType type hit in enumeration - ") << ty);
-                break;
             }
             case HIRType::TAG_Diverge: {
                 break;
@@ -3752,11 +3739,9 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
                 switch (te.binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
                         BUG(sp, StringView("Unbound type hit in enumeration - ") << ty);
-                        break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
                         BUG(sp, StringView("Opaque type hit in enumeration - ") << ty);
-                        break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
                         break;

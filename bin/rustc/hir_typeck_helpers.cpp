@@ -1170,7 +1170,6 @@ void HMTypeInferrence::printType(ZeroCopyOutput& os, const HIRType* tr, LList<co
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 BUG(Span(), StringView("UfcsUnknown"));
-                break;
             }
         }
     };
@@ -2135,7 +2134,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
                 BUG(Span(), StringView("UfcsUnknown"));
-                break;
             }
         }
         UNREACHABLE();
@@ -2295,7 +2293,6 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
                     BUG(Span(), StringView("UfcsUnknown"));
-                    break;
                 }
             }
             UNREACHABLE();
@@ -3609,7 +3606,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
                     switch (str.data.tag()) {
                         case HIRStructData::TAG_Unit: {
                             BUG(sp, StringView("Unsized unit struct in Pointee lookup - ") << type);
-                            break;
                         }
                         case HIRStructData::TAG_Tuple: {
                             auto& se = str.data.as_Tuple();
@@ -9301,7 +9297,6 @@ const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, con
         switch (e->binding.tag()) {
             case HIRTypePathBinding::TAG_Unbound: {
                 TODO(sp, StringView("Handle TypePathBinding::Unbound - ") << ty);
-                break;
             }
             case HIRTypePathBinding::TAG_Opaque: {
                 break;

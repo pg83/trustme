@@ -4544,7 +4544,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     case HIRPatternData::TAG_Ref: {
                         BUG(sp, StringView("Match ergonomics - & pattern"));
-                        break;
                     }
                     case HIRPatternData::TAG_Tuple: {
                         auto& e = pattern.data.as_Tuple();
@@ -4577,7 +4576,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             case HIRPatternPathBinding::TAG_Unbound: {
                                 auto& _ = e.binding.as_Unbound();
                                 BUG(sp, StringView(""));
-                                break;
                             }
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
@@ -4612,7 +4610,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             case HIRPatternPathBinding::TAG_Unbound: {
                                 auto& _ = e.binding.as_Unbound();
                                 BUG(sp, StringView(""));
-                                break;
                             }
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
@@ -4647,7 +4644,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             case HIRPatternPathBinding::TAG_Unbound: {
                                 auto& _ = e.binding.as_Unbound();
                                 BUG(sp, StringView(""));
-                                break;
                             }
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
@@ -5095,11 +5091,9 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Ref: {
                         BUG(sp, StringView("Match ergonomics - `&` pattern already handled"));
-                        break;
                     }
                     case HIRPatternData::TAG_Or: {
                         BUG(sp, StringView("Match ergonomics - `|` pattern already handled"));
-                        break;
                     }
                     case HIRPatternData::TAG_Any: {
                         rv = true;
@@ -5280,7 +5274,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                             case HIRPatternPathBinding::TAG_Union: {
                                 BUG(sp, StringView("PathValue used for union"));
-                                break;
                             }
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
@@ -7157,7 +7150,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
                         BUG(sp, StringView("Unresolved constant path ") << path);
-                        break;
                     }
                 }
 
@@ -7233,7 +7225,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
                         BUG(node.span(), StringView("Unresolved call path ") << node.path);
-                        break;
                     }
                 }
 
@@ -7259,11 +7250,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 switch (node.methodPath.data.tag()) {
                     case HIRPathData::TAG_Generic: {
                         BUG(node.span(), StringView(""));
-                        break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
                         BUG(node.span(), StringView(""));
-                        break;
                     }
                     case HIRPathData::TAG_UfcsKnown: {
                         auto& pe = node.methodPath.data.as_UfcsKnown();
@@ -7432,7 +7421,6 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         case HIRPathData::TAG_UfcsUnknown: {
             // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.
             TODO(sp, StringView("Hit a UfcsUnknown (") << path << StringView(") - Is this an error?"));
-            break;
         }
         case HIRPathData::TAG_UfcsInherent: {
             if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr, selectedInherentImpl)) {
@@ -7959,7 +7947,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
         }
         case HIRType::TAG_Diverge: {
             BUG(sp, StringView(""));
-            break;
         }
         case HIRType::TAG_Primitive: {
             auto& e = (*tgtTy).as_Primitive();
@@ -7986,7 +7973,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
         }
         case HIRType::TAG_Generic: {
             TODO(sp, StringView("_Cast Generic"));
-            break;
         }
         case HIRType::TAG_TraitObject: {
             bad_cast(sp, srcTy, tgtTy, "dst");
@@ -8217,11 +8203,9 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
         }
         case HIRType::TAG_NamedFunction: {
             BUG(sp, StringView("Attempting to cast to a named-function type - impossible"));
-            break;
         }
         case HIRType::TAG_NodeType: {
             BUG(sp, StringView("Attempting to cast to a magic type type - impossible"));
-            break;
         }
     }
 }
@@ -8822,7 +8806,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         DEBUG(StringView("possible_methods = ") << possibleMethods);
         if (possibleMethods.empty()) {
             ERROR(sp, E0000, StringView("No applicable methods for {") << this->context.ivars.fmtType(ty) << StringView("}.") << node.method);
-            DEBUG(StringView("possible_methods = ") << possibleMethods);
         }
         BUG_ASSERT(!possibleMethods.empty());
         if (possibleMethods.size() != 1) {
@@ -9367,7 +9350,6 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
             }
             case HIRTypePathBinding::TAG_ExternType: {
                 BUG(sp, StringView("ExternType in StructLiteral"));
-                break;
             }
             case HIRTypePathBinding::TAG_Struct: {
                 const auto e = tuMatch.as_Struct();
@@ -9536,7 +9518,6 @@ auto ExprVisitorApply::checkTypeResolvedPath(const Span& sp, HIRPath& path, cons
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             ERROR(sp, E0000, StringView("UfcsUnknown ") << path << StringView(" left in ") << topType);
-            break;
         }
     }
 }
@@ -11675,7 +11656,6 @@ auto ExprVisitorEnum::addIvarsPath(const Span& sp, HIRPath& path) -> void {
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             TODO(sp, StringView("Hit a UfcsUnknown (") << path << StringView(") - Is this an error?"));
-            break;
         }
         case HIRPath::Data::TAG_UfcsInherent: {
             auto& e = path.data.as_UfcsInherent();
@@ -11759,11 +11739,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
             }
             case HIRTypePathBinding::TAG_Union: {
                 BUG(sp, StringView("TupleVariant pointing to a union"));
-                break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
                 BUG(sp, StringView("TupleVariant pointing to a extern type"));
-                break;
             }
         }
     }
@@ -12487,7 +12465,6 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("Encountered UfcsUnknown"));
-            break;
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e = node.path.data.as_UfcsKnown();
@@ -12517,7 +12494,6 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
                 case HIRTraitValueItem::TAG_Static: {
                     auto& ie = it->second.as_Static();
                     TODO(sp, StringView("Monomorpise associated static type - ") << ie.type);
-                    break;
                 }
                 case HIRTraitValueItem::TAG_Function: {
                     auto& ie = it->second.as_Function();
@@ -12669,7 +12645,6 @@ auto ExprVisitorEnum::visitPath(const Span& sp, HIRPath& path) -> void {
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             TODO(sp, StringView("Hit a UfcsUnknown (") << path << StringView(") - Is this an error?"));
-            break;
         }
         case HIRPath::Data::TAG_UfcsInherent: {
             auto& e = path.data.as_UfcsInherent();

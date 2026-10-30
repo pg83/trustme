@@ -1025,7 +1025,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             switch (v.tag()) {
                 case ASTPatternValue::TAG_Invalid: {
                     BUG(sp, StringView("Encountered Invalid value in Pattern"));
-                    break;
                 }
                 case ASTPatternValue::TAG_Integer: {
                     auto& e = v.as_Integer();
@@ -1055,11 +1054,9 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
     switch (pat.data().tag()) {
         case ASTPatternData::TAG_MaybeBind: {
             BUG(pat.span(), StringView("Encountered MaybeBind pattern"));
-            break;
         }
         case ASTPatternData::TAG_Macro: {
             BUG(pat.span(), StringView("Encountered Macro pattern"));
-            break;
         }
         case ASTPatternData::TAG_Any: {
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
@@ -1069,7 +1066,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         }
         case ASTPatternData::TAG_Guard: {
             BUG(pat.span(), StringView("Guard pattern was not lifted before HIR lowering"));
-            break;
         }
         case ASTPatternData::TAG_Box: {
             auto& e = pat.data().as_Box();
@@ -1577,23 +1573,18 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             BUG(sp, StringView("BUG: Encountered Invalid path in LowerHIR_Path"));
-            break;
         }
         case ASTPathClass::TAG_Local: {
             TODO(sp, StringView("What to do with Path::Class::Local in LowerHIR_Path - ") << path);
-            break;
         }
         case ASTPathClass::TAG_Relative: {
             BUG(sp, StringView("Encountered `Relative` path in LowerHIR_Path - ") << path);
-            break;
         }
         case ASTPathClass::TAG_Self: {
             BUG(sp, StringView("Encountered `Self` path in LowerHIR_Path - ") << path);
-            break;
         }
         case ASTPathClass::TAG_Super: {
             BUG(sp, StringView("Encountered `Super` path in LowerHIR_Path - ") << path);
-            break;
         }
         case ASTPathClass::TAG_Absolute: {
             return HIRPath(LowerHIRGenericPath(sp, path, pc));
@@ -1632,7 +1623,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
             BUG(ty->span(), StringView("TypeData::None"));
-            break;
         }
         case TypeData::TAG_Bang: {
             return crate->types.diverge();
@@ -1645,7 +1635,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Macro: {
             BUG(ty->span(), StringView("TypeData::Macro"));
-            break;
         }
         case TypeData::TAG_Primitive: {
             auto& e = ty->data.as_Primitive();
@@ -1792,19 +1781,15 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                     }
                     case ASTPatternValue::TAG_Invalid: {
                         BUG(sp, StringView("invalid pattern endpoint"));
-                        break;
                     }
                     case ASTPatternValue::TAG_Float: {
                         ERROR(sp, E0000, StringView("float pattern types are not supported"));
-                        break;
                     }
                     case ASTPatternValue::TAG_String: {
                         ERROR(sp, E0000, StringView("string pattern types are not supported"));
-                        break;
                     }
                     case ASTPatternValue::TAG_ByteString: {
                         ERROR(sp, E0000, StringView("byte-string pattern types are not supported"));
-                        break;
                     }
                 }
                 UNREACHABLE();
@@ -4738,11 +4723,9 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeBinOp& v) -> void {
     switch (v.type) {
         case ASTExprNodeBinOp::RANGE: {
             BUG(v.span(), StringView("Unexpected RANGE binop"));
-            break;
         }
         case ASTExprNodeBinOp::RANGE_INC: {
             BUG(v.span(), StringView("Unexpected RANGE_INC binop"));
-            break;
         }
         case ASTExprNodeBinOp::PLACE_IN:
             rv.reset(ctx.crate->pool->make<HIRExprNodeEmplace>(v.span(), HIRExprNodeEmplace::Type::Placer, lower(v.left), lower(v.right)));

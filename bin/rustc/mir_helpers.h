@@ -316,7 +316,6 @@ public:
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 BUG(Span(), stl::StringView("Unresolved UFCS path in MIR visitor: ") << path);
-                break;
             }
         }
     }

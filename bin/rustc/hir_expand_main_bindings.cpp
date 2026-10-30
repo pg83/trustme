@@ -6143,7 +6143,6 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeBorrow& node) -> void {
         auto& valuePtr = *valuePtrPtr;
         if (auto* innerNode = cast<HIRExprNodeDeref>(valuePtrPtr->get())) {
             BUG(node.span(), StringView("Unexpected inner being deref?"));
-            return;
         }
         auto usage = valuePtr->usage;
 

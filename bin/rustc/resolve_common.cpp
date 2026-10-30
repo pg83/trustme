@@ -150,15 +150,12 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             BUG(sp, StringView("Invalid path class encountered"));
-            break;
         }
         case ASTPathClass::TAG_Local: {
             BUG(sp, StringView("Local path class in use statement"));
-            break;
         }
         case ASTPathClass::TAG_UFCS: {
             BUG(sp, StringView("UFCS path class in use statement"));
-            break;
         }
         case ASTPathClass::TAG_Relative: {
             auto& e = path.cls.as_Relative();
@@ -677,7 +674,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                 switch (mac.ref.tag()) {
                     case MacroRef::TAG_None: {
                         BUG(sp, StringView("macro_imports_res had a None entry"));
-                        break;
                     }
                     case MacroRef::TAG_MacroRules: {
                         const auto me = mac.ref.as_MacroRules();
@@ -841,7 +837,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                         }
                         case ResolveModuleRef::TAG_ImplicitPrelude: {
                             TODO(sp, StringView("ImplicitPrelude? ") << e.path);
-                            break;
                         }
                         case ResolveModuleRef::TAG_Ast: {
                             const auto sm = srcMod.as_Ast();
@@ -971,7 +966,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                     case HIRMacroItem::TAG_Import: {
                         auto& me = (*mi).as_Import();
                         BUG(sp, StringView("Recursive macro import in HIR: ") << it->second->ent.as_Import().path << StringView(" pointed to ") << me.path);
-                        break;
                     }
                     case HIRMacroItem::TAG_MacroRules: {
                         auto& me = (*mi).as_MacroRules();

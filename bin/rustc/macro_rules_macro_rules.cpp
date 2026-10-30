@@ -2045,7 +2045,6 @@ namespace {
                     DEBUG(i << StringView(" ExpectTok(") << *e << StringView(") == ") << tok);
                     if (tok != *e) {
                         ERROR(sp, E0000, StringView("Expected token ") << *e << StringView(" in macro arm, got ") << tok);
-                        break;
                     }
                 } else if (const auto* e = pat.opt_ExpectPat()) {
                     DEBUG(i << StringView(" ExpectPat(") << e->type << StringView(" => $") << e->idx << StringView(")"));
@@ -3113,7 +3112,6 @@ const SimplePatEnt& MacroPatternStream::next() {
                 return curEnt;
             case SimplePatEnt::TAG_End: {
                 BUG(Span(), StringView("Unexpected End"));
-                break;
             }
             case SimplePatEnt::TAG_Jump: {
                 auto& e = curEnt.as_Jump();
