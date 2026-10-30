@@ -758,7 +758,8 @@ HIRTraitPath HIRTraitPath::clone() const {
 }
 
 bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
-    if (!path.equalsIgnoringRegions(x.path) || typeBounds.size() != x.typeBounds.size() || traitBounds.size() != x.traitBounds.size()) {
+    BUG_ASSERT(traitBounds.empty() && x.traitBounds.empty());
+    if (!path.equalsIgnoringRegions(x.path) || typeBounds.size() != x.typeBounds.size()) {
         return false;
     }
 
@@ -772,20 +773,6 @@ bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
         }
     }
 
-    auto lhsBound = traitBounds.begin();
-    auto rhsBound = x.traitBounds.begin();
-    for (; lhsBound != traitBounds.end(); ++lhsBound, ++rhsBound) {
-        const auto& lhs = lhsBound->second;
-        const auto& rhs = rhsBound->second;
-        if (lhsBound->first != rhsBound->first || !lhs.sourceTrait.equalsIgnoringRegions(rhs.sourceTrait) || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams) || lhs.traits.size() != rhs.traits.size()) {
-            return false;
-        }
-        for (size_t i = 0; i < lhs.traits.size(); i++) {
-            if (!lhs.traits[i].equalsIgnoringRegions(rhs.traits[i])) {
-                return false;
-            }
-        }
-    }
     return true;
 }
 
