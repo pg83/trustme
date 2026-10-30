@@ -7238,18 +7238,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         // TODO: Detect nonzero within
     } else if (name == "assert_mem_uninitialized_valid") {
         // TODO: Detect nonzero or enum within
-    } else if (name == "const_eval_select") {
-        const auto& argTyTuple = params.types.at(0)->as_Tuple();
-        const auto& arg = e.args.at(0).as_LValue();
-        const auto& fcnPath = *e.args.at(2).as_Constant().as_Function().p;
-
-        std::vector<MIRParam> args;
-        args.reserve(argTyTuple.length());
-        for (size_t i = 0; i < argTyTuple.length(); i++) {
-            args.push_back(MIRLValue::newField(arg.clone(), i));
-        }
-        auto pseudoTerm = MIRTerminator::Data_Call{e.retBlock, MIRUnwindAction::make_Continue({}), e.retVal.clone(), MIRCallTarget::make_Path(fcnPath.clone()), std::move(args)};
-        emitTermCall(localMirRes, pseudoTerm, 1);
     } else if (name == "type_id") {
         /* `type_id` returns a `TypeId`, and its value is produced by constant
            evaluation (as in rustc's `write_type_id`); `TypeId::of` wraps the
