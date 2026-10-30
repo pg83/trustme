@@ -4841,12 +4841,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
         case HIRType::TAG_NodeType: {
             auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
             MIR_ASSERT(state, repr, StringView("No representation for ") << ty);
-            for (const auto& field : repr->fields) {
-                auto size = sizeOfOrBug(field.ty);
-                if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
-                    return true;
-                }
-            }
+            MIR_ASSERT(state, repr->fields.empty(), StringView("Unlowered closure has fields in its representation: ") << ty);
             return false;
         }
         case HIRType::TAG_Generic: {

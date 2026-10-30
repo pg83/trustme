@@ -10122,10 +10122,6 @@ auto ConstExprEquate::equateNode(const HIRConstGenericUnevaluated& leftValue, co
         context.equateTypesInner(sp, l->dstType, r->dstType);
         return equateNode(leftValue, *l->value, rightValue, *r->value);
     }
-    if (const auto* l = cast<const HIRExprNodeConstBlock>(&left)) {
-        const auto* r = cast<const HIRExprNodeConstBlock>(&right);
-        return r && equateNode(leftValue, *l->inner, rightValue, *r->inner);
-    }
     if (const auto* l = cast<const HIRExprNodeCallPath>(&left)) {
         const auto* r = cast<const HIRExprNodeCallPath>(&right);
         if (!r || !equatePath(leftValue, l->path, rightValue, r->path) || l->args.size() != r->args.size()) {
