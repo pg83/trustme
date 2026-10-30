@@ -1565,7 +1565,6 @@ namespace {
 
         TypeRepr rv;
         switch (enm.data.tag()) {
-            break;
             case HIREnumClass::TAG_Data: {
                 auto& e = enm.data.as_Data();
                 if (enm.isCRepr) {
@@ -1959,7 +1958,6 @@ namespace {
                     }
                 }
             } break;
-                break;
             case HIREnumClass::TAG_Value: {
                 auto& e = enm.data.as_Value();
                 // TODO: If the values aren't yet populated, force const evaluation

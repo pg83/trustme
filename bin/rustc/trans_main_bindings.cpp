@@ -603,7 +603,6 @@ static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVis
     TRACE_FUNCTION_F(getPath.get() << StringView(" : ") << vi.tagStr() << StringView(" is_visible=") << isVisible);
     const Span sp;
     switch (vi.tag()) {
-        break;
         case HIRValueItem::TAG_Import: {
             auto& e = vi.as_Import();
             // TODO: If visible, ensure that target is visited.
@@ -617,13 +616,10 @@ static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVis
                 }
             }
         } break;
-            break;
         case HIRValueItem::TAG_StructConstant: {
         } break;
-            break;
         case HIRValueItem::TAG_StructConstructor: {
         } break;
-            break;
         case HIRValueItem::TAG_Constant: {
             const auto& e = *vi.as_Constant();
             if (isVisible) {
@@ -635,7 +631,6 @@ static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVis
                 TransEnumerateFillFromLiteral(state, e.valueRes, TransParams(state.crate.types));
             }
         } break;
-            break;
         case HIRValueItem::TAG_Static: {
             const auto& e = *vi.as_Static();
             if (e.linkage.name != "" || e.linkage.section != "") {
@@ -659,7 +654,6 @@ static void TransEnumerateValItem(EnumState& state, HIRValueItem& vi, bool isVis
                 state.rv.roots.push_back(getPath.get());
             }
         } break;
-            break;
         case HIRValueItem::TAG_Function: {
             auto& e = *vi.as_Function();
             bool isInline = false;

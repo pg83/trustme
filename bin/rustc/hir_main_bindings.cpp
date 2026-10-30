@@ -3933,36 +3933,30 @@ auto HirSerialiser::serialise(const ::Token& tok) -> void {
 auto HirSerialiser::serialise(const TokenData& td) -> void {
     out.writeTag(td.tag());
     switch (td.tag()) {
-        break;
         case TokenData::TAG_None: {
         } break;
-            break;
         case TokenData::TAG_String: {
             auto& e = td.as_String();
             out.writeString(e.value);
             out.writeString(e.spelling);
         } break;
-            break;
         case TokenData::TAG_Ident: {
             auto& e = td.as_Ident();
             serialise(e.hygiene);
             out.writeString(e.name);
         } break;
-            break;
         case TokenData::TAG_Integer: {
             auto& e = td.as_Integer();
             out.writeTag(e.datatype);
             out.writeU128(e.intval);
             out.writeString(e.spelling);
         } break;
-            break;
         case TokenData::TAG_Float: {
             auto& e = td.as_Float();
             out.writeTag(e.datatype);
             out.writeFloatValue(e.floatval);
             out.writeString(e.spelling);
         } break;
-            break;
         case TokenData::TAG_Fragment: {
             BUG_ASSERT(!"Serialising interpolated macro fragment - should have been handled in HIR lowering");
         }

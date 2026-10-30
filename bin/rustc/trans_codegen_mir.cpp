@@ -408,7 +408,6 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
     };
 
     switch (repr->variants.tag()) {
-        break;
         case TypeReprVariantMode::TAG_None: {
         } break;
         case TypeReprVariantMode::TAG_Single: {
@@ -593,37 +592,30 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
             localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
             DEBUG(stmt);
             switch (stmt.tag()) {
-                break;
                 case MIRStatement::TAG_Assign: {
                     auto& se = stmt.as_Assign();
                     of << StringView("ASSIGN ") << fmt(se.dst) << StringView(" = ");
                     switch (se.src.tag()) {
-                        break;
                         case MIRRValue::TAG_Use: {
                             auto& e = se.src.as_Use();
                             of << StringView("=") << fmt(e);
                         } break;
-                            break;
                         case MIRRValue::TAG_Constant: {
                             auto& e = se.src.as_Constant();
                             of << fmt(e);
                         } break;
-                            break;
                         case MIRRValue::TAG_SizedArray: {
                             auto& e = se.src.as_SizedArray();
                             of << StringView("[") << fmt(e.val) << StringView("; ") << e.count << StringView("]");
                         } break;
-                            break;
                         case MIRRValue::TAG_Borrow: {
                             auto& e = se.src.as_Borrow();
                             of << borrowPrefix(e.type) << fmt(e.val);
                         } break;
-                            break;
                         case MIRRValue::TAG_Cast: {
                             auto& e = se.src.as_Cast();
                             of << StringView("CAST ") << fmt(e.val) << StringView(" as ") << fmt(e.type);
                         } break;
-                            break;
                         case MIRRValue::TAG_BinOp: {
                             auto& e = se.src.as_BinOp();
                             of << StringView("BINOP ") << fmt(e.valL) << StringView(" ");
@@ -679,7 +671,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << StringView(" ") << fmt(e.valR);
                         } break;
-                            break;
                         case MIRRValue::TAG_UniOp: {
                             auto& e = se.src.as_UniOp();
                             of << StringView("UNIOP ");
@@ -693,27 +684,22 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << StringView(" ") << fmt(e.val);
                         } break;
-                            break;
                         case MIRRValue::TAG_DstMeta: {
                             auto& e = se.src.as_DstMeta();
                             of << StringView("DSTMETA ") << fmt(e.val);
                         } break;
-                            break;
                         case MIRRValue::TAG_DstPtr: {
                             auto& e = se.src.as_DstPtr();
                             of << StringView("DSTPTR ") << fmt(e.val);
                         } break;
-                            break;
                         case MIRRValue::TAG_MakeDst: {
                             auto& e = se.src.as_MakeDst();
                             of << StringView("MAKEDST ") << fmt(e.ptrVal) << StringView(", ") << fmt(e.metaVal);
                         } break;
-                            break;
                         case MIRRValue::TAG_UnionVariant: {
                             auto& e = se.src.as_UnionVariant();
                             of << StringView("UNION ") << fmt(e.path) << StringView(" ") << e.index << StringView(" ") << fmt(e.val);
                         } break;
-                            break;
                         case MIRRValue::TAG_EnumVariant: {
                             auto& e = se.src.as_EnumVariant();
                             of << StringView("ENUM ") << fmt(e.path) << StringView(" ") << e.index << StringView(" { ");
@@ -722,7 +708,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << StringView("}");
                         } break;
-                            break;
                         case MIRRValue::TAG_Array: {
                             auto& e = se.src.as_Array();
                             of << StringView("[ ");
@@ -731,7 +716,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << StringView("]");
                         } break;
-                            break;
                         case MIRRValue::TAG_Tuple: {
                             auto& e = se.src.as_Tuple();
                             of << StringView("( ");
@@ -740,7 +724,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << StringView(")");
                         } break;
-                            break;
                         case MIRRValue::TAG_Struct: {
                             auto& e = se.src.as_Struct();
                             of << StringView("{ ");
@@ -751,7 +734,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                         } break;
                     }
                 } break;
-                    break;
                 case MIRStatement::TAG_SetDropFlag: {
                     auto& se = stmt.as_SetDropFlag();
                     of << StringView("SETFLAG df") << se.idx << StringView(" = ");
@@ -761,17 +743,14 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                         of << (se.newVal ? "" : "!") << StringView("df") << se.other;
                     }
                 } break;
-                    break;
                 case MIRStatement::TAG_LoadDropFlag: {
                     auto& se = stmt.as_LoadDropFlag();
                     of << StringView("LOADFLAG df") << se.idx << StringView(" = ") << fmt(se.slot) << StringView(" BIT ") << se.bitIndex;
                 } break;
-                    break;
                 case MIRStatement::TAG_SaveDropFlag: {
                     auto& se = stmt.as_SaveDropFlag();
                     of << StringView("SAVEFLAG ") << fmt(se.slot) << StringView(" BIT ") << se.bitIndex << StringView(" = df") << se.idx;
                 } break;
-                    break;
                 case MIRStatement::TAG_Asm: {
                     auto& se = stmt.as_Asm();
                     of << StringView("ASM (");
@@ -789,7 +768,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     }
                     of << StringView(":") << se.flags << StringView("]");
                 } break;
-                    break;
                 case MIRStatement::TAG_Asm2: {
                     auto& se = stmt.as_Asm2();
                     of << StringView("ASM2 (");
@@ -836,7 +814,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     se.options.fmt(of);
                     of << StringView(")");
                 } break;
-                    break;
             }
             of << StringView(";\n");
         }
@@ -846,13 +823,11 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
         DEBUG(StringView("- ") << term);
         of << StringView("\t\t");
         switch (term.tag()) {
-            break;
             case MIRTerminator::TAG_Incomplete: {
                 auto& _e = term.as_Incomplete();
                 (void)_e;
             }
                 of << StringView("INCOMPLETE\n");
-                break;
                 break;
             case MIRTerminator::TAG_Return: {
                 auto& _e = term.as_Return();
@@ -860,13 +835,11 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
             }
                 of << StringView("RETURN\n");
                 break;
-                break;
             case MIRTerminator::TAG_UnwindResume: {
                 auto& _e = term.as_UnwindResume();
                 (void)_e;
             }
                 of << StringView("UNWIND RESUME\n");
-                break;
                 break;
             case MIRTerminator::TAG_UnwindTerminate: {
                 auto& _e = term.as_UnwindTerminate();
@@ -874,13 +847,11 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
             }
                 of << StringView("UNWIND TERMINATE\n");
                 break;
-                break;
             case MIRTerminator::TAG_Unreachable: {
                 auto& _e = term.as_Unreachable();
                 (void)_e;
             }
                 of << StringView("UNREACHABLE\n");
-                break;
                 break;
             case MIRTerminator::TAG_Asm2: {
                 auto& e = term.as_Asm2();
@@ -899,29 +870,24 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 }
                 of << StringView("\n");
             } break;
-                break;
             case MIRTerminator::TAG_Goto: {
                 auto& e = term.as_Goto();
                 of << StringView("GOTO ") << e << StringView("\n");
             } break;
-                break;
             case MIRTerminator::TAG_If: {
                 auto& e = term.as_If();
                 of << StringView("IF ") << fmt(e.cond) << StringView(" goto ") << e.bbTrue << StringView(" else ") << e.bbFalse << StringView("\n");
             } break;
-                break;
             case MIRTerminator::TAG_Switch: {
                 auto& e = term.as_Switch();
                 of << StringView("SWITCH ") << fmt(e.val) << StringView(" { ");
                 of << e.targets;
                 of << StringView(" }\n");
             } break;
-                break;
             case MIRTerminator::TAG_SwitchValue: {
                 auto& e = term.as_SwitchValue();
                 of << StringView("SWITCHVALUE ") << fmt(e.val) << StringView(" { ");
                 switch (e.values.tag()) {
-                    break;
                     case MIRSwitchValues::TAG_String: {
                         auto& ve = e.values.as_String();
                         for (size_t i = 0; i < ve.size(); i++) {
@@ -949,7 +915,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 of << StringView("_ = ") << e.defTarget;
                 of << StringView(" }\n");
             } break;
-                break;
             case MIRTerminator::TAG_Drop: {
                 auto& e = term.as_Drop();
                 of << StringView("DROP ") << fmt(e.slot);
@@ -961,7 +926,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 }
                 of << StringView(" goto ") << e.target << StringView(" unwind ") << e.unwind.tagStr() << StringView("\n");
             } break;
-                break;
             case MIRTerminator::TAG_Call: {
                 auto& e = term.as_Call();
                 if (const auto* fP = e.fcn.opt_Intrinsic()) {
@@ -974,7 +938,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 }
                 of << StringView("CALL ") << fmt(e.retVal) << StringView(" = ");
                 switch (e.fcn.tag()) {
-                    break;
                     case MIRCallTarget::TAG_Intrinsic: {
                         auto& f = e.fcn.as_Intrinsic();
                         of << StringView("\"") << f.name << StringView("\"");
@@ -986,12 +949,10 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             of << StringView(">");
                         }
                     } break;
-                        break;
                     case MIRCallTarget::TAG_Value: {
                         auto& f = e.fcn.as_Value();
                         of << StringView("(") << fmt(f) << StringView(")");
                     } break;
-                        break;
                     case MIRCallTarget::TAG_Path: {
                         auto& f = e.fcn.as_Path();
                         of << fmt(f);
@@ -1003,7 +964,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 }
                 of << StringView(") goto ") << e.retBlock << StringView(" unwind ") << e.unwind.tagStr() << StringView("\n");
             } break;
-                break;
             case MIRTerminator::TAG_TailCall: {
                 auto& e = term.as_TailCall();
                 of << StringView("TAILCALL ");
@@ -1207,11 +1167,9 @@ void stl::output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLVal
         bool prevWasNum = wasNum;
         wasNum = false;
         switch (w.tag()) {
-            break;
             case MIRLValue::Wrapper::TAG_Deref: {
                 os << StringView(")");
             } break;
-                break;
             case MIRLValue::Wrapper::TAG_Field: {
                 decltype(w.as_Field()) fieldIndex = w.as_Field();
                 if (prevWasNum) {
@@ -1220,12 +1178,10 @@ void stl::output<ZeroCopyOutput, Fmt<MIRLValue>>(ZeroCopyOutput& os, Fmt<MIRLVal
                 os << StringView(".") << fieldIndex;
                 wasNum = true;
             } break;
-                break;
             case MIRLValue::Wrapper::TAG_Index: {
                 decltype(w.as_Index()) e = w.as_Index();
                 os << StringView("[") << fmt(x.wb, MIRLValue::newLocal(e)) << StringView("]");
             } break;
-                break;
             case MIRLValue::Wrapper::TAG_Downcast: {
                 decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
                 os << StringView("@") << variantIndex;
@@ -1248,17 +1204,14 @@ void stl::output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRCo
 
     const auto& e = x.e;
     switch (e.tag()) {
-        break;
         case MIRConstant::TAG_Int: {
             auto& v = e.as_Int();
             os << (v.v < 0 ? "" : "+") << v.v << StringView(" ") << v.t;
         } break;
-            break;
         case MIRConstant::TAG_Uint: {
             auto& v = e.as_Uint();
             os << v.v << StringView(" ") << v.t;
         } break;
-            break;
         case MIRConstant::TAG_Float: {
             auto& v = e.as_Float();
             // TODO: Infinity/nan/...
@@ -1269,7 +1222,6 @@ void stl::output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRCo
             os << StringView(sign ? "-" : "+") << StringView("0x1.") << formatHex(frac, 52 / 4) << StringView("p") << (exp - 1023);
             os << StringView(" ") << v.t;
         } break;
-            break;
         case MIRConstant::TAG_ItemAddr: {
             auto& v = e.as_ItemAddr();
             os << StringView("ADDROF ") << fmt(x.wb, *v);
@@ -1277,7 +1229,6 @@ void stl::output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRCo
                 os << StringView(" + ") << v.offset;
             }
         } break;
-            break;
         case MIRConstant::TAG_Const: {
             BUG(Span(), StringView("Stray named constant in MIR after cleanup - ") << e);
         } break;
@@ -1291,17 +1242,14 @@ void stl::output<ZeroCopyOutput, Fmt<MIRConstant>>(ZeroCopyOutput& os, Fmt<MIRCo
 template <>
 void stl::output<ZeroCopyOutput, Fmt<MIRParam>>(ZeroCopyOutput& os, Fmt<MIRParam> x) {
     switch (x.e.tag()) {
-        break;
         case MIRParam::TAG_LValue: {
             auto& e = x.e.as_LValue();
             os << fmt(x.wb, e);
         } break;
-            break;
         case MIRParam::TAG_Borrow: {
             auto& e = x.e.as_Borrow();
             os << borrowPrefix(e.type) << fmt(x.wb, e.val);
         } break;
-            break;
         case MIRParam::TAG_Constant: {
             auto& e = x.e.as_Constant();
             os << fmt(x.wb, e);

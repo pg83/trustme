@@ -1081,7 +1081,6 @@ bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRType* type) const 
 
 bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) const {
     switch ((*ty).tag()) {
-        break;
         default:
             return false;
         case HIRType::TAG_Diverge: {

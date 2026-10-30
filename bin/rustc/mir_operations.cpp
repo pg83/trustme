@@ -5277,7 +5277,6 @@ namespace {
             }
             optVisitMirLvaluesMut(bb.terminator, editLval);
             switch (bb.terminator.tag()) {
-                break;
                 case MIRTerminator::TAG_Switch: {
                     auto& te = bb.terminator.as_Switch();
                     if (te.validFlag != ~0u) {
@@ -5293,7 +5292,6 @@ namespace {
                         changed = true;
                     }
                 } break;
-                    break;
                 case MIRTerminator::TAG_If: {
                     auto& te = bb.terminator.as_If();
                     auto it = knownValues.find(te.cond);
@@ -5309,7 +5307,6 @@ namespace {
                         }
                     }
                 } break;
-                    break;
                 case MIRTerminator::TAG_Call: {
                     auto& te = bb.terminator.as_Call();
                     for (auto& a : te.args) {

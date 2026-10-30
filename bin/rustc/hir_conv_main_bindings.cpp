@@ -904,10 +904,26 @@ void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
         expandList(implGroup.second.generic);
     }
 
+    struct Headers final: UfcsVisitor {
+        explicit Headers(const WireBoard& wb)
+            : UfcsVisitor(wb, false)
+        {
+        }
+
+        void visitConstgeneric(HIRConstGeneric&) override {
+        }
+    } headers(wb);
+    /* Resolving a constant's UFCS receiver can evaluate its array length and
+       typecheck a call before the regular visitor reaches that callee's header. */
+    headers.visitCrate(crate);
+    const auto invalidateRelations = [&]() {
+        wb.solverCache->overlaps.index.visit([](auto& head) { head = nullptr; });
+        wb.solverCache->specializations.index.visit([](auto& head) { head = nullptr; });
+    };
+    invalidateRelations();
     UfcsVisitor exp{wb, false};
     exp.visitCrate(crate);
-    wb.solverCache->overlaps.index.visit([](auto& head) { head = nullptr; });
-    wb.solverCache->specializations.index.visit([](auto& head) { head = nullptr; });
+    invalidateRelations();
 }
 
 void ConvertHIRResolveUFCS(const WireBoard& wb, HIRCrate& crate) {

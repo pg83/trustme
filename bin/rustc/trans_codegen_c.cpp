@@ -4225,7 +4225,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             of << StringView(".DATA[") << (e.bitIndex / 8) << StringView("] &= ~(1 << ") << (e.bitIndex % 8) << StringView(");");
             of << StringView(" }\n");
         } break;
-            break;
         case MIRStatement::TAG_LoadDropFlag: {
             auto& e = stmt.as_LoadDropFlag();
             of << indent << StringView("df") << e.idx << StringView(" = ((");
@@ -7654,11 +7653,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(localMirRes, repr, StringView("No repr for enum ") << ty);
             switch (repr->variants.tag()) {
-                break;
                 case TypeReprVariantMode::TAG_None: {
                     of << StringView("0");
                 } break;
-                    break;
                 case TypeReprVariantMode::TAG_Single: {
                     of << repr->variants.as_Single().index;
                 } break;
@@ -7669,7 +7666,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     of << StringView(")");
                     emitEnumPath(repr, ve.field);
                 } break;
-                    break;
                 case TypeReprVariantMode::TAG_Linear: {
                     auto& ve = repr->variants.as_Linear();
                     const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, ve.field.index, ve.field.subFields);
@@ -7704,7 +7700,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                         emitTag();
                     }
                 } break;
-                    break;
                 case TypeReprVariantMode::TAG_NonZero: {
                     auto& ve = repr->variants.as_NonZero();
                     of << StringView("(*");

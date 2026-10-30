@@ -4850,7 +4850,6 @@ namespace {
                     }
                     case ASTItem::TAG_Use: {
                         break;
-                        break;
                     }
                     case ASTItem::TAG_Impl: {
                         BUG(span, StringView("Hit Impl in use resolution"));
