@@ -57,86 +57,68 @@ FmtEscaped::FmtEscaped(const std::string& s)
 
 template <>
 void stl::output<ZeroCopyOutput, FmtEscaped>(ZeroCopyOutput& os, FmtEscaped x) {
+    bool afterHexEscape = false;
+    const auto emitByte = [&](u8 byte) {
+        os << StringView("\\x") << formatHex(byte, 2, true);
+        afterHexEscape = true;
+    };
     for (auto s = x.begin(); s != x.end(); s++) {
-        switch (*s) {
+        const auto lead = static_cast<u8>(*s);
+        if (afterHexEscape && (('0' <= lead && lead <= '9') || ('a' <= lead && lead <= 'f') || ('A' <= lead && lead <= 'F'))) {
+            emitByte(lead);
+            continue;
+        }
+        afterHexEscape = false;
+        switch (lead) {
             case '\0':
-                os << StringView("\\0");
-                break;
+                if (s + 1 != x.end() && '0' <= s[1] && s[1] <= '7') {
+                    emitByte(lead);
+                } else {
+                    os << StringView("\\0");
+                }
+                continue;
             case '\n':
                 os << StringView("\\n");
-                break;
+                continue;
             case '\\':
                 os << StringView("\\\\");
-                break;
+                continue;
             case '"':
                 os << StringView("\\\"");
-                break;
+                continue;
             default:
-                u8 v = *s;
-                if (v < 0x80) {
-                    if (v < ' ' || v > 0x7F) {
-                        os << StringView("\\u{");
-                        os << formatHex(v);
-                        os << StringView("}");
-                    } else {
-                        os << static_cast<char>(v);
-                    }
-                } else if (v < 0xC0)
-                    ;
-                else if (v < 0xE0) {
-                    u32 val = (u32)(v & 0x1F) << 6;
-                    v = (u8) * ++s;
-                    if ((v & 0xC0) != 0x80) {
-                        s--;
-                        continue;
-                    }
-                    val |= (u32)(v & 0x3F) << 0;
-                    os << StringView("\\u{");
-                    os << formatHex(val);
-                    os << StringView("}");
-                } else if (v < 0xF0) {
-                    u32 val = (u32)(v & 0x0F) << 12;
-                    v = (u8) * ++s;
-                    if ((v & 0xC0) != 0x80) {
-                        s--;
-                        continue;
-                    }
-                    val |= (u32)(v & 0x3F) << 6;
-                    v = (u8) * ++s;
-                    if ((v & 0xC0) != 0x80) {
-                        s--;
-                        continue;
-                    }
-                    val |= (u32)(v & 0x3F) << 0;
-                    os << StringView("\\u{");
-                    os << formatHex(val);
-                    os << StringView("}");
-                } else if (v < 0xF8) {
-                    u32 val = (u32)(v & 0x07) << 18;
-                    v = (u8) * ++s;
-                    if ((v & 0xC0) != 0x80) {
-                        s--;
-                        continue;
-                    }
-                    val |= (u32)(v & 0x3F) << 12;
-                    v = (u8) * ++s;
-                    if ((v & 0xC0) != 0x80) {
-                        s--;
-                        continue;
-                    }
-                    val |= (u32)(v & 0x3F) << 6;
-                    v = (u8) * ++s;
-                    if ((v & 0xC0) != 0x80) {
-                        s--;
-                        continue;
-                    }
-                    val |= (u32)(v & 0x3F) << 0;
-                    os << StringView("\\u{");
-                    os << formatHex(val);
-                    os << StringView("}");
-                }
                 break;
         }
+        if (lead < 0x80) {
+            if (lead < ' ' || lead == 0x7F) {
+                os << StringView("\\u{") << formatHex(lead) << StringView("}");
+            } else {
+                os << static_cast<char>(lead);
+            }
+            continue;
+        }
+        const size_t width = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
+        if (width == 0 || static_cast<size_t>(x.end() - s) < width) {
+            emitByte(lead);
+            continue;
+        }
+        u32 value = lead & (0x7F >> width);
+        bool valid = true;
+        for (size_t i = 1; i < width; i++) {
+            const auto byte = static_cast<u8>(s[i]);
+            if ((byte & 0xC0) != 0x80) {
+                valid = false;
+                break;
+            }
+            value = (value << 6) | (byte & 0x3F);
+        }
+        const u32 minimum = width == 2 ? 0x80 : width == 3 ? 0x800 : 0x10000;
+        if (!valid || value < minimum || value > 0x10FFFF || (0xD800 <= value && value <= 0xDFFF)) {
+            emitByte(lead);
+            continue;
+        }
+        os << StringView("\\u{") << formatHex(value) << StringView("}");
+        s += width - 1;
     }
 }
 

@@ -4,6 +4,7 @@
 #include "mir_mir.h"
 #include "hir_visitor.h"
 #include "mir_operations.h"
+#include "parse_lex.h"
 
 using namespace stl;
 
@@ -388,7 +389,14 @@ auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRLValue& lval) -> void {
 }
 
 auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRConstant& e) -> void {
-    os << e;
+    if (e.is_Bytes()) {
+        const auto& bytes = e.as_Bytes();
+        printEscapedLiteral(os, TOK_BYTESTRING, bytes.data(), bytes.length());
+    } else if (e.is_StaticString()) {
+        os << StringView("\"") << FmtEscaped(e.as_StaticString()) << StringView("\"");
+    } else {
+        os << e;
+    }
 }
 
 auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRParam& param) -> void {

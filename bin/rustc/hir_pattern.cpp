@@ -1,6 +1,7 @@
 #include "hir_pattern.h"
 
 #include "output.h"
+#include "parse_lex.h"
 
 #include <std/lib/vector.h>
 
@@ -486,7 +487,12 @@ void stl::output<ZeroCopyOutput, HIRPattern>(ZeroCopyOutput& os, const HIRPatter
         }
         case HIRPatternData::TAG_Value: {
             auto& e = x.data.as_Value();
-            os << e.val;
+            if (e.val.is_ByteString()) {
+                const auto& bytes = e.val.as_ByteString().v;
+                printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(bytes.data()), bytes.size());
+            } else {
+                os << e.val;
+            }
             break;
         }
         case HIRPatternData::TAG_Range: {

@@ -528,7 +528,7 @@ void RustPrinter::printPatternValue(const ASTPattern::Value& v) {
             os << StringView("\"") << FmtEscaped(v.as_String()) << StringView("\"");
             break;
         case ASTPattern::Value::TAG_ByteString:
-            os << StringView("b\"") << FmtEscaped(v.as_ByteString().v) << StringView("\"");
+            printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(v.as_ByteString().v.data()), v.as_ByteString().v.size());
             break;
         case ASTPattern::Value::TAG_Named:
             os << v.as_Named();
@@ -1596,7 +1596,7 @@ auto RustPrinter::visit(ASTExprNodeString& n) -> void {
 
 auto RustPrinter::visit(ASTExprNodeByteString& n) -> void {
     exprRoot = false;
-    os << StringView("b\"") << FmtEscaped(n.value) << StringView("\"");
+    printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(n.value.data()), n.value.size());
 }
 
 auto RustPrinter::visit(ASTExprNodeCString& n) -> void {
