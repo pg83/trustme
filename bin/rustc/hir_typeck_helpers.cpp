@@ -5760,33 +5760,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
     return false;
 }
 
-const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRType* self, const RcString& name, HIRGenericPath& outPath) const {
-    TRACE_FUNCTION_FR(StringView("trait_path=") << traitPath << StringView(",name=") << name, outPath);
-    const HIRFunction* rv = nullptr;
-
-    if (traitContainsMethodInner(traitPtr, name, rv)) {
-        BUG_ASSERT(rv);
-        outPath = traitPath.clone();
-        return rv;
-    }
-
-    /* Declaration navigation only.  allParentTraits is the flattened HIR
-     * supertrait closure, so consumers that merely need the declaring path can
-     * avoid reimplementing its substitutions here.  Candidate assembly must
-     * enumerate every matching declaration itself: this traversal order is
-     * not a method-selection rule. */
-    auto monomorphCb = MonomorphStatePtr(crate.types, self, &traitPath.params, nullptr);
-    for (const auto& st : traitPtr.allParentTraits) {
-        if (traitContainsMethodInner(*st.traitPtr, name, rv)) {
-            BUG_ASSERT(rv);
-            outPath.path = st.path.path;
-            outPath.params = monomorphCb.monomorphPathParams(sp, st.path.params, false);
-            return rv;
-        }
-    }
-    return nullptr;
-}
-
 bool TraitResolution::traitContainsType(const Span& sp, const HIRType* selfType, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const {
     TRACE_FUNCTION_FR(traitPath << StringView(" has ") << name, outPath);
     auto it = traitPtr.types.find(name);

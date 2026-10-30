@@ -142,12 +142,6 @@ struct Context {
     HIRGenericParams emptyGenericParams;
     stl::Vector<bool> ivarsSized;
 
-    struct IvarDefault {
-        unsigned index;
-        const HIRType* type;
-    };
-    ThinVector<IvarDefault> ivarDefaults;
-
     struct TaitEntry {
         HIRPathParams params;
         const HIRType* ourType;
@@ -220,8 +214,6 @@ struct Context {
     }
 
     void selectWellFormed(const Span& sp, const HIRType* type);
-
-    void addIvarDefault(const Span& sp, unsigned int ivarIndex, const HIRType* type);
 
     void handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type, bool isIrrefutable = false);
     void addBindingInner(const Span& sp, const HIRPatternBinding& pb, const HIRType* type);

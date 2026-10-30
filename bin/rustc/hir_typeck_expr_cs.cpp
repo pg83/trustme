@@ -5872,21 +5872,6 @@ void Context::requireSized(const Span& sp, const HIRType* ty_) {
     }
 }
 
-void Context::addIvarDefault(const Span& sp, unsigned int ivarIndex, const HIRType* type) {
-    const auto* resolved = ivars.getType(ivarIndex);
-    const auto* infer = resolved->opt_Infer();
-    if (!infer || infer->index == ~0u) {
-        DEBUG(StringView("IVar ") << ivarIndex << StringView(" is already ") << resolved);
-        return;
-    }
-    const auto duplicate = std::any_of(ivarDefaults.begin(), ivarDefaults.end(), [&](const auto& existing) {
-        return existing.index == infer->index && existing.type == type;
-    });
-    if (!duplicate) {
-        ivarDefaults.push_back({infer->index, type});
-    }
-}
-
 void Context::addVar(const Span& sp, unsigned int index, const RcString& name, const HIRType* type) {
     DEBUG(StringView("(") << index << StringView(" ") << name << StringView(" : ") << type << StringView(")"));
     BUG_ASSERT(index != ~0u);
@@ -6957,43 +6942,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             context.fallbackUnresolvedRpitType(rootPtr->span());
         }
 
-        /* Generic and numeric defaults are language fallbacks, so they run
+        /* Numeric defaults are language fallbacks, so they run
          * only after every final coercion effect and identity propagation has
          * had a chance to constrain the ivar through pending obligations. */
-        if (!context.ivars.peekChanged()) {
-            DEBUG(StringView("- Applying generic defaults"));
-            for (size_t i = 0; i < context.ivarDefaults.size(); i++) {
-                const auto* tyL = context.ivars.getType(context.ivarDefaults[i].index);
-                const auto* infer = tyL->opt_Infer();
-                if (!infer || infer->index == ~0u) {
-                    continue;
-                }
-                bool firstForClass = true;
-                const HIRType* uniqueDefault = nullptr;
-                bool defaultsDisagree = false;
-                for (size_t j = 0; j < context.ivarDefaults.size(); j++) {
-                    const auto* member = context.ivars.getType(context.ivarDefaults[j].index);
-                    const auto* memberInfer = member->opt_Infer();
-                    if (!memberInfer || memberInfer->index != infer->index) {
-                        continue;
-                    }
-                    if (j < i) {
-                        firstForClass = false;
-                        break;
-                    }
-                    const auto* candidate = context.getType(context.ivarDefaults[j].type);
-                    if (uniqueDefault && !context.ivars.typesEqual(uniqueDefault, candidate)) {
-                        defaultsDisagree = true;
-                    } else {
-                        uniqueDefault = candidate;
-                    }
-                }
-                if (firstForClass && uniqueDefault && !defaultsDisagree) {
-                    context.equateTypes(rootPtr->span(), tyL, uniqueDefault);
-                }
-            }
-        }
-
         if (!context.ivars.peekChanged()) {
             bool appliedDefault = false;
             for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
@@ -8826,25 +8777,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         this->context.applySolverResponse(sp, selectedMethod.effects, &node.args);
         auto& adBorrow = selectedMethod.borrow;
         auto& fcnPath = selectedMethod.path;
-
-        if (context.currentTraitImpl) {
-            const auto* selected = fcnPath.data.opt_UfcsKnown();
-            const auto* currentTrait = context.resolve.currentTraitPath();
-            const auto* selectedSelf = selected ? context.ivars.getType(selected->type) : nullptr;
-            const auto* currentSelf = context.ivars.getType(context.currentTraitImpl->type);
-            if (selected && currentTrait && (selectedSelf == currentSelf || selectedSelf->equalsIgnoringRegions(currentSelf))) {
-                HIRGenericPath exactTrait;
-                const auto& trait = context.crate.getTraitByPath(sp, currentTrait->path);
-                if (context.resolve.traitContainsMethod(sp, *currentTrait, trait, selectedSelf, node.method, exactTrait) && selected->trait.path == exactTrait.path && selected->trait.params.types.size() == exactTrait.params.types.size()) {
-                    for (unsigned int i = 0; i < selected->trait.params.types.size(); i++) {
-                        const auto* selectedParam = context.ivars.getType(selected->trait.params.types[i]);
-                        if (const auto* infer = selectedParam->opt_Infer()) {
-                            context.addIvarDefault(sp, infer->index, exactTrait.params.types[i]);
-                        }
-                    }
-                }
-            }
-        }
 
         node.methodPath = mv$(fcnPath);
 
