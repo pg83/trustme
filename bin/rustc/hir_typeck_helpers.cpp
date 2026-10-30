@@ -14081,6 +14081,25 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     }
     const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : traitImpl ? &candidate->impl.implParams : &associatedProjection->params;
 
+    /* Alias expansion can introduce associated trait bounds after AST lowering
+       flattened the original predicates. Keep derived predicates in the resolver's
+       pool because candidate normalization can replay them after this call. */
+    ThinVector<const HIRGenericBound*> effectiveBounds;
+    const auto appendBound = [&](auto&& append, const HIRGenericBound& bound) -> void {
+        effectiveBounds.push_back(&bound);
+        const auto& traitBound = bound.as_TraitBound();
+        for (const auto& associated : traitBound.trait.traitBounds) {
+            const auto* projection = crate.types.path(HIRPath(traitBound.type, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+            for (const auto& required : associated.second.traits) {
+                const auto* predicate = resolve_.eatCachePool.mutPtr()->make<HIRGenericBound>(HIRGenericBound::make_TraitBound({projection, required.clone(), required.constness, traitBound.isTrivial}));
+                append(append, *predicate);
+            }
+        }
+    };
+    for (const auto& bound : implParamsDef->bounds) {
+        appendBound(appendBound, bound);
+    }
+
     /* Upstream proves an impl candidate's where-clauses against the arguments its own
        trait reference was unified with, never against the goal as written: the new
        solver's `consider_impl_candidate` (rustc_next_trait_solver, solve/trait_goals.rs)
@@ -14167,7 +14186,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         HIRPathParams params;
         HIRTraitPath::assocListT associated;
     };
-    ThinVector<PreparedTraitBound> preparedBounds(implParamsDef->bounds.size());
+    ThinVector<PreparedTraitBound> preparedBounds(effectiveBounds.size());
     bool preparedBoundsStale = false;
     size_t boundsRuledOut = 0;
     const auto boundIsOpen = [&](const HIRType* type) {
@@ -14176,14 +14195,11 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             return inner->is_Infer() || (generic && (generic->group() == GENERICPlaceholder || generic->isSolverExistential()));
         });
     };
-    for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
-        const auto& bound = implParamsDef->bounds[boundIndex];
-        const auto* traitBound = bound.opt_TraitBound();
-        if (!traitBound) {
-            continue;
-        }
+    for (size_t boundIndex = 0; boundIndex < effectiveBounds.size(); boundIndex++) {
+        const auto& bound = *effectiveBounds[boundIndex];
+        const auto& traitBound = bound.as_TraitBound();
         auto& prepared = preparedBounds[boundIndex];
-        prepared.type = monomorphTraitBound(*traitBound, prepared.trait, prepared.params, prepared.associated);
+        prepared.type = monomorphTraitBound(traitBound, prepared.trait, prepared.params, prepared.associated);
         const bool forwarded = forwardProjectionRequirements(prepared.type, prepared.trait, prepared.params, prepared.associated);
         prepared.ready = true;
         if (prepared.associated.empty()) {
@@ -14257,8 +14273,8 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
     }
 
-    for (size_t boundIndex = 0; boundIndex < implParamsDef->bounds.size(); boundIndex++) {
-        const auto& bound = implParamsDef->bounds[boundIndex];
+    for (size_t boundIndex = 0; boundIndex < effectiveBounds.size(); boundIndex++) {
+        const auto& bound = *effectiveBounds[boundIndex];
         if (const auto* be = bound.opt_TraitBound()) {
             const HIRType* nestedType;
             HIRSimplePath nestedTrait;

@@ -2412,7 +2412,7 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
     HIRTraitAlias ta;
     ta.params = LowerHIRGenericParams(f.params, &traitReqiresSized);
     for (const auto& t : f.traits) {
-        ta.traits.push_back(LowerHIRTraitPath(t.sp, *t.ent.path, t.ent.hrbs, false, t.ent.constness));
+        ta.traits.push_back(LowerHIRTraitPath(t.sp, *t.ent.path, t.ent.hrbs, /*allow_bounds=*/true, t.ent.constness));
     }
 
     return ta;
@@ -4185,7 +4185,7 @@ auto TraitObjectLowering::expandAstAlias(HIRTraitPath aliasPath, const ASTPathBi
         auto params = ConvertHIRCompleteAliasParams(ctx_.crate->types, span_, paramsDef, aliasPath.path, false);
         auto monomorph = MonomorphStatePtr(ctx_.crate->types, nullptr, &params, nullptr);
         for (const auto& bound : binding.trait_->traits) {
-            auto trait = ctx_.LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness);
+            auto trait = ctx_.LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, /*allow_bounds=*/true, bound.ent.constness);
             addAstPath(monomorph.monomorphTraitpath(span_, trait, false), bound.ent.path->bindings.type.binding);
         }
     } else {

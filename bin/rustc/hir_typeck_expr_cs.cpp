@@ -7032,6 +7032,10 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 ERROR(rule.span, E0000, StringView("type annotations needed: cannot infer `") << context.ivars.fmtType(rule.leftTy) << StringView(" = <") << context.ivars.fmtType(rule.implTy) << StringView(" as ") << rule.trait << context.ivars.fmt(rule.params) << StringView(">::") << rule.name << StringView("`"));
             }
         }
+        ExprVisitorApply unresolvedTypes{context};
+        for (const auto* node : context.toVisit) {
+            (void)unresolvedTypes.checkTypeResolvedTop(node->span(), node->resType);
+        }
         for (const auto& coercionP : context.linkCoerce) {
             const auto& coercion = *coercionP;
             const auto& sp = coercion.span();
