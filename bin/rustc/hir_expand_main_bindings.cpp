@@ -2219,35 +2219,23 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeConstParam& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeStructLiteral& node) -> void {
-    const auto& sp = node.span();
     const auto& tyPath = node.realPath;
     if (node.baseValue) {
         bool isMoved = false;
         const auto& tpb = viewed(node.baseValue->resType)->as_Path().binding;
         const tStructFields* fieldsPtr;
         tStructFields tupleFields;
-        if (tpb.is_Enum()) {
-            const auto& enm = *tpb.as_Enum();
-            auto idx = enm.findVariant(tyPath.path.components().back());
-            ASSERT_BUG(sp, idx != SIZE_MAX, StringView(""));
-            const auto& varTy = enm.data.as_Data()[idx].type;
-            const auto& str = *varTy->as_Path().binding.as_Struct();
-            ASSERT_BUG(sp, str.data.is_Named(), StringView(""));
-            fieldsPtr = &str.data.as_Named();
-        } else if (tpb.is_Union()) {
-            fieldsPtr = &tpb.as_Union()->variants;
-        } else {
-            const auto& str = *tpb.as_Struct();
-            if (str.data.is_Tuple()) {
-                const auto& tuple = str.data.as_Tuple();
-                for (size_t i = 0; i < tuple.size(); i++) {
-                    tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});
-                }
-                fieldsPtr = &tupleFields;
-            } else {
-                ASSERT_BUG(sp, str.data.is_Named(), StringView(""));
-                fieldsPtr = &str.data.as_Named();
+        ASSERT_BUG(node.span(), tpb.is_Struct(), StringView("Record update base is not a struct"));
+        const auto& str = *tpb.as_Struct();
+        if (str.data.is_Tuple()) {
+            const auto& tuple = str.data.as_Tuple();
+            for (size_t i = 0; i < tuple.size(); i++) {
+                tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});
             }
+            fieldsPtr = &tupleFields;
+        } else {
+            ASSERT_BUG(node.span(), str.data.is_Named(), StringView(""));
+            fieldsPtr = &str.data.as_Named();
         }
         const auto& fields = *fieldsPtr;
 

@@ -518,13 +518,7 @@ namespace {
                     next.types.push_back(types.infer());
                 }
             } else if (next.types.size() > paramDefs.types.size()) {
-                while (next.types.size() > paramDefs.types.size() && next.values.size() < paramDefs.values.size() && next.types.back()->is_Infer()) {
-                    next.types.pop_back();
-                    next.values.push_back(HIRConstGeneric::make_Infer({}));
-                }
-                if (next.types.size() > paramDefs.types.size()) {
-                    ERROR(sp, E0000, StringView("Too many type parameters passed to ") << path);
-                }
+                ERROR(sp, E0000, StringView("Too many type parameters passed to ") << path);
             }
             if (next.types.size() < paramDefs.types.size()) {
                 while (next.types.size() < paramDefs.types.size()) {

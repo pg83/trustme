@@ -11858,6 +11858,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                 ASSERT_BUG(sp, idx != SIZE_MAX, StringView(""));
                 ASSERT_BUG(sp, enm.data.is_Data(), StringView(""));
                 const auto& var = enm.data.as_Data()[idx];
+                if (node.baseValue) {
+                    ERROR(sp, E0000, StringView("Enum literals cannot have a base value"));
+                }
                 if (var.type == this->context.crate.types.unit()) {
                     ASSERT_BUG(node.span(), node.values.size() == 0, StringView("Values provided for unit-like variant"));
                     ASSERT_BUG(node.span(), !node.baseValue, StringView("Values provided for unit-like variant"));
@@ -11865,9 +11868,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                 }
                 const auto& str = *var.type->as_Path().binding.as_Struct();
                 if (const auto* tuple = str.data.opt_Tuple()) {
-                    if (node.baseValue) {
-                        ERROR(sp, E0000, StringView("Tuple enum literals cannot have a base value"));
-                    }
                     for (size_t i = 0; i < tuple->size(); i++) {
                         tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), (*tuple)[i].publicity, (*tuple)[i].ent, nullptr});
                     }
