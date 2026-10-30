@@ -1868,7 +1868,6 @@ Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
             ORD(te.abi, xe.abi);
             ORD(te.argTypes, xe.argTypes);
             return ::ord(te.rettype, xe.rettype);
-            break;
         }
         case HIRType::TAG_NodeType: {
             auto& te = (*this).as_NodeType();
@@ -2837,7 +2836,9 @@ void stl::output<ZeroCopyOutput, HIRTypePattern>(ZeroCopyOutput& out, const HIRT
 
 template <>
 void stl::output<ZeroCopyOutput, HIRTypeDataInfer>(ZeroCopyOutput& out, HIRTypeDataInfer value) {
-    out << StringView("HIRTypeDataInfer(index = ") << value.index << StringView(", tyClass = ") << value.tyClass << StringView(")");
+    /* Raw type dumps are reached through item paths, whose placeholders are unclassified. */
+    BUG_ASSERT(value.tyClass == HIRInferClass::None);
+    out << StringView("HIRTypeDataInfer(index = ") << value.index << StringView(", tyClass = None)");
 }
 
 template <>
