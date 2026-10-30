@@ -3857,30 +3857,8 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
         return useMonomorph ? pp.maybeMonomorph(resolve, ty) : ty;
     };
     DEBUG(fcn.returnType);
-    bool hasErased = visitTyWith(fcn.returnType, [&](const auto& x) {
-        return x->is_ErasedType();
-    });
-    if (hasErased || monomorphiseTypeNeeded(fcn.returnType)) {
-        const HIRType* retTy;
-        if (hasErased) {
-            retTy = cloneTyWith(crate.types, sp, fcn.returnType, [&](const auto* x) -> const HIRType* {
-                if (const auto* te = x->opt_ErasedType()) {
-                    if (const auto* e = te->inner.opt_Fcn()) {
-                        BUG_ASSERT(e->index < fcn.code.erasedTypes.length());
-                        return fcn.code.erasedTypes[e->index];
-                    }
-                }
-                return nullptr;
-            });
-            DEBUG(retTy);
-            retTy = pp.monomorph(tv.resolve, retTy);
-        } else {
-            retTy = pp.monomorph(tv.resolve, fcn.returnType);
-        }
-        tv.visitType(retTy);
-    } else {
-        tv.visitType(fcn.returnType);
-    }
+    ASSERT_BUG(sp, !fcn.returnType->hasErasedType(), StringView("Unrevealed function return type in translation: ") << fcn.returnType);
+    tv.visitType(monomorph(fcn.returnType));
     for (const auto& arg : fcn.args) {
         DEBUG(arg.second);
         tv.visitType(monomorph(arg.second));

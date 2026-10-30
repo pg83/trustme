@@ -6772,26 +6772,8 @@ auto CodeGeneratorC::emitReifiedFunctionName(const HIRPath& path, bool preserveT
 }
 
 auto CodeGeneratorC::monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params) -> const HIRType* {
-    bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
-        return x->is_ErasedType();
-    });
-
-    if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
-        if (hasErased) {
-            auto result = cloneTyWith(crate.types, sp, item.returnType, [&](const auto* x) -> const HIRType* {
-                if (const auto* te = x->opt_ErasedType()) {
-                    if (const auto* e = te->inner.opt_Fcn()) {
-                        BUG_ASSERT(e->index < item.code.erasedTypes.length());
-                        return item.code.erasedTypes[e->index];
-                    }
-                }
-                return nullptr;
-            });
-            result = params.monomorphType(Span(), result);
-            return resolve_.expandAssociatedTypes(Span(), result);
-        } else {
-            return resolve_.expandAssociatedTypes(Span(), params.monomorphType(Span(), item.returnType));
-        }
+    if (monomorphiseTypeNeeded(item.returnType)) {
+        return resolve_.expandAssociatedTypes(Span(), params.monomorphType(Span(), item.returnType));
     } else {
         return item.returnType;
     }
