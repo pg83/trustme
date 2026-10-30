@@ -1856,7 +1856,11 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             } else {
                 lowerPattern(*e.pattern);
             }
-            return crate->types.intern(HIRType::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
+            const auto* inner = LowerHIRType(e.inner);
+            if (!pattern.alternatives.empty() && inner->hasTypeInfer()) {
+                ERROR(ty->span(), E0000, StringView("the placeholder `_` is not allowed in pattern range base types"));
+            }
+            return crate->types.intern(HIRType::make_Pattern({inner, mv$(pattern)}));
         }
         case TypeData::TAG_Path: {
             auto& e = ty->data.as_Path();

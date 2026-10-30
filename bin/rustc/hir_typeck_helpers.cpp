@@ -1371,7 +1371,7 @@ void HMTypeInferrence::printPathparams(ZeroCopyOutput& os, const HIRPathParams& 
 }
 
 const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
-    if (!type->hasTypeInfer()) {
+    if (!(type->flags & (HIRType::HAS_TYPE_INFER | HIRType::HAS_DEFERRED_CONST))) {
         return type;
     }
     if (std::find(expandStack.begin(), expandStack.end(), type) != expandStack.end()) {
@@ -11000,15 +11000,7 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        const auto& leftData = leftPath.data.as_UfcsUnknown();
-                        const auto& rightData = rightPath.data.as_UfcsUnknown();
-                        if (leftData.item != rightData.item) {
-                            responseMismatch = true;
-                            return;
-                        }
-                        self(leftData.type, rightData.type);
-                        unifyParams(leftData.params, rightData.params);
-                        break;
+                        BUG(span(), StringView("Opaque function origin is not resolved: ") << leftPath);
                     }
                 }
             };
