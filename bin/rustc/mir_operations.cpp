@@ -323,11 +323,7 @@ namespace {
         TRACE_FUNCTION_F(ty << StringView(" <= ") << lit);
         switch ((*ty).tag()) {
             default:
-                if (path == HIRGenericPath()) {
-                    MIR_TODO(state, StringView("Literal of type ") << ty << StringView(" - ") << lit);
-                }
-                DEBUG(StringView("Unknown type ") << ty << StringView(", but a path was provided - Return ItemAddr ") << path);
-                return MIRConstant::make_ItemAddr(box$(path));
+                MIR_BUG(state, StringView("Unexpected materialized literal type ") << ty << StringView(" - ") << lit);
             case HIRType::TAG_Tuple: {
                 auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
                 MIR_ASSERT(state, repr, StringView("No type repr, but encoded value available? ") << ty);

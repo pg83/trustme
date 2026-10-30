@@ -824,8 +824,9 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
             ASSERT_BUG(sp, e, StringView("get_const_type - ") << c);
             auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
             switch (v.tag()) {
+                case TypeckValuePtr::TAG_Constant:
                 case TypeckValuePtr::TAG_NotFound: {
-                    MIR_BUG(*this, StringView("get_const_type - ItemAddr points to unknown value - ") << c);
+                    MIR_BUG(*this, StringView("get_const_type - ItemAddr does not name an addressable item - ") << c);
                     break;
                 }
                 case TypeckValuePtr::TAG_NotYetKnown: {
@@ -841,18 +842,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                     }
                     MIR_BUG(*this, StringView("get_const_type - get_value returned NotYetKnown with signature_only=true"));
                     break;
-                }
-                case TypeckValuePtr::TAG_Constant: {
-                    auto& ve = v.as_Constant();
-                    const auto& ty = ve->type;
-                    const HIRType* rv;
-                    if (monomorphiseTypeNeeded(ty)) {
-                        rv = p.monomorphType(this->sp, ty);
-                        rv = resolve.expandAssociatedTypes(this->sp, rv);
-                    } else {
-                        rv = ty;
-                    }
-                    return crate.types.borrow(HIRBorrowType::Shared, rv);
                 }
                 case TypeckValuePtr::TAG_Static: {
                     auto& ve = v.as_Static();
