@@ -3571,6 +3571,7 @@ UfcsVisitor::UfcsVisitor(const WireBoard& wb, bool visitExprs)
 }
 
 auto UfcsVisitor::restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath) -> void {
+    resolve_.setBothGenericsRaw(state.implGenerics, state.itemGenerics);
     traits = state.traits;
     currentTraitPath_ = traitPath;
     currentType_ = state.currentSelfType;
