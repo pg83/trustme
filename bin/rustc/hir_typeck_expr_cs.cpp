@@ -2124,7 +2124,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
     enum class AssociatedCheckResult {
         Complete,
-        Retry,
         Stalled,
         Ambiguous,
     };
@@ -6372,7 +6371,8 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         context.currentOrder = rule.order;
         const auto result = checkAssociated(context, coercionIndex, rule, &cuts);
         context.currentOrder = 0;
-        rule.isAmbiguous = result == AssociatedCheckResult::Ambiguous;
+        /* A stalled query also needs an annotation if inference stops progressing. */
+        rule.isAmbiguous = result != AssociatedCheckResult::Complete;
 
         if (result == AssociatedCheckResult::Complete) {
             DEBUG(StringView("- Consumed associated type rule ") << i << StringView("/") << context.linkAssoc.size() << StringView(" - ") << rule);
@@ -6394,9 +6394,6 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
                 positionOf.popBack();
             }
         } else {
-            if (result == AssociatedCheckResult::Retry) {
-                rule.stalledOn.clear();
-            }
             context.storeAssociated(i, mv$(rule), indexedKey);
         }
 

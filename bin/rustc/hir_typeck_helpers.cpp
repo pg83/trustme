@@ -725,7 +725,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     SolverResponse monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations = true) const;
 
-    SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const;
+    SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer) const;
 
     static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated, const SolverGoalEnvironment* existentialEnvironment = nullptr, bool suppressAmbiguity = false, const OperatorKey& operatorKey = {});
 
@@ -10783,7 +10783,7 @@ auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& sourc
     return result;
 }
 
-auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const -> SolverSlotValues {
+auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const SolverImpl& response, const CanonicalizeTraitGoal& canonicalizer) const -> SolverSlotValues {
     SolverSlotValues result;
     if (canonicalizer.typeSlotCount() == 0 && canonicalizer.valueSlotCount() == 0) {
         return result;
@@ -10872,16 +10872,7 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
 
     const auto responseType = response.getImplType(crate.types);
     const auto responseParams = response.getTraitParams(crate.types);
-    if (goal.params.types.size() != responseParams.types.size() || goal.params.values.size() != responseParams.values.size()) {
-        ASSERT_BUG(span(), certainty == Certainty::Ambiguous, StringView("proven solver response has a different trait arity than its goal: goal=") << goal.params << StringView(" response=") << responseParams << StringView(" impl=") << response);
-        for (size_t i = 0; i < canonicalizer.typeSlotCount(); i++) {
-            result.types.push_back(canonicalizer.canonicalTypeSlot(i));
-        }
-        for (size_t i = 0; i < canonicalizer.valueSlotCount(); i++) {
-            result.values.push_back(canonicalizer.canonicalValueSlot(i));
-        }
-        return result;
-    }
+    ASSERT_BUG(span(), goal.params.types.size() == responseParams.types.size() && goal.params.values.size() == responseParams.values.size(), StringView("solver response has a different trait arity than its goal: goal=") << goal.params << StringView(" response=") << responseParams << StringView(" impl=") << response);
 
     Unifier unifier(span(), table, nullptr, {.bindRigidValues = true});
     bool responseMismatch = false;
@@ -15449,7 +15440,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         auto canonicalResponse = monomorphSolverResponse(guidedResponse, responseCanonicalizer);
                         const auto* canonicalApplicable = guidedApplicable ? monomorphSolverImpl(*guidedApplicable, responseCanonicalizer) : nullptr;
                         if (canonicalApplicable) {
-                            canonicalResponse.slots = extractSlotValues(responseGoal, *canonicalApplicable, responseCanonicalizer, canonicalResponse.certainty);
+                            canonicalResponse.slots = extractSlotValues(responseGoal, *canonicalApplicable, responseCanonicalizer);
                         }
                         InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, responseCanonicalizer.placeholderNames(), &responseCanonicalizer);
                         auto callerResponse = monomorphSolverResponse(canonicalResponse, instantiator);
@@ -15597,7 +15588,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     );
     const bool cacheEmptyAssembly = outermost && !hasCoercionGoals;
     const auto emptyAssemblyHash = cacheEmptyAssembly ? hashMix(goalHashWithEnvironment(goalHash(trait, canonical.params, canonical.type, nullptr), canonicalizer.alphaSolverEnvironment()), includeRootMagicCandidates) : 0;
-    Vector<std::pair<const Candidate*, Certainty>> distinctViable;
+    Vector<const Candidate*> distinctViable;
     auto deliverResponse = [&](const SolverResponse& response, const SolverImpl* applicable) {
         const auto visitResponse = [&](SolverResponse output, const SolverImpl* outputApplicable) {
             if (!outputApplicable) {
@@ -15919,7 +15910,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         SolverResponse solverResponse;
         solverResponse.certainty = certainty;
         solverResponse.winnowedBySpecialization = rootSpecializationWinnowed;
-        solverResponse.slots = extractSlotValues(canonical, canonicalResponse, canonicalizer, solverResponse.certainty);
+        solverResponse.slots = extractSlotValues(canonical, canonicalResponse, canonicalizer);
         const auto* canonicalApplicable = exposeImpl ? ownSolverImpl(monomorphCandidateImpl(canonicalResponse, MonomorphiserNop(crate.types))) : nullptr;
         if (distinctViable.empty()) {
             classifyOperatorImpl(solverResponse.operatorSummary, canonicalResponse);
@@ -15969,11 +15960,10 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 return infer && infer->isLit();
             });
             for (size_t i = 0; i < distinctViable.length(); i++) {
-                const auto* candidate = distinctViable[i].first;
-                const auto candidateCertainty = distinctViable[i].second;
+                const auto* candidate = distinctViable[i];
                 auto candidateImpl = monomorphCandidateImpl(candidate->impl, canonicalizer);
                 classifyOperatorImpl(solverResponse.operatorSummary, candidateImpl);
-                candidateSlots.push_back(extractSlotValues(canonical, candidateImpl, canonicalizer, candidateCertainty));
+                candidateSlots.push_back(extractSlotValues(canonical, candidateImpl, canonicalizer));
                 SolverResponse effects;
                 appendCandidateEffects(effects, candidate);
                 const HIRType* associatedOutput = nullptr;
@@ -15999,7 +15989,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                             considerInherited(source);
                         }
                         for (const auto& viable : distinctViable) {
-                            for (const Candidate* source = viable.first; source; source = source->specializationItemSource) {
+                            for (const Candidate* source = viable; source; source = source->specializationItemSource) {
                                 if (source != candidate) {
                                     considerInherited(source);
                                 }
@@ -17004,8 +16994,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
 
     for (auto* candidate : frame.viable) {
-        const auto candidateCertainty = candidate->headExact && !candidate->nestedAmbiguity ? Certainty::Proven : Certainty::Ambiguous;
-        distinctViable.pushBack({candidate, candidateCertainty});
+        distinctViable.pushBack(candidate);
     }
     auto ambiguous = SolverImpl(resolvedType, goalParams.clone(), HIRTraitPath::assocListT());
     const bool responseProven = sameResponse && std::any_of(frame.viable.begin(), frame.viable.end(), [](const Candidate* candidate) {
