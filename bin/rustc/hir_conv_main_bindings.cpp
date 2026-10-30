@@ -47,6 +47,7 @@ namespace {
         unsigned inExpr;
         bool inImplTraitBinding = false;
         const HIRType* selfType = nullptr;
+        const HIRGenericParams* nominalParams = nullptr;
         IntMap<const HIRType*> boundTypes;
         IntMap<unsigned int> erasedIndices;
         bool typeUsesContext = false;
@@ -1181,7 +1182,25 @@ auto BindVisitor::visitParams(HIRGenericParams& params) -> void {
         }
     }
 
-    HIRVisitor::visitParams(params);
+    const auto oldSelfType = selfType;
+    /* Nominal parameter defaults have no Self; fields and predicates do. */
+    if (nominalParams == &params) {
+        selfType = nullptr;
+    }
+    for (auto& type : params.types) {
+        type.defaultValue = visitType(type.defaultValue);
+    }
+    for (auto& value : params.values) {
+        value.type = visitType(value.type);
+        visitConstgeneric(value.defaultValue);
+    }
+    selfType = oldSelfType;
+    for (auto& bound : params.bounds) {
+        visitGenericBound(bound);
+    }
+    for (auto& type : mutRange(params.wellFormedTypes)) {
+        type = visitType(type);
+    }
 }
 
 auto BindVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> void {
@@ -1689,14 +1708,19 @@ auto BindVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
 auto BindVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
     auto _ = this->ms.setImplGenerics(item.params);
     const auto oldSelfType = selfType;
+    const auto oldNominalParams = nominalParams;
+    nominalParams = &item.params;
     selfType = crate.types.path(HIRGenericPath(p.getSimplePath(), item.params.makeNopParams(crate.types, 0)), &item);
     HIRVisitor::visitEnum(p, item);
     selfType = oldSelfType;
+    nominalParams = oldNominalParams;
 }
 
 auto BindVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
     auto _ = this->ms.setImplGenerics(item.params);
     const auto oldSelfType = selfType;
+    const auto oldNominalParams = nominalParams;
+    nominalParams = &item.params;
     auto path = p.getSimplePath();
     if (item.variantOfEnum != RcString()) {
         path.updateLastComponent(item.variantOfEnum);
@@ -1707,14 +1731,18 @@ auto BindVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
     }
     HIRVisitor::visitStruct(p, item);
     selfType = oldSelfType;
+    nominalParams = oldNominalParams;
 }
 
 auto BindVisitor::visitUnion(HIRItemPath p, HIRUnion& item) -> void {
     auto _ = this->ms.setImplGenerics(item.params);
     const auto oldSelfType = selfType;
+    const auto oldNominalParams = nominalParams;
+    nominalParams = &item.params;
     selfType = crate.types.path(HIRGenericPath(p.getSimplePath(), item.params.makeNopParams(crate.types, 0)), &item);
     HIRVisitor::visitUnion(p, item);
     selfType = oldSelfType;
+    nominalParams = oldNominalParams;
 }
 
 auto BindVisitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) -> void {
