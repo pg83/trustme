@@ -15073,7 +15073,7 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, cons
             return true;
         }
 
-        bool typeEquality(const HIRType* left, const HIRType* right) {
+        bool typeEquality(const HIRType* left, const HIRType* right) override {
             const auto* leftNormalized = probe.expandAssociatedTypes(sp, left);
             const auto* rightNormalized = probe.expandAssociatedTypes(sp, right);
             return leftNormalized == rightNormalized || leftNormalized->equalsIgnoringRegions(rightNormalized);

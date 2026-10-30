@@ -1296,6 +1296,16 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
             }
         }
     }
+    const auto* parentType = monomorph.monomorphType(sp, parent.type);
+    const auto parentArgs = monomorph.monomorphPathParams(sp, parent.traitArgs, true);
+    if (!monomorph.complete() || !cb.typeEquality(parentType, this->type)) {
+        return false;
+    }
+    for (size_t i = 0; i < parentArgs.types.size(); i++) {
+        if (!cb.typeEquality(parentArgs.types[i], this->traitArgs.types[i])) {
+            return false;
+        }
+    }
     return true;
 }
 
