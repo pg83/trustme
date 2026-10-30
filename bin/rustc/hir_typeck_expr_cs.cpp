@@ -754,7 +754,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                into a variable target is `unify` - and the later assignment conform to
                it, not hold it open until `rest` is known (bstr's
                `for_byte_record_with_terminator`). */
-            if (other->assignmentSite) {
+            if (other->assignmentSite || other->argumentSite) {
                 continue;
             }
             const auto* otherInfer = context.ivars.getType(other->leftTy)->opt_Infer();
