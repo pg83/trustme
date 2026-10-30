@@ -5839,7 +5839,7 @@ namespace {
                     }
                     if (found) {
                         DEBUG(StringView("> Schedule replace ") << e.dst << StringView(" with ") << e.src.as_Use());
-                        replacements.push_back(std::make_pair(e.dst.clone(), e.src.clone()));
+                        replacements.push_back(std::make_pair(e.dst.clone(), MIRRValue(e.src.as_Use().clone())));
                         DEBUG(StringView("- Single-write/read ") << e.dst << StringView(" not replaced - couldn't find usage"));
                     }
                 }

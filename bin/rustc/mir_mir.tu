@@ -143,9 +143,6 @@ generate(
             ("std::vector<MIRParam>", "vals"),
         ], copy=False, doc="Create a new instance of a struct"),
     ],
-    extra="""
-        MIRRValue clone() const;
-    """,
 )
 
 generate(

@@ -88,12 +88,11 @@ namespace {
         if (const auto* fields = str.data.opt_Tuple()) {
             size_t index = 0;
             for (const char* c = name.c_str(); *c; c++) {
-                if (*c < '0' || *c > '9') {
-                    return SIZE_MAX;
-                }
+                BUG_ASSERT(*c >= '0' && *c <= '9');
                 index = index * 10 + static_cast<size_t>(*c - '0');
             }
-            return index < fields->size() ? index : SIZE_MAX;
+            BUG_ASSERT(index < fields->size());
+            return index;
         }
         return SIZE_MAX;
     }
