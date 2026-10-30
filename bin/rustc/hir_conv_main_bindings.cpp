@@ -1656,6 +1656,21 @@ auto BindVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
             }
             erased->second.generics = method->params.clone();
         }
+        if (method->code || method->code.mir) {
+            visitTyWith(method->returnType, [&](const HIRType* type) {
+                const auto* erased = type->opt_ErasedType();
+                const auto* origin = erased ? erased->inner.opt_Fcn() : nullptr;
+                const auto* path = origin ? origin->origin.data.opt_UfcsKnown() : nullptr;
+                if (path && path->trait.path == traitPath.path && path->item == value.first) {
+                    const auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << value.first << StringView("_") << origin->index));
+                    const auto associated = item.types.find(name);
+                    ASSERT_BUG(Span(), associated != item.types.end(), StringView("Default method opaque has no associated type: ") << name);
+                    associated->second.defaultValue = type;
+                    associated->second.hasDefault = true;
+                }
+                return false;
+            });
+        }
     }
 }
 

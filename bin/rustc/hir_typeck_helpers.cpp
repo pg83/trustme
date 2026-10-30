@@ -567,7 +567,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     const TraitResolution& resolve_;
     const HIRCrate& crate;
-    const HIRSimplePath& langCoerceUnsized_;
     const Span* span_ = nullptr;
     bool coherenceMode = false;
     mutable u64 cycleHits_ = 0;
@@ -832,7 +831,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     Certainty relateValues(Candidate& candidate, const HIRConstGeneric& left, const HIRConstGeneric& right);
 
-    Certainty evaluateBuiltinCoerceUnsized(Candidate& candidate, const HIRType* destination, const HIRType* source);
 
     Certainty evaluateBuiltinUnsize(Candidate& candidate, const HIRType* destination, const HIRType* source);
 
@@ -3464,7 +3462,6 @@ bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Da
 }
 
 bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* ty, AssembledImplCallback& callback) const {
-    const auto& langCoerceUnsized = this->langCoerceUnsized();
     const auto& langFnPtr = this->langFnPtrTrait();
     const auto& langTuple = this->langTupleTrait();
     const auto& langTransmute = this->langTransmuteTrait();
@@ -3673,22 +3670,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         return false;
     }
 
-    if (!langCoerceUnsized.components().empty() && trait == langCoerceUnsized) {
-        if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
-            return true;
-        }
-
-        const auto& dstTy = params.types.at(0);
-        if (const auto* e = type->opt_Pointer()) {
-            if (const auto* de = dstTy->opt_Pointer()) {
-                if (de->type < e->type) {
-                    if (callback.visit(SolverImpl(type, HIRPathParams(dstTy), {}))) {
-                        return true;
-                    }
-                }
-            }
-        }
-    } else if (trait == langPointeeSized()) {
+    if (trait == langPointeeSized()) {
         if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
             return true;
         }
@@ -13075,15 +13057,6 @@ auto NextTraitGoalEvaluator::relateValues(Candidate& candidate, const HIRConstGe
     return Certainty::Ambiguous;
 }
 
-auto NextTraitGoalEvaluator::evaluateBuiltinCoerceUnsized(Candidate& candidate, const HIRType* rawDestination, const HIRType* rawSource) -> Certainty {
-    const auto* destinationPointer = rawDestination->opt_Pointer();
-    const auto* sourcePointer = rawSource->opt_Pointer();
-    if (!destinationPointer || !sourcePointer || !(destinationPointer->type < sourcePointer->type)) {
-        return Certainty::NoSolution;
-    }
-    return relateTypes(candidate, destinationPointer->inner, sourcePointer->inner);
-}
-
 auto NextTraitGoalEvaluator::evaluateUnsizeRelation(Candidate& candidate, const HIRType* rawDestination, const HIRType* rawSource) -> Certainty {
     const auto structural = evaluateBuiltinUnsize(candidate, rawDestination, rawSource);
     if (structural == Certainty::Proven) {
@@ -14133,20 +14106,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
     }
 
-    if (candidate->source == CandidateSource::Builtin && !langCoerceUnsized_.components().empty() && trait == langCoerceUnsized_) {
-        ASSERT_BUG(span(), candidate->impl.traitArgs.types.size() == 1, StringView("CoerceUnsized trait requires a single type param"));
-        const auto structural = evaluateBuiltinCoerceUnsized(*candidate, candidate->impl.traitArgs.types[0], candidate->impl.getImplType(crate.types));
-        if (structural == Certainty::NoSolution) {
-            return Certainty::NoSolution;
-        }
-        if (structural == Certainty::Ambiguous) {
-            candidate->ambiguityBeyondHead = true;
-            candidate->nestedAmbiguity = true;
-            candidate->nonObligationNestedAmbiguity = true;
-            result = Certainty::Ambiguous;
-        }
-    }
-
     if (candidate->source == CandidateSource::Builtin && trait == resolve_.langUnsize()) {
         ASSERT_BUG(span(), candidate->impl.traitArgs.types.size() == 1, StringView("Unsize trait requires a single type param"));
         const auto structural = evaluateBuiltinUnsize(*candidate, candidate->impl.traitArgs.types[0], candidate->impl.getImplType(crate.types));
@@ -15035,7 +14994,6 @@ auto NextTraitGoalEvaluator::responsesEqual(const Candidate& leftCandidate, cons
 NextTraitGoalEvaluator::NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate)
     : resolve_(resolve)
     , crate(crate)
-    , langCoerceUnsized_(resolve.langCoerceUnsized())
     , structuralCertaintyCache_(resolve.eatCachePool.mutPtr())
     , candidateNodes(resolve.eatCachePool.mutPtr())
     , goalKeys(resolve.eatCachePool.mutPtr())
