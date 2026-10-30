@@ -8246,11 +8246,19 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     };
     const auto paramsForMethod = [&](const HIRGenericParams& definition) {
         HIRPathParamsBuilder params(resolve_.makeFreshImplParams(definition));
+        size_t inferredConstPrefix = 0;
+        for (size_t i = params.types.size(); i < explicitMethodParams.types.size(); i++) {
+            if (!explicitMethodParams.types[i]->is_Infer()) {
+                inferredConstPrefix = 0;
+                break;
+            }
+            inferredConstPrefix++;
+        }
         for (size_t i = 0; i < std::min(params.types.size(), explicitMethodParams.types.size()); i++) {
             params.types[i] = explicitMethodParams.types[i];
         }
-        for (size_t i = 0; i < std::min(params.values.size(), explicitMethodParams.values.size()); i++) {
-            params.values[i] = explicitMethodParams.values[i].clone();
+        for (size_t i = 0; i < explicitMethodParams.values.size() && i + inferredConstPrefix < params.values.size(); i++) {
+            params.values[i + inferredConstPrefix] = explicitMethodParams.values[i].clone();
         }
         return HIRPathParams(std::move(params));
     };

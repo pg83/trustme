@@ -3517,6 +3517,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 next.types.pop_back();
                 next.values.push_back({});
                 context.ivars.addIvars(next.values.back());
+                std::rotate(next.values.begin(), next.values.end() - 1, next.values.end());
             }
             if (next.types.size() > paramDefs.types.size()) {
                 ERROR(sp, E0000, StringView("Too many type parameters passed to ") << path);
@@ -4677,14 +4678,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         break;
                     }
                     case HIRPatternData::TAG_Or: {
-                        auto& e = pattern.data.as_Or();
-                        for (auto& subpat : e) {
-                            possibleType = getPossibleTypeInner(context, subpat);
-                            if (possibleType) {
-                                break;
-                            }
-                        }
-                        break;
+                        BUG(sp, StringView("Or-pattern alternatives must be visited before type guessing"));
                     }
                 }
                 return possibleType;
@@ -4734,7 +4728,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                     case HIRPatternData::TAG_SplitTuple: {
                         auto& e = pattern.data.as_SplitTuple();
@@ -4749,7 +4742,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                     case HIRPatternData::TAG_PathValue: {
                         return false;
@@ -4767,7 +4759,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                     case HIRPatternData::TAG_PathNamed: {
                         auto& e = pattern.data.as_PathNamed();
@@ -4777,7 +4768,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                     case HIRPatternData::TAG_Slice: {
                         auto& e = pattern.data.as_Slice();
@@ -4787,7 +4777,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                     case HIRPatternData::TAG_SplitSlice: {
                         auto& e = pattern.data.as_SplitSlice();
@@ -4805,7 +4794,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                     case HIRPatternData::TAG_Or: {
                         auto& e = pattern.data.as_Or();
@@ -4815,7 +4803,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         return false;
-                        break;
                     }
                 }
                 UNREACHABLE();
@@ -4888,8 +4875,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         return false;
                     }
                     case HIRPatternData::TAG_Or: {
-                        auto& e = pattern.data.as_Or();
-                        return !e.empty() && directlyMatches(e.front(), type);
+                        BUG(Span(), StringView("Or-pattern alternatives must be visited before shape matching"));
                     }
                 }
                 UNREACHABLE();
@@ -8874,6 +8860,23 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
         node.methodPath = mv$(fcnPath);
 
         ASSERT_BUG(sp, visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache, selectedMethod.inherentImpl), StringView("Selected method became ambiguous while populating its cache: ") << node.methodPath);
+        if (node.params.hasParams()) {
+            const HIRPathParams* selectedParams = nullptr;
+            if (const auto* method = node.methodPath.data.opt_UfcsKnown()) {
+                selectedParams = &method->params;
+            } else if (const auto* method = node.methodPath.data.opt_UfcsInherent()) {
+                selectedParams = &method->params;
+            } else {
+                BUG(sp, StringView("Method lookup returned a non-method path: ") << node.methodPath);
+            }
+            fixParamCount(sp, this->context, nullptr, false, node.methodPath, *node.cache.fcnParams, node.params);
+            for (size_t i = 0; i < node.params.types.size(); i++) {
+                this->context.equateTypes(sp, node.params.types[i], selectedParams->types[i]);
+            }
+            for (size_t i = 0; i < node.params.values.size(); i++) {
+                this->context.equateValues(sp, node.params.values[i], selectedParams->values[i]);
+            }
+        }
         DEBUG(StringView("> m_method_path = ") << node.methodPath);
         BUG_ASSERT(node.cache.argTypes.length() >= 1);
 
