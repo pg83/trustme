@@ -315,13 +315,7 @@ public:
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                if constexpr (std::is_const_v<typename Dec<HIRPath>::Type>) {
-                    visitType(e.type);
-                } else {
-                    e.type = visitType(e.type);
-                }
-                visitPathParams(e.params);
+                BUG(Span(), stl::StringView("Unresolved UFCS path in MIR visitor: ") << path);
                 break;
             }
         }
