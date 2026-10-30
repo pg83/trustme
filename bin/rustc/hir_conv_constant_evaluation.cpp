@@ -5640,14 +5640,7 @@ auto MIREvalCallStackEntry::readParamPtr(const MIRParam& p) -> std::pair<u64, MI
             return getLval(e).readPtr(state);
         }
         case MIRParam::TAG_Borrow: {
-            auto& e = p.as_Borrow();
-            MIREvalValueRef meta;
-            u64 rawAddress = 0;
-            auto value = getLval(e.val, &meta, &rawAddress);
-            if (rawAddress) {
-                return std::make_pair(rawAddress, MIREvalRelocPtr());
-            }
-            return std::make_pair(EncodedLiteral::PTR_BASE + value.getOfs(), value.getStorage());
+            MIR_BUG(state, StringView("Unexpected direct borrow in pointer argument"));
         }
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
