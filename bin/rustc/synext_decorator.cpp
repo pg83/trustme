@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "synext.h"
+#include "synext_macro.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "ast_expr.h"
@@ -511,7 +512,18 @@ namespace {
         DeriverConstParamTy constParamTy;
         DeriverUnsizedConstParamTy unsizedConstParamTy;
 
+        const Deriver* const builtins[13] = {&debug, &partialEq, &partialOrd, &eq, &ord, &clone, &copy, &default_, &hash, &rustcEncodable, &rustcDecodable, &constParamTy, &unsizedConstParamTy};
+
+        DeriveRegistry() = default;
+        DeriveRegistry(const DeriveRegistry&) = delete;
+
         const Deriver* find(const RcString& traitName) const;
+    };
+
+    struct BuiltinDeriveMacro final: ExpandProcMacro {
+        auto expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> decltype(ExpandProcMacro::expand(sp, wb, crate, tt, mod)) override {
+            ERROR(sp, E0000, StringView("Builtin derive macros can only be used in #[derive]"));
+        }
     };
 
     struct DecoratorDerive: public ExpandDecorator {
@@ -939,7 +951,9 @@ namespace {
 
     static const Deriver* findBuiltinDerive(const DeriveRegistry& registry, const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
         if (traitPath.isTrivial()) {
-            return registry.find(traitPath.asTrivial());
+            if (const auto* derive = registry.find(traitPath.asTrivial())) {
+                return derive;
+            }
         }
         if (const auto* path = traitPath.cls.opt_Relative()) {
             if (path->nodes.size() >= 2 && (path->nodes.front().name() == "core" || path->nodes.front().name() == "std")) {
@@ -1809,6 +1823,9 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
 
 void RegisterBuiltinDecorators(ExpandRegistry& registry) {
     auto& derives = *registry.make<DeriveRegistry>();
+    for (const auto* derive : derives.builtins) {
+        registry.addMacro<BuiltinDeriveMacro>(derive->traitName());
+    }
     auto& langItems = *registry.make<LangItemRegistry>(registry.objectPool());
     registry.addDecorator<CHandlerInline>("inline");
     registry.addDecorator<CHandlerCold>("cold");
@@ -4336,23 +4353,11 @@ auto DeriverUnsizedConstParamTy::handleItem(Span sp, const DeriveOpts& opts, con
 }
 
 auto DeriveRegistry::find(const RcString& traitName) const -> const Deriver* {
-#define _(obj)                        \
-    if (traitName == obj.traitName()) \
-        return &obj;
-    _(debug)
-    _(partialEq)
-    _(partialOrd)
-    _(eq)
-    _(ord)
-    _(clone)
-    _(copy)
-    _(default_)
-    _(hash)
-    _(rustcEncodable)
-    _(rustcDecodable)
-    _(constParamTy)
-    _(unsizedConstParamTy)
-#undef _
+    for (const auto* derive : builtins) {
+        if (traitName == derive->traitName()) {
+            return derive;
+        }
+    }
     return nullptr;
 }
 

@@ -943,7 +943,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
 
                     struct H2 {
                         static ResolveItemRefMacro getBuiltin(const WireBoard& wb, const Span& sp, const RcString& name) {
-                            // TODO: What if it's a derive? Or it's an attribute
                             if (auto* pm = ExpandFindProcMacro(wb, name)) {
                                 return ResolveItemRefMacro(pm);
                             }
@@ -962,18 +961,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                         return v;
                     }
                     mi = &H::getCrate(sp, crate, p->path).getMacroitemByPath(sp, p->path, true);
-                    if (const auto* p = mi->opt_Import()) {
-                        if (p->path.crateName() == CRATE_BUILTINS) {
-                            if (outPath) {
-                                *outPath = spToAp(p->path);
-                            }
-                            auto v = H2::getBuiltin(crate.wb, sp, p->path.components().back());
-                            if (v.is_None()) {
-                                break;
-                            }
-                            return v;
-                        }
-                    }
                 } else {
                     mi = &it->second->ent;
                     if (outPath) {

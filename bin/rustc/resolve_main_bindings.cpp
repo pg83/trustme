@@ -5598,7 +5598,7 @@ namespace {
                 DEBUG(StringView("E : Macro ") << nodes.back().name() << StringView(" = ") << itemPtr->tagStr());
                 if (const auto* imp = itemPtr->opt_Import()) {
                     if (imp->path.crateName() == crateBuiltinsName()) {
-                        rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), oneComponent(nodes.back().name())), ASTPathBindingMacro::make_MacroRules({nullptr}));
+                        rv.macro.set(ASTAbsolutePath(imp->path.crateName(), imp->path.componentsVec()), ASTPathBindingMacro::make_MacroRules({nullptr}));
                         return rv;
                     }
                     ASSERT_BUG(span, crate.externCrates.count(imp->path.crateName()) > 0, StringView("Unable to find crate for ") << imp->path);
