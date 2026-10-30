@@ -1899,23 +1899,7 @@ namespace {
                             }
                         }
                     } else {
-                        const HIRType* tagTy;
-                        if (enm.tagRepr != HIREnum::Repr::Auto) {
-                            tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
-                        } else {
-                            ASSERT_BUG(sp, !hasExplcitValue, StringView("Explicit tag without a repr"));
-                            if (e.size() <= 1) {
-                                BUG(sp, StringView("Reached auto tag type logic with zero/one-sized enum"));
-                            } else if (e.size() <= 255) {
-                                tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
-                                DEBUG(StringView("u8 data tag"));
-                            } else if (e.size() <= UINT16_MAX) {
-                                tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
-                            } else {
-                                ASSERT_BUG(sp, e.size() <= UINT32_MAX, StringView(""));
-                                tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
-                            }
-                        }
+                        const auto* tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
 
                         size_t tagSize;
                         size_t tagAlign;
