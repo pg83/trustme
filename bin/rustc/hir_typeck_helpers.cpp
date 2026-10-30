@@ -2243,6 +2243,9 @@ bool HMTypeInferrence::pathparamsEqual(const HIRPathParams& ppsL, const HIRPathP
 bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
     const auto& l = this->getType(rl);
     const auto& r = this->getType(rr);
+    if (l == r) {
+        return true;
+    }
     if (l->tag() != r->tag()) {
         return false;
     }
@@ -2287,7 +2290,7 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                     return self.pathparamsEqual(lpe.params, rpe.params);
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
-                    BUG(Span(), StringView("UfcsUnknown"));
+                    return false;
                 }
             }
             UNREACHABLE();
