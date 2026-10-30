@@ -11380,7 +11380,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
             auto operatorKind = node.op == HIRExprNodeBinOp::Op::CmpEqu || node.op == HIRExprNodeBinOp::Op::CmpNEqu ? TypeckPrimitiveOperator::Equal : TypeckPrimitiveOperator::Order;
             if (!opTrait.components().empty()) {
                 const auto parentOrderEnd = this->context.currentOrderEnd;
-                this->context.currentOrderEnd = node.checkOrderEnd;
+                this->context.currentOrderEnd = node.left->checkOrderEnd;
                 this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), opTrait, HIRPathParams(rightTy), leftTy, "", {}, true, operatorKind);
                 this->context.currentOrderEnd = parentOrderEnd;
             } else {
@@ -11464,7 +11464,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
 
             if (!opTrait.components().empty()) {
                 const auto parentOrderEnd = this->context.currentOrderEnd;
-                this->context.currentOrderEnd = node.checkOrderEnd;
+                this->context.currentOrderEnd = node.left->checkOrderEnd;
                 this->context.equateTypesAssoc(node.span(), operatorResultType, opTrait, HIRPathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
                 this->context.currentOrderEnd = parentOrderEnd;
             } else {

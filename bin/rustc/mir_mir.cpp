@@ -24,7 +24,6 @@ using namespace stl;
                 return ::ord(ae.v, be.v);
             }
             return ::ord((unsigned)ae.t, (unsigned)be.t);
-            break;
         }
         case MIRConstant::TAG_Uint: {
             auto& ae = (*this).as_Uint();
@@ -33,7 +32,6 @@ using namespace stl;
                 return ::ord(ae.v, be.v);
             }
             return ::ord((unsigned)ae.t, (unsigned)be.t);
-            break;
         }
         case MIRConstant::TAG_Float: {
             auto& ae = (*this).as_Float();
@@ -45,7 +43,6 @@ using namespace stl;
                 return ::ord(ae.v.bitsLo(), be.v.bitsLo());
             }
             return ::ord((unsigned)ae.t, (unsigned)be.t);
-            break;
         }
         case MIRConstant::TAG_Bool: {
             auto& ae = (*this).as_Bool();
@@ -67,7 +64,6 @@ using namespace stl;
             auto& be = b.as_Encoded();
             ORD(ae.type, be.type);
             return ae.value.ord(be.value);
-            break;
         }
         case MIRConstant::TAG_Const: {
             auto& ae = (*this).as_Const();
@@ -93,7 +89,6 @@ using namespace stl;
             }
             ORD(ae.offset, be.offset);
             return OrdEqual;
-            break;
         }
     }
     UNREACHABLE();
