@@ -5467,6 +5467,14 @@ auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& t
                 BUG(state.sp, StringView("Unevaluated const cannot monomorph during concrete evaluation"));
             }
             auto value = ve->monomorph(state.sp, ms, false);
+            const auto expandCapturedType = [&](const HIRType* type) {
+                return rootResolve.expandAssociatedTypes(state.sp, type);
+            };
+            if (value.selfType) {
+                value.selfType = expandCapturedType(value.selfType);
+            }
+            value.paramsImpl = value.paramsImpl.mapTypes(expandCapturedType);
+            value.paramsItem = value.paramsItem.mapTypes(expandCapturedType);
             if (!typeIsConcrete(value.selfType) || !pathParamsAreConcrete(value.paramsImpl) || !pathParamsAreConcrete(value.paramsItem)) {
                 BUG(state.sp, StringView("Unevaluated const not concrete after monomorph during concrete evaluation"));
             }

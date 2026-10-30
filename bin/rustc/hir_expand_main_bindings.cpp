@@ -6098,11 +6098,10 @@ auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitR
         }
 
         void visit(HIRExprNodeArraySized& node) override {
+            HIRExprVisitorDef::visit(node);
             if (auto* n = node.size.opt_Unevaluated()) {
-                if (auto* g = n->opt_Generic()) {
-                    *g = monomorph.getValue(node.span(), *g).as_Generic();
-                    isGeneric = true;
-                }
+                *n = monomorph.monomorphConstgeneric(node.span(), *n, false);
+                isGeneric = true;
             }
         }
     } v(resolve, monomorph);
