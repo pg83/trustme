@@ -607,6 +607,8 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
 }
 
 const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
+    /* The default traversal observes interned types. Transforming visitors
+       override visitType without delegating type rebuilding to this walker. */
     switch (ty->tag()) {
         case HIRType::TAG_Infer:
         case HIRType::TAG_Diverge:
@@ -623,13 +625,10 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
                 this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
                 return types.internFolded(ty, std::move(data));
             }
-            bool changed = false;
             for (size_t i = 0; i < count; i++) {
-                const auto* child = visitType(children[i]);
-                changed |= child != children[i];
-                children[i] = child;
+                (void)visitType(children[i]);
             }
-            return changed ? types.pathType(e.path, children, e.binding) : ty;
+            return ty;
         }
         case HIRType::TAG_TraitObject: {
             auto data = ty->cloneData();
@@ -663,91 +662,38 @@ const HIRType* HIRExprVisitorDef::visitType(const HIRType* ty) {
             return types.internFolded(ty, std::move(data));
         }
         case HIRType::TAG_Array: {
-            auto ninner = visitType(ty->as_Array().inner);
-            if (ninner == ty->as_Array().inner) {
-                return ty;
-            }
-            auto data = ty->cloneData();
-            data.as_Array().inner = ninner;
-            return types.intern(std::move(data));
+            (void)visitType(ty->as_Array().inner);
+            return ty;
         }
         case HIRType::TAG_Slice: {
-            auto ninner = visitType(ty->as_Slice().inner);
-            if (ninner == ty->as_Slice().inner) {
-                return ty;
-            }
-            auto data = ty->cloneData();
-            data.as_Slice().inner = ninner;
-            return types.intern(std::move(data));
+            (void)visitType(ty->as_Slice().inner);
+            return ty;
         }
         case HIRType::TAG_Pattern: {
-            auto ninner = visitType(ty->as_Pattern().inner);
-            if (ninner == ty->as_Pattern().inner) {
-                return ty;
-            }
-            auto data = ty->cloneData();
-            data.as_Pattern().inner = ninner;
-            return types.intern(std::move(data));
+            (void)visitType(ty->as_Pattern().inner);
+            return ty;
         }
         case HIRType::TAG_Borrow: {
-            auto ninner = visitType(ty->as_Borrow().inner);
-            if (ninner == ty->as_Borrow().inner) {
-                return ty;
-            }
-            auto data = ty->cloneData();
-            data.as_Borrow().inner = ninner;
-            return types.intern(std::move(data));
+            (void)visitType(ty->as_Borrow().inner);
+            return ty;
         }
         case HIRType::TAG_Pointer: {
-            auto ninner = visitType(ty->as_Pointer().inner);
-            if (ninner == ty->as_Pointer().inner) {
-                return ty;
-            }
-            auto data = ty->cloneData();
-            data.as_Pointer().inner = ninner;
-            return types.intern(std::move(data));
+            (void)visitType(ty->as_Pointer().inner);
+            return ty;
         }
         case HIRType::TAG_Tuple: {
-            const auto& e = ty->as_Tuple();
-            for (size_t i = 0; i < e.length(); i++) {
-                auto nt = visitType(e[i]);
-                if (nt != e[i]) {
-                    auto data = ty->cloneData();
-                    auto& ne = data.as_Tuple();
-                    ne.mut(i) = nt;
-                    for (size_t j = i + 1; j < ne.length(); j++) {
-                        ne.mut(j) = visitType(ne[j]);
-                    }
-                    return types.intern(std::move(data));
-                }
+            for (const auto* element : ty->as_Tuple()) {
+                (void)visitType(element);
             }
             return ty;
         }
         case HIRType::TAG_Function: {
             const auto& e = ty->as_Function();
-            auto nret = visitType(e.rettype);
-            size_t argIdx = e.argTypes.length();
-            const HIRType* narg = nullptr;
-            for (size_t i = 0; i < e.argTypes.length(); i++) {
-                narg = visitType(e.argTypes[i]);
-                if (narg != e.argTypes[i]) {
-                    argIdx = i;
-                    break;
-                }
+            (void)visitType(e.rettype);
+            for (const auto* argument : e.argTypes) {
+                (void)visitType(argument);
             }
-            if (nret == e.rettype && argIdx == e.argTypes.length()) {
-                return ty;
-            }
-            auto data = ty->cloneData();
-            auto& ne = data.as_Function();
-            ne.rettype = nret;
-            if (argIdx < ne.argTypes.length()) {
-                ne.argTypes.mut(argIdx) = narg;
-                for (size_t j = argIdx + 1; j < ne.argTypes.length(); j++) {
-                    ne.argTypes.mut(j) = visitType(ne.argTypes[j]);
-                }
-            }
-            return types.intern(std::move(data));
+            return ty;
         }
     }
     return ty;
