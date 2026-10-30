@@ -11521,19 +11521,23 @@ auto ExprVisitorConv::visit(HIRExprNodeConstParam& node) -> void {
 auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStruct& str, const HIRGenericPath& path) -> void {
     const Span& sp = node.span();
 
-    ASSERT_BUG(sp, str.data.is_Named(), StringView(""));
-    const tStructFields& fields = str.data.as_Named();
+    const auto* named = str.data.opt_Named();
+    const auto* tuple = str.data.opt_Tuple();
+    ASSERT_BUG(sp, named || tuple, StringView("Struct literal needs named or tuple fields"));
+    const size_t fieldCount = tuple ? tuple->size() : named->size();
 
     Vector<bool> valuesSet;
-    std::vector<MIRParam> values;
-    values.resize(fields.size());
-    valuesSet.zero(fields.size());
+    auto result = MIRRValue::make_Struct({path.clone(), {}});
+    auto& values = result.as_Struct().vals;
+    values.resize(fieldCount);
+    valuesSet.zero(fieldCount);
 
     for (auto& ent : node.values) {
         auto& valnode = ent.second;
-        auto idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+        const auto idx = tuple ? static_cast<size_t>(std::atoi(ent.first.c_str())) : std::find_if(named->begin(), named->end(), [&](const auto& x) {
             return x.name == ent.first;
-        }) - fields.begin();
+        }) - named->begin();
+        ASSERT_BUG(sp, idx < fieldCount, StringView("Field '") << ent.first << StringView("' out of range"));
         BUG_ASSERT(!valuesSet[idx]);
         valuesSet.mut(idx) = true;
         DEBUG(StringView("_StructLiteral - fld '") << ent.first << StringView("' (idx ") << idx << StringView(")"));
@@ -11565,18 +11569,19 @@ auto ExprVisitorConv::visitSlInner(HIRExprNodeStructLiteral& node, const HIRStru
         if (!valuesSet[i]) {
             if (node.baseValue) {
                 values[i] = MIRLValue::newField(baseVal.clone(), i);
-            } else if (fields[i].defaultValue) {
+            } else if (named && (*named)[i].defaultValue) {
+                const auto& fields = *named;
                 const auto& v = *fields[i].defaultValue;
                 auto ms = MonomorphStatePtr(builder.resolve().crate.types, nullptr, &path.params, nullptr);
                 values[i] = builder.lvalueOrTemp(sp, ms.monomorphType(sp, fields[i].ty), MIRConstant::make_Const({std::make_unique<HIRPath>(ms.monomorphGenericpath(sp, v))}));
             } else {
-                ERROR(node.span(), E0000, StringView("Field '") << fields[i].name << StringView("' not specified"));
+                ERROR(node.span(), E0000, StringView("Field '") << (named ? (*named)[i].name : RcString::newInterned(FMT(i))) << StringView("' not specified"));
             }
         } else {
         }
     }
 
-    builder.setResult(node.span(), MIRRValue::make_Struct({path.clone(), mv$(values)}));
+    builder.setResult(node.span(), mv$(result));
 }
 
 auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
@@ -11646,43 +11651,6 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
                     builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), {}}));
                     return;
                 }
-                if (e->data.is_Tuple()) {
-                    const auto& fields = e->data.as_Tuple();
-                    Vector<u8> valuesSet;
-                    valuesSet.zero(fields.size());
-                    std::vector<MIRParam> values;
-                    values.resize(fields.size());
-                    for (auto& val : node.values) {
-                        const auto idx = static_cast<unsigned>(std::atoi(val.first.c_str()));
-                        ASSERT_BUG(node.span(), idx < fields.size(), StringView("Tuple field index ") << idx << StringView(" out of range"));
-                        ASSERT_BUG(node.span(), !valuesSet[idx], StringView("Tuple field ") << idx << StringView(" specified twice"));
-                        this->visitNodePtr(val.second);
-                        if (!builder.blockActive()) {
-                            return;
-                        }
-                        valuesSet.mut(idx) = true;
-                        values.at(idx) = builder.getResultInParam(val.second->span(), val.second->resType);
-                    }
-                    auto baseValue = MIRLValue::newReturn();
-                    if (node.baseValue) {
-                        this->visitNodePtr(node.baseValue);
-                        if (!builder.blockActive()) {
-                            return;
-                        }
-                        baseValue = builder.getResultInLvalue(node.baseValue->span(), node.baseValue->resType);
-                    }
-                    for (size_t i = 0; i < fields.size(); i++) {
-                        if (!valuesSet[i]) {
-                            if (!node.baseValue) {
-                                ERROR(node.span(), E0000, StringView("Field '") << i << StringView("' not specified"));
-                            }
-                            values.at(i) = MIRLValue::newField(baseValue.clone(), static_cast<unsigned>(i));
-                        }
-                    }
-                    builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), std::move(values)}));
-                    return;
-                }
-
                 this->visitSlInner(node, *e, tyPath);
                 break;
             }

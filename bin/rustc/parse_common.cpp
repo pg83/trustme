@@ -19,6 +19,7 @@
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
+#include <std/sym/i_map.h>
 
 #include <fstream>
 
@@ -651,14 +652,17 @@ namespace {
         Token tok;
 
         if (LOOK_AHEAD(lex) == TOK_INTEGER) {
-            std::map<unsigned int, ASTExprNode*> nodes;
+            IntMap<bool> indices(&lex.typePool());
+            ASTExprNodeStructLiteral::tValues items;
             while (GET_TOK(tok, lex) == TOK_INTEGER) {
                 unsigned int ofs = static_cast<unsigned int>(tok.intval().truncateU64());
                 GET_CHECK_TOK(tok, lex, TOK_COLON);
                 ASTExprNode* val = ParseStmt(lex);
-                if (!nodes.insert(std::make_pair(ofs, mv$(val))).second) {
+                if (indices.find(ofs)) {
                     ERROR(lex.pointSpan(), E0000, StringView("Duplicate index"));
                 }
+                indices.insert(ofs, true);
+                items.push_back(ASTExprNodeStructLiteral::Ent{ASTAttributeList(), RcString::newInterned(FMT(ofs)), val});
 
                 if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
                     break;
@@ -676,14 +680,12 @@ namespace {
             }
             CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
-            ASTExprNodeStructLiteral::tValues items;
-            unsigned int i = 0;
-            for (auto& p : nodes) {
-                if (!baseVal && p.first != i) {
-                    ERROR(lex.pointSpan(), E0000, StringView("Missing index ") << i);
+            if (!baseVal) {
+                for (unsigned int i = 0; i < items.size(); i++) {
+                    if (!indices.find(i)) {
+                        ERROR(lex.pointSpan(), E0000, StringView("Missing index ") << i);
+                    }
                 }
-                items.push_back(ASTExprNodeStructLiteral::Ent{ASTAttributeList(), RcString::newInterned(FMT(p.first)), mv$(p.second)});
-                i++;
             }
 
             return NEWNODE(ASTExprNodeStructLiteral, mv$(path), mv$(baseVal), mv$(items));

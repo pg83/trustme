@@ -9349,6 +9349,10 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                 const auto& var = enm.data.as_Data()[idx];
 
                 const auto& str = *var.type->as_Path().binding.as_Struct();
+                if (str.data.is_Tuple()) {
+                    HIRExprVisitorDef::visit(node);
+                    return;
+                }
                 ASSERT_BUG(sp, var.isStruct, StringView("Struct literal for enum on non-struct variant"));
                 fieldsPtr = &str.data.as_Named();
                 break;
@@ -11886,9 +11890,18 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                     return;
                 }
                 const auto& str = *var.type->as_Path().binding.as_Struct();
-
-                ASSERT_BUG(sp, var.isStruct, StringView("Struct literal for enum on non-struct variant"));
-                fieldsPtr = &str.data.as_Named();
+                if (const auto* tuple = str.data.opt_Tuple()) {
+                    if (node.baseValue) {
+                        ERROR(sp, E0000, StringView("Tuple enum literals cannot have a base value"));
+                    }
+                    for (size_t i = 0; i < tuple->size(); i++) {
+                        tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), (*tuple)[i].publicity, (*tuple)[i].ent, nullptr});
+                    }
+                    fieldsPtr = &tupleFields;
+                } else {
+                    ASSERT_BUG(sp, var.isStruct, StringView("Struct literal for enum on non-struct variant"));
+                    fieldsPtr = &str.data.as_Named();
+                }
                 generics = &enm.params;
                 break;
             }

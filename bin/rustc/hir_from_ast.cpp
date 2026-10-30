@@ -1363,18 +1363,6 @@ HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path,
         DEBUG(path << StringView(" => ") << rv);
         return rv;
     } else {
-        if (const auto* e = path.cls.opt_UFCS()) {
-            DEBUG(path);
-            if (!e->type) {
-            } else if (!e->nodes.empty()) {
-            } else if (!e->type->data.is_Path()) {
-            } else {
-                // HACK: `Self` replacement
-                ASSERT_BUG(sp, pc == FromASTPathClass::Type, StringView("`Self` used in value context"));
-                return LowerHIRGenericPath(sp, *e->type->data.as_Path(), pc, false);
-            }
-        }
-
         BUG(sp, StringView("Encountered non-Absolute path when creating ::HIR::GenericPath - ") << path);
     }
 }
@@ -5225,52 +5213,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeStructLiteral& v) -> void {
         }
         if (v.baseValue) {
             ERROR(v.span(), E0000, StringView("Union constructors can't take a base value"));
-        }
-    }
-
-    if (!v.values.empty() && !v.baseValue) {
-        bool allNumeric = true;
-        for (const auto& val : v.values) {
-            for (const char* c = val.name.c_str(); *c; c++) {
-                allNumeric &= (*c >= '0' && *c <= '9');
-            }
-        }
-        bool isTuple = false;
-        bool isStruct = false;
-        const ASTPath* ctorPath = &v.path;
-        {
-            const ASTPath* p = &v.path;
-            for (unsigned int i = 0; i < 32; i++) {
-                const auto* alias = p->bindings.type.binding.opt_TypeAlias();
-                if (!alias || !alias->alias_ || !alias->alias_->type_ || !alias->alias_->type_->isPath()) {
-                    break;
-                }
-                p = &alias->alias_->type_->path();
-                ctorPath = p;
-            }
-        }
-        if (const auto* binding = ctorPath->bindings.type.binding.opt_EnumVar()) {
-            if (binding->enum_) {
-                isTuple = binding->enum_->variants().at(binding->idx).data.is_Tuple();
-            } else if (binding->hir && binding->hir->data.is_Data()) {
-                const auto& var = binding->hir->data.as_Data().at(binding->idx);
-                isTuple = !var.isStruct && var.type != ctx.crate->types.unit();
-            }
-        } else if (const auto* binding = ctorPath->bindings.type.binding.opt_Struct()) {
-            isStruct = true;
-            if (binding->struct_) {
-                isTuple = binding->struct_->data.is_Tuple();
-            } else if (binding->hir) {
-                isTuple = binding->hir->data.is_Tuple();
-            }
-        }
-        if (allNumeric && isTuple) {
-            std::vector<HIRExprNodeP> args;
-            for (auto& val : v.values) {
-                args.push_back(lower(val.value));
-            }
-            rv.reset(ctx.crate->pool->make<HIRExprNodeTupleVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), *ctorPath, FromASTPathClass::Type), isStruct, mv$(args)));
-            return;
         }
     }
 
