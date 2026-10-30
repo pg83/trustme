@@ -1704,7 +1704,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
         }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
-            return typeNeedsDropGlue(sp, e.inner);
+            return (!e.size.is_Known() || e.size.as_Known() != 0) && typeNeedsDropGlue(sp, e.inner);
         }
         case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
