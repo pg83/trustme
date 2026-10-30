@@ -4241,10 +4241,10 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                 auto normalizedL = l.clone();
                 auto normalizedR = r.clone();
 
-                struct ResolveIvars: HIRVisitor {
+                struct NormalizeValues: HIRVisitor {
                     Context& context;
 
-                    explicit ResolveIvars(Context& context)
+                    explicit NormalizeValues(Context& context)
                         : HIRVisitor(nullptr, context.crate.types)
                         , context(context)
                     {
@@ -4258,6 +4258,14 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                             }
                         }
                         HIRVisitor::visitConstgeneric(value);
+                        if (const auto* unevaluated = value.opt_Unevaluated()) {
+                            auto& expr = *(*unevaluated)->expr;
+                            if (expr.get()) {
+                                /* Equality can precede the crate pass over impl const arguments. */
+                                ASSERT_BUG(Span(), expr.state, StringView("Unbound const expression in value equality"));
+                                ConvertHIRResolveUFCSExpr(context.resolve.board(), context.crate, HIRItemPath(expr.state->modPath), expr);
+                            }
+                        }
                     }
 
                     [[nodiscard]] const HIRType* visitType(const HIRType* type) override {
@@ -4269,10 +4277,10 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                         }
                         return visitTypeDefaultViaHooks(type);
                     }
-                } resolveIvars{*this};
+                } normalizeValues{*this};
 
-                resolveIvars.visitConstgeneric(normalizedL);
-                resolveIvars.visitConstgeneric(normalizedR);
+                normalizeValues.visitConstgeneric(normalizedL);
+                normalizeValues.visitConstgeneric(normalizedR);
                 ConvertHIRConstantEvaluateConstGeneric(sp, resolve.board(), crate, normalizedL);
                 ConvertHIRConstantEvaluateConstGeneric(sp, resolve.board(), crate, normalizedR);
 
@@ -7032,6 +7040,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
 
                 DEBUG(StringView("- Equate coercion R") << ent->ruleIdx << StringView(" ") << ent->leftTy << StringView(" := ") << srcTy);
                 context.equateTypes(sp, ent->leftTy, srcTy);
+                context.ivars.markChange();
             }
         }
 
@@ -9900,20 +9909,27 @@ auto ConstExprEquate::evaluatedPath(const HIRConstGenericUnevaluated& value, con
     MonomorphStatePtr monomorph(context.crate.types, value.selfType, &value.paramsImpl, &value.paramsItem);
     auto path = monomorph.monomorphPath(sp, node.path);
     StaticTraitResolve resolve(context.resolve.board());
+    resolve.setBothGenericsRaw(context.resolve.implGenericsPtr(), context.resolve.itemGenericsPtr());
     MonomorphState params(context.crate.types);
-    auto resolved = resolve.getValue(sp, path, params);
+    const HIRGenericParams* implParams = nullptr;
+    auto resolved = resolve.getValue(sp, path, params, false, &implParams);
     const auto* constant = resolved.opt_Constant();
     if (!constant) {
         return nullptr;
     }
 
-    const auto& item = **constant;
-    if (item.valueState == HIRConstant::ValueState::Known) {
-        return &item.valueRes;
+    const auto* item = *constant;
+    if (!monomorphisePathNeeded(path) && item->valueState != HIRConstant::ValueState::Known) {
+        auto& current = resolve.hirCrateMut().findConstantMut(context.resolve.board(), sp, path, *item);
+        ConvertHIRConstantEvaluateConstant(resolve, implParams, HIRItemPath(path), current);
+        item = &current;
     }
-    if (item.valueState == HIRConstant::ValueState::Generic) {
-        auto cached = item.monomorphCache.find(path);
-        return cached == item.monomorphCache.end() ? nullptr : &cached->second;
+    if (item->valueState == HIRConstant::ValueState::Known) {
+        return &item->valueRes;
+    }
+    if (item->valueState == HIRConstant::ValueState::Generic) {
+        auto cached = item->monomorphCache.find(path);
+        return cached == item->monomorphCache.end() ? nullptr : &cached->second;
     }
     return nullptr;
 }
@@ -10013,13 +10029,7 @@ auto ConstExprEquate::equatePath(const HIRConstGenericUnevaluated& leftValue, co
             return true;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            auto& l = leftPath.data.as_UfcsUnknown();
-            auto& r = rightPath.data.as_UfcsUnknown();
-            if (l.item != r.item || !equateParams(l.params, r.params)) {
-                return false;
-            }
-            context.equateTypesInner(sp, l.type, r.type);
-            return true;
+            BUG(sp, StringView("Unresolved path in normalized const expression"));
         }
     }
     UNREACHABLE();
@@ -10080,7 +10090,7 @@ auto ConstExprEquate::equateNode(const HIRConstGenericUnevaluated& leftValue, co
     }
     if (const auto* l = cast<const HIRExprNodePathValue>(&left)) {
         if (const auto* r = cast<const HIRExprNodePathValue>(&right)) {
-            return l->target == r->target && equatePath(leftValue, l->path, rightValue, r->path);
+            return equatePath(leftValue, l->path, rightValue, r->path);
         }
         if (const auto* r = cast<const HIRExprNodeLiteral>(&right)) {
             return equateLiteralPath(*r, leftValue, *l);
