@@ -407,7 +407,7 @@ namespace {
 
         void emitDropFields(const Span& sp, const HIRType* ty, const MIRLValue& value);
 
-        void emitCoroutineAsyncDrop(const Span& sp, const HIRType* ty, MIRLValue value);
+        void emitAsyncDropInPlace(const Span& sp, const HIRType* ty, MIRLValue value);
 
         bool emitAsyncDrop(const Span& sp, MIRLValue value, unsigned int flag);
 
@@ -8496,7 +8496,7 @@ auto ExprVisitorConv::emitDropFields(const Span& sp, const HIRType* ty, const MI
     }
 }
 
-auto ExprVisitorConv::emitCoroutineAsyncDrop(const Span& sp, const HIRType* ty, MIRLValue value) -> void {
+auto ExprVisitorConv::emitAsyncDropInPlace(const Span& sp, const HIRType* ty, MIRLValue value) -> void {
     auto& types = builder.crate().types;
     const auto& path = builder.crate().getLangItemPath(sp, "async_drop_in_place");
     auto dropPath = HIRPath(HIRGenericPath(path, HIRPathParams(ty)));
@@ -8558,8 +8558,8 @@ auto ExprVisitorConv::emitAsyncDrop(const Span& sp, MIRLValue value, unsigned in
         return true;
     }
 
-    if (const auto* pathTy = ty->opt_Path(); pathTy && (pathTy->isFuture() || pathTy->isGenerator())) {
-        emitCoroutineAsyncDrop(sp, ty, std::move(value));
+    if (const auto* pathTy = ty->opt_Path(); pathTy && (pathTy->binding.is_Enum() || pathTy->isFuture() || pathTy->isGenerator())) {
+        emitAsyncDropInPlace(sp, ty, std::move(value));
         return true;
     }
 

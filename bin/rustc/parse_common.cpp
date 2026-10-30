@@ -3424,7 +3424,7 @@ namespace {
                     if (lex.getTokenIf(TOK_LIFETIME, tok)) {
                         lifetimes.pushBack(ASTLifetimeRef(/*lex.point_span(),*/ lifetimeIdent(tok)));
                     } else {
-                        if (lex.lookahead(0) == TOK_RWORD_FOR) {
+                        if (lex.getTokenIf(TOK_RWORD_FOR)) {
                             hrbs = ParseHRB(lex);
                         }
                         traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
