@@ -703,15 +703,7 @@ namespace {
                             break;
                         }
                         case MetadataType::TraitObject: {
-                            const auto* tep = te.inner->opt_TraitObject();
-                            if (!tep) {
-                                MIR_TODO(state, StringView("Hidden vtable"));
-                            }
-
-                            auto vtableVal = MIRParam(createVtable(srcTy, tep->trait, operationsContext(state).vtableName));
-
-                            return MIRRValue::make_MakeDst({MIRParam(mv$(ptrVal)), mv$(vtableVal)});
-                            break;
+                            return MIRRValue::make_MakeDst({MIRParam(mv$(ptrVal)), literalVtable(state, lit, params)});
                         }
                         case MetadataType::Unknown:
                             MIR_BUG(state, te.inner << StringView(" unknown metadata type"));
@@ -4206,7 +4198,7 @@ namespace {
             } else if (tef.name == "align_of_val" || tef.name == "min_align_of_val") {
                 size_t alignVal = 0;
                 size_t sizeVal = 0;
-                if (TargetGetSizeAndAlignOf(state.sp, state.resolve, tef.params.types.at(0), sizeVal, alignVal) && alignVal > 0) {
+                if (state.resolve.metadataType(state.sp, tef.params.types.at(0)) != MetadataType::TraitObject && TargetGetSizeAndAlignOf(state.sp, state.resolve, tef.params.types.at(0), sizeVal, alignVal) && alignVal > 0) {
                     DEBUG(StringView("min_align_of_val = ") << alignVal);
                     auto val = MIRConstant::make_Uint({U128(alignVal), HIRCoreType::Usize});
                     bb.statements.push_back(MIRStatement::make_Assign({mv$(te.retVal), mv$(val)}));

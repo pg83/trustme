@@ -2463,8 +2463,24 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t sizeVal;
                     size_t alignVal;
-                    if (ty->is_TraitObject()) {
-                        alignVal = readTraitObjectVtableUsize(2);
+                    if (this->resolve.metadataType(state.sp, ty) == MetadataType::TraitObject) {
+                        const auto dynamicAlignment = readTraitObjectVtableUsize(2);
+                        const auto wrapperAlignment = [&](auto&& recurse, const HIRType* type) -> size_t {
+                            if (type->is_TraitObject()) {
+                                return dynamicAlignment;
+                            }
+                            const auto* repr = TargetGetTypeRepr(state.sp, this->resolve, type);
+                            MIR_ASSERT(state, repr && repr->size == SIZE_MAX && !repr->fields.empty(), StringView("Expected a DST wrapper - ") << type);
+                            auto tailAlignment = recurse(recurse, repr->fields.back().ty);
+                            if (const auto* path = type->opt_Path(); path && path->binding.is_Struct()) {
+                                const auto packing = path->binding.as_Struct()->maxFieldAlignment;
+                                if (packing != 0) {
+                                    tailAlignment = std::min(tailAlignment, static_cast<size_t>(packing));
+                                }
+                            }
+                            return std::max(repr->align, tailAlignment);
+                        };
+                        alignVal = wrapperAlignment(wrapperAlignment, ty);
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
