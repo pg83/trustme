@@ -1101,21 +1101,10 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
 }
 
 HIRValueItem& HIRCrate::getValitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName) {
-    if (path.crateName() == crateName && path.components().size() == 1) {
-        auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) { return v.first == path.components().back(); });
-        if (i != newValues.end()) {
-            return i->second->ent;
-        }
-    }
+    /* Mutable lookup follows resolved imports, whose targets are declared items. */
     auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, false);
     auto it = mod.valueItems.find(path.components().back());
     if (it == mod.valueItems.end()) {
-        for (auto& inlineStatic : mod.inlineStatics) {
-            if (inlineStatic.first == path.components().back()) {
-                newValues.push_back(std::make_pair(inlineStatic.first, pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(inlineStatic.second.get())})));
-                return newValues.back().second->ent;
-            }
-        }
         BUG(sp, StringView("Could not find value name ") << path);
     }
     if (auto* imp = it->second->ent.opt_Import(); imp && !imp->isVariant && imp->path != path) {
