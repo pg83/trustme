@@ -1688,17 +1688,33 @@ auto BindVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
 
 auto BindVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
     auto _ = this->ms.setImplGenerics(item.params);
+    const auto oldSelfType = selfType;
+    selfType = crate.types.path(HIRGenericPath(p.getSimplePath(), item.params.makeNopParams(crate.types, 0)), &item);
     HIRVisitor::visitEnum(p, item);
+    selfType = oldSelfType;
 }
 
 auto BindVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
     auto _ = this->ms.setImplGenerics(item.params);
+    const auto oldSelfType = selfType;
+    auto path = p.getSimplePath();
+    if (item.variantOfEnum != RcString()) {
+        path.updateLastComponent(item.variantOfEnum);
+        const auto& enm = crate.getTypeitemByPathOpt(path)->as_Enum();
+        selfType = crate.types.path(HIRGenericPath(path, enm.params.makeNopParams(crate.types, 0)), &enm);
+    } else {
+        selfType = crate.types.path(HIRGenericPath(path, item.params.makeNopParams(crate.types, 0)), &item);
+    }
     HIRVisitor::visitStruct(p, item);
+    selfType = oldSelfType;
 }
 
 auto BindVisitor::visitUnion(HIRItemPath p, HIRUnion& item) -> void {
     auto _ = this->ms.setImplGenerics(item.params);
+    const auto oldSelfType = selfType;
+    selfType = crate.types.path(HIRGenericPath(p.getSimplePath(), item.params.makeNopParams(crate.types, 0)), &item);
     HIRVisitor::visitUnion(p, item);
+    selfType = oldSelfType;
 }
 
 auto BindVisitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) -> void {
@@ -3529,9 +3545,9 @@ UfcsVisitor::UfcsVisitor(const WireBoard& wb, bool visitExprs)
 auto UfcsVisitor::restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath) -> void {
     traits = state.traits;
     currentTraitPath_ = traitPath;
+    currentType_ = state.currentSelfType;
     if (traitPath) {
         currentTrait = &crate.getTraitByPath(Span(), state.currentTraitPath);
-        currentType_ = state.currentSelfType;
         inTraitDef_ = state.currentTraitImpl == nullptr;
     }
     curModPath = state.modPath;
