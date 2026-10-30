@@ -189,7 +189,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return true;
-            break;
         }
         case MIRRValue::TAG_Borrow: {
             auto& are = a.as_Borrow();
@@ -201,7 +200,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return true;
-            break;
         }
         case MIRRValue::TAG_Cast: {
             auto& are = a.as_Cast();
@@ -213,7 +211,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return true;
-            break;
         }
         case MIRRValue::TAG_BinOp: {
             auto& are = a.as_BinOp();
@@ -228,7 +225,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return true;
-            break;
         }
         case MIRRValue::TAG_UniOp: {
             auto& are = a.as_UniOp();
@@ -240,7 +236,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return true;
-            break;
         }
         case MIRRValue::TAG_DstPtr: {
             auto& are = a.as_DstPtr();
@@ -262,7 +257,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return true;
-            break;
         }
         case MIRRValue::TAG_Tuple: {
             auto& are = a.as_Tuple();
@@ -284,7 +278,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return are.val == bre.val;
-            break;
         }
         case MIRRValue::TAG_EnumVariant: {
             auto& are = a.as_EnumVariant();
@@ -296,7 +289,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return are.vals == bre.vals;
-            break;
         }
         case MIRRValue::TAG_Struct: {
             auto& are = a.as_Struct();
@@ -305,7 +297,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 return false;
             }
             return are.vals == bre.vals;
-            break;
         }
     }
     UNREACHABLE();

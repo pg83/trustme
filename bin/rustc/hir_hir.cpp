@@ -298,7 +298,6 @@ namespace {
                             BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                         }
                         return typelistOrdSpecific(context, sp, lpe.params.types, rpe.params.types);
-                        break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
                         break;

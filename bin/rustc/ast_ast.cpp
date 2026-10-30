@@ -203,7 +203,6 @@ ASTStruct ASTStruct::clone() const {
                 newFields.push_back(f.clone());
             }
             return ASTStruct(params_.clone(), mv$(newFields));
-            break;
         }
         case ASTStructData::TAG_Struct: {
             auto& e = data.as_Struct();
@@ -212,7 +211,6 @@ ASTStruct ASTStruct::clone() const {
                 newFields.push_back(f.clone());
             }
             return ASTStruct(params_.clone(), mv$(newFields));
-            break;
         }
     }
     UNREACHABLE();

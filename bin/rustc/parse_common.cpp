@@ -4620,7 +4620,6 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubSuper, std::move(path));
-                    break;
                 case TOK_RWORD_IN: {
                     ASTPath astPath;
                     switch (GET_TOK(tok, lex)) {
@@ -5216,7 +5215,6 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
             return ASTNamed<ASTItem>{lex.endSpan(ps), mv$(metaItems), vis, mv$(name), mv$(i)};
-            break;
         }
         case TOK_RWORD_STATIC: {
             bool isMut = false;
@@ -5233,7 +5231,6 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
 
             auto i = ASTItem(ASTStatic((isMut ? ASTStatic::MUT : ASTStatic::STATIC), mv$(type), nullptr));
             return ASTNamed<ASTItem>{lex.endSpan(ps), mv$(metaItems), vis, mv$(name), mv$(i)};
-            break;
         }
         case TOK_RWORD_TYPE: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -5243,7 +5240,6 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
             //TODO(sp, StringView("Extern type"));
             auto i = ASTItem(mv$(alias));
             return ASTNamed<ASTItem>{mv$(sp), mv$(metaItems), vis, mv$(name), mv$(i)};
-            break;
         }
         default:
             parseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_RWORD_STATIC, TOK_RWORD_TYPE});

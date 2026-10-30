@@ -260,7 +260,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
 
                         ASSERT_BUG(sp, iEntPtr->is_Module(), StringView("Expected Module, got ") << iEntPtr->tagStr() << StringView(" for ") << name << StringView(" in [") << baseNodes << StringView("]"));
                         return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
-                        break;
                     }
                     case ResolveItemRefType::TAG_None: {
                         DEBUG(StringView("Keep searching (") << i << StringView("/") << baseNodes.size() << StringView(")"));

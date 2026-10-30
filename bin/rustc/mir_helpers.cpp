@@ -616,13 +616,11 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                                 auto& se = str.data.as_Tuple();
                                 MIR_ASSERT(*this, fieldIndex < se.size(), StringView("Field index out of range in tuple-struct ") << te.path);
                                 return maybeMonomorph(se[fieldIndex].ent);
-                                break;
                             }
                             case HIRStructData::TAG_Named: {
                                 auto& se = str.data.as_Named();
                                 MIR_ASSERT(*this, fieldIndex < se.size(), StringView("Field index out of range in struct ") << te.path);
                                 return maybeMonomorph(se[fieldIndex].ty);
-                                break;
                             }
                         }
                     } else if (const auto* tep = te.binding.opt_Union()) {

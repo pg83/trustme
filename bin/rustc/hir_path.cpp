@@ -1125,7 +1125,6 @@ Ordering HIRPath::ord(const HIRPath& x) const {
             ORD(tpe.type, xpe.type);
             ORD(tpe.item, xpe.item);
             return ::ord(tpe.params, xpe.params);
-            break;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& tpe = this->data.as_UfcsKnown();
@@ -1134,7 +1133,6 @@ Ordering HIRPath::ord(const HIRPath& x) const {
             ORD(tpe.trait, xpe.trait);
             ORD(tpe.item, xpe.item);
             return ::ord(tpe.params, xpe.params);
-            break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             auto& tpe = this->data.as_UfcsUnknown();
@@ -1142,7 +1140,6 @@ Ordering HIRPath::ord(const HIRPath& x) const {
             ORD(tpe.type, xpe.type);
             ORD(tpe.item, xpe.item);
             return ::ord(tpe.params, xpe.params);
-            break;
         }
     }
     UNREACHABLE();
@@ -1615,7 +1612,6 @@ void stl::output<ZeroCopyOutput, HIRPath>(ZeroCopyOutput& os, const HIRPath& x) 
             os << StringView("<") << e.type << StringView(" as ");
             os << e.trait << StringView(">::") << e.item << e.params;
             return;
-            break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             auto& e = x.data.as_UfcsUnknown();

@@ -8006,7 +8006,6 @@ VarState VarState::clone() const {
                 n.push_back(a.clone());
             }
             return VarState::make_Partial({mv$(n), e.outerFlag});
-            break;
         }
         case VarState::TAG_PartialArray: {
             auto& e = (*this).as_PartialArray();
@@ -8015,7 +8014,6 @@ VarState VarState::clone() const {
                 n.insert(std::make_pair(kv.first, kv.second.clone()));
             }
             return VarState::make_PartialArray({box$(e.fillState->clone()), mv$(n), e.count});
-            break;
         }
     }
     UNREACHABLE();
@@ -8046,7 +8044,6 @@ bool VarState::operator==(const VarState& x) const {
                 return false;
             }
             return *te.innerState == *xe.innerState;
-            break;
         }
         case VarState::TAG_Partial: {
             auto& te = (*this).as_Partial();
@@ -8060,7 +8057,6 @@ bool VarState::operator==(const VarState& x) const {
                 }
             }
             return true;
-            break;
         }
         case VarState::TAG_PartialArray: {
             auto& te = (*this).as_PartialArray();
@@ -8074,7 +8070,6 @@ bool VarState::operator==(const VarState& x) const {
                 }
             }
             return true;
-            break;
         }
     }
     UNREACHABLE();

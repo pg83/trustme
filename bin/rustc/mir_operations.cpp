@@ -700,7 +700,6 @@ namespace {
                             auto size = lit.slice(ptrSize).readUint(ptrSize);
                             auto sizeVal = MIRParam(MIRConstant::make_Uint({size, HIRCoreType::Usize}));
                             return MIRRValue::make_MakeDst({MIRParam(mv$(ptrVal)), mv$(sizeVal)});
-                            break;
                         }
                         case MetadataType::TraitObject: {
                             return MIRRValue::make_MakeDst({MIRParam(mv$(ptrVal)), literalVtable(state, lit, params)});

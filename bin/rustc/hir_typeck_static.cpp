@@ -2003,7 +2003,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         *outImplParamsDef = &str.params;
                     }
                     return ValuePtr::Data_StructConstructor{&ve.ty, &str};
-                    break;
                 }
             }
             UNREACHABLE();

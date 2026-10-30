@@ -2122,7 +2122,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
                     return true;
                 }
                 return this->pathparamsContainIvars(pe.params, onlyUnbound);
-                break;
             }
             case HIRPath::Data::TAG_UfcsInherent: {
                 auto& pe = path.data.as_UfcsInherent();
@@ -2130,7 +2129,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
                     return true;
                 }
                 return this->pathparamsContainIvars(pe.params, onlyUnbound);
-                break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
                 BUG(Span(), StringView("UfcsUnknown"));
@@ -2262,7 +2260,6 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                         return false;
                     }
                     return self.pathparamsEqual(lpe.params, rpe.params);
-                    break;
                 }
                 case HIRPath::Data::TAG_UfcsKnown: {
                     auto& lpe = l.data.as_UfcsKnown();
@@ -2277,7 +2274,6 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                         return false;
                     }
                     return self.pathparamsEqual(lpe.params, rpe.params);
-                    break;
                 }
                 case HIRPath::Data::TAG_UfcsInherent: {
                     auto& lpe = l.data.as_UfcsInherent();
@@ -2289,7 +2285,6 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                         return false;
                     }
                     return self.pathparamsEqual(lpe.params, rpe.params);
-                    break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
                     BUG(Span(), StringView("UfcsUnknown"));
@@ -4480,7 +4475,6 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
                         return true;
                     }
                     return false;
-                    break;
                 }
                 case HIRPath::Data::TAG_UfcsKnown: {
                     auto& e2 = p.data.as_UfcsKnown();
@@ -4494,7 +4488,6 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
                         return true;
                     }
                     return false;
-                    break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
                     return true;

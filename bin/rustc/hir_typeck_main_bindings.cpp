@@ -134,7 +134,6 @@ namespace {
                     }
                     case HIRTypeItem::TAG_ExternType: {
                         return emptyParams;
-                        break;
                     }
                     case HIRTypeItem::TAG_Module: {
                         BUG(sp, StringView("Type path pointed to module - ") << path);

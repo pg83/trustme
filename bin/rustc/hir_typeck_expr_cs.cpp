@@ -12296,7 +12296,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeArrayList& node) -> void {
     this->context.equateTypes(node.span(), node.resType, arrayTy);
     const auto& innerTy = arrayTy->as_Array().inner;
     for (auto& val : node.vals) {
-        this->equateTypesInnerCoerce(node.span(), innerTy, val);
+        /* An expected element type binds its open parameters in element order;
+           later elements cannot select a trait impl before those bindings. */
+        this->context.equateTypesCoerce(node.span(), innerTy, val, expectedElement != nullptr);
     }
 
     for (auto& val : node.vals) {

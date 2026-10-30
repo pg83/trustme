@@ -3228,7 +3228,6 @@ Token MacroExpander::realGetToken() {
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG(StringView("Updated hygine: ") << rv);
                         return rv;
-                        break;
                     }
                     case TOK_BYTESTRING:
                     case TOK_STRING: {
@@ -3267,7 +3266,6 @@ Token MacroExpander::realGetToken() {
                         const auto value = e & NAMEDVALUE_VALMASK;
                         auto count = mappings_.getVariableCount(this->pointSpan(), state.iterations(), value & NAMEDVALUE_COUNT_IDXMASK, value >> NAMEDVALUE_COUNT_DEPTHSHIFT);
                         return Token(U128(count), CORETYPE_ANY);
-                        break;
                     }
                     case NAMEDVALUE_TY_IGNORE: {
                         break;

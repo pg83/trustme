@@ -1797,7 +1797,6 @@ Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
                 return rv;
             }
             return OrdEqual;
-            break;
         }
         case HIRType::TAG_TraitObject: {
             auto& te = (*this).as_TraitObject();
@@ -1805,14 +1804,12 @@ Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
             ORD(te.trait, xe.trait);
             ORD(te.markers, xe.markers);
             return OrdEqual;
-            break;
         }
         case HIRType::TAG_ErasedType: {
             auto& te = (*this).as_ErasedType();
             auto& xe = (*x).as_ErasedType();
             ORD(te.inner, xe.inner);
             return OrdEqual;
-            break;
         }
         case HIRType::TAG_Array: {
             auto& te = (*this).as_Array();
@@ -1820,7 +1817,6 @@ Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
             ORD(te.inner, xe.inner);
             ORD(te.size, xe.size);
             return OrdEqual;
-            break;
         }
         case HIRType::TAG_Slice: {
             auto& te = (*this).as_Slice();
@@ -1832,7 +1828,6 @@ Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
             auto& xe = (*x).as_Pattern();
             ORD(te.inner, xe.inner);
             return te.pattern.ord(xe.pattern);
-            break;
         }
         case HIRType::TAG_Tuple: {
             auto& te = (*this).as_Tuple();
@@ -1844,14 +1839,12 @@ Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
             auto& xe = (*x).as_Borrow();
             ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type));
             return ::ord(te.inner, xe.inner);
-            break;
         }
         case HIRType::TAG_Pointer: {
             auto& te = (*this).as_Pointer();
             auto& xe = (*x).as_Pointer();
             ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type));
             return ::ord(te.inner, xe.inner);
-            break;
         }
         case HIRType::TAG_NamedFunction: {
             auto& te = (*this).as_NamedFunction();
