@@ -2932,6 +2932,9 @@ namespace {
                 }
                 path = std::move(tok.fragType()->path());
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+                if (lex.lookahead(0) != TOK_STAR && lex.lookahead(0) != TOK_BRACE_OPEN) {
+                    parseErrorUnexpected(lex, lex.getToken(), {TOK_STAR, TOK_BRACE_OPEN});
+                }
             } break;
             case TOK_INTERPOLATED_PATH: {
                 path = mv$(tok.fragPath());
@@ -2952,6 +2955,9 @@ namespace {
                     }
                     out.entries.push_back({lex.pointSpan(), ASTPath(path), std::move(name), false, group});
                     return;
+                }
+                if (lex.lookahead(0) != TOK_STAR && lex.lookahead(0) != TOK_BRACE_OPEN) {
+                    parseErrorUnexpected(lex, lex.getToken(), {TOK_STAR, TOK_BRACE_OPEN});
                 }
             } break;
             default:

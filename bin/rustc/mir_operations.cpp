@@ -4203,7 +4203,7 @@ namespace {
                     bb.terminator = MIRTerminator::make_Goto(te.retBlock);
                     changed = true;
                 }
-            } else if (tef.name == "min_align_of_val") {
+            } else if (tef.name == "align_of_val" || tef.name == "min_align_of_val") {
                 size_t alignVal = 0;
                 size_t sizeVal = 0;
                 if (TargetGetSizeAndAlignOf(state.sp, state.resolve, tef.params.types.at(0), sizeVal, alignVal) && alignVal > 0) {
