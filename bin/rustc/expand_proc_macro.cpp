@@ -2324,33 +2324,12 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                     break;
                 }
                 case GenericParam::TAG_Lifetime: {
-                    auto& p = param.as_Lifetime();
+                    const auto& p = param.as_Lifetime();
                     pmi.sendLifetime(p.name().name.c_str());
-                    bool first = true;
                     for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
-                        if (!params.bounds[i].is_None()) {
-                            if (first) {
-                                pmi.sendSymbol(":");
-                                first = false;
-                            } else {
-                                pmi.sendSymbol("+");
-                            }
-                        }
-                        {
-                            auto& tuMatch = params.bounds[i];
-                            switch (tuMatch.tag()) {
-                                default:
-                                    BUG(sp, StringView(""));
-                                case ASTGenericBound::TAG_None: {
-                                    break;
-                                }
-                                case ASTGenericBound::TAG_Lifetime: {
-                                    auto& be = tuMatch.as_Lifetime();
-                                    pmi.sendLifetime(be.test.name().name.c_str());
-                                    break;
-                                }
-                            }
-                        }
+                        pmi.sendSymbol(i == param.boundsStart ? ":" : "+");
+                        const auto& bound = params.bounds[i].as_Lifetime();
+                        pmi.sendLifetime(bound.bound.name().name.c_str());
                     }
                     break;
                 }
@@ -2450,9 +2429,9 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
                 }
                 case ASTGenericBound::TAG_Lifetime: {
                     auto& be = e.as_Lifetime();
-                    pmi.sendLifetime(be.bound.name().name.c_str());
-                    pmi.sendSymbol(":");
                     pmi.sendLifetime(be.test.name().name.c_str());
+                    pmi.sendSymbol(":");
+                    pmi.sendLifetime(be.bound.name().name.c_str());
                     break;
                 }
                 case ASTGenericBound::TAG_TypeLifetime: {
