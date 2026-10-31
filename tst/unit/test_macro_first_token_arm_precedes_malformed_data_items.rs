@@ -1,0 +1,50 @@
+macro_rules! select {
+    ($($token:tt)*) => { 17u8 };
+    ($item:item) => { 99u8 };
+}
+fn main() {
+    let selected = [
+        select!(mod ;),
+        select!(mod named = ;),
+        select!(type = ;),
+        select!(type Named<),
+        select!(type Named;),
+        select!(type Named = ;),
+        select!(type Named = u8),
+        select!(static ;),
+        select!(static VALUE = 0;),
+        select!(static VALUE: = 0;),
+        select!(static VALUE: u8 = ;),
+        select!(static VALUE: u8),
+        select!(struct ;),
+        select!(struct Named<),
+        select!(struct Named where : {}),
+        select!(struct Named = ;),
+        select!(struct Named(u8)),
+        select!(enum {}),
+        select!(enum Named<),
+        select!(enum Named where : {}),
+        select!(enum Named;),
+        select!(pub union ;),
+        select!(pub union Named<),
+        select!(pub union Named where : {}),
+        select!(pub union Named;),
+        select!(some_macro!()),
+        select!(union!),
+        select!(union!()),
+        select!(mod nested;),
+        select!(mod nested {}),
+        select!(type Named<T> = (T, u8);),
+        select!(static mut VALUE: u8 = 37;),
+        select!(struct Named(u8);),
+        select!(struct Named { value: u8 }),
+        select!(enum Named { Value(u8) }),
+        select!(pub union Named { value: u8 }),
+        select!(#[allow(dead_code)] struct Attributed;),
+        select!(::),
+        select!(not_a_macro),
+        select!(struct Unit;),
+        select!(union! {}),
+    ];
+    assert_eq!(selected, [17; 41]);
+}

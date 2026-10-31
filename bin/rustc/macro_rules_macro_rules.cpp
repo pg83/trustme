@@ -1450,9 +1450,7 @@ namespace {
                                 if (lex.consumeIf(TOK_LIFETIME)) {
                                 } else {
                                     if (lex.next() == TOK_SQUARE_OPEN) {
-                                        if (!consumeTt(lex)) {
-                                            return false;
-                                        }
+                                        consumeTt(lex);
                                     } else if (lex.consumeIf(TOK_TILDE)) {
                                         if (!lex.consumeIf(TOK_RWORD_CONST)) {
                                             return false;
@@ -1487,7 +1485,13 @@ namespace {
         }
 
         // TODO: What about `union!` as a macro? Needs to be handled below
-        if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.nextTok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_RWORD_CRATE || lex.next() == TOK_DOUBLE_COLON)) {
+        bool startsAutoTrait = false;
+        if (lex.next() == TOK_IDENT && lex.nextTok().ident().name == "auto") {
+            auto afterAuto = lex.clone();
+            afterAuto.consume();
+            startsAutoTrait = afterAuto.next() == TOK_RWORD_TRAIT;
+        }
+        if (mode == ItemConsumeMode::ItemFragment && !startsAutoTrait && ((lex.next() == TOK_IDENT && lex.nextTok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_RWORD_CRATE || lex.next() == TOK_DOUBLE_COLON)) {
             if (!consumePath(lex)) {
                 return false;
             }
@@ -1526,9 +1530,7 @@ namespace {
                 if (lex.consumeIf(TOK_SEMICOLON))
                     ;
                 else if (lex.next() == TOK_BRACE_OPEN) {
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                 } else {
                     return false;
                 }
@@ -1614,16 +1616,12 @@ namespace {
                 if (lex.consumeIf(TOK_SEMICOLON))
                     ;
                 else if (lex.next() == TOK_PAREN_OPEN) {
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                     if (!lex.consumeIf(TOK_SEMICOLON)) {
                         return false;
                     }
                 } else if (lex.next() == TOK_BRACE_OPEN) {
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                 } else {
                     return false;
                 }
@@ -1686,7 +1684,6 @@ namespace {
                 } else {
                     return false;
                 }
-                break;
 
             case TOK_RWORD_CONST:
                 lex.consume();
@@ -1740,9 +1737,7 @@ namespace {
                 if (lex.next() != TOK_BRACE_OPEN) {
                     return false;
                 }
-                if (!consumeTt(lex)) {
-                    return false;
-                }
+                consumeTt(lex);
                 break;
             case TOK_RWORD_EXTERN:
                 lex.consume();
@@ -1799,9 +1794,7 @@ namespace {
                 if (lex.next() != TOK_PAREN_OPEN) {
                     return false;
                 }
-                if (!consumeTt(lex)) {
-                    return false;
-                }
+                consumeTt(lex);
 
                 if (lex.consumeIf(TOK_THINARROW)) {
                     if (!consumeType(lex)) {
@@ -1817,9 +1810,7 @@ namespace {
                     // TODO: Is this actually valid?
                     break;
                 } else if (lex.next() == TOK_BRACE_OPEN) {
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                 } else {
                     return false;
                 }
