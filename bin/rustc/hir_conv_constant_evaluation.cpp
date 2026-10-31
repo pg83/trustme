@@ -2792,11 +2792,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeSint(state, dst.getLen() * 8, S128(result));
                 } else if (te->name == "assume") {
                     auto val = localState.readParamUint(8, e.args.at(0));
-                    MIR_ASSERT(state, val != 0, StringView("`assume` failed"));
+                    if (val == 0) {
+                        ERROR(state.sp, E0000, StringView("assumption failed during constant evaluation"));
+                    }
                 } else if (te->name == "assert_inhabited") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     bool isUninhabited = resolve.typeIsImpossible(state.sp, ty);
-                    MIR_ASSERT(state, !isUninhabited, StringView("assert_inhabited ") << ty << StringView(" failed"));
+                    if (isUninhabited) {
+                        ERROR(state.sp, E0000, StringView("attempted to instantiate an uninhabited type: ") << ty);
+                    }
                 } else if (te->name == "const_eval_select") {
                     auto argTy = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, argTy->is_Tuple(), StringView("`") << te->name << StringView("` requires a tuple for ARG, got ") << argTy);
@@ -3082,7 +3086,9 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, TargetGetPointerBits(), count);
                 } else if (te->name == "assert_zero_valid") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, !ty->is_Borrow(), StringView("`assert_zero_valid`: Borrow cannot be zero"));
+                    if (ty->is_Borrow()) {
+                        ERROR(state.sp, E0000, StringView("zero is not a valid value for a reference: ") << ty);
+                    }
                     // TODO: Other cases?
                 } else if (te->name == "assert_mem_uninitialized_valid") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
