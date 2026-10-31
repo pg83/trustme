@@ -2173,45 +2173,8 @@ namespace {
                 case ASTItem::TAG_MacroInv: {
                     break;
                 }
-                case ASTItem::TAG_ExternBlock: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_Impl: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_NegImpl: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_GlobalAsm: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_Macro: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_Use: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - Use"));
-                }
-                case ASTItem::TAG_Module: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - Module"));
-                }
-                case ASTItem::TAG_Crate: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - Crate"));
-                }
-                case ASTItem::TAG_Enum: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - Enum"));
-                }
-                case ASTItem::TAG_Trait: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_TraitAlias: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - ") << i.data.tagStr());
-                }
-                case ASTItem::TAG_Struct: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - Struct"));
-                }
-                case ASTItem::TAG_Union: {
-                    BUG(i.span, StringView("Resolve_Absolute_ImplItems - Union"));
-                }
+                default:
+                    BUG(i.span, StringView("Invalid expanded impl item - ") << i.data.tagStr());
                 case ASTItem::TAG_Type: {
                     auto& e = i.data.as_Type();
                     DEBUG(StringView("Type - ") << i.name);

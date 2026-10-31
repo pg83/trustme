@@ -2309,6 +2309,10 @@ namespace {
         } else {
             type = ::mkType(lex.typePool(), lex.pointSpan());
         }
+        if (tok.type() == TOK_RWORD_WHERE) {
+            ParseWhereClause(lex, params);
+            GET_TOK(tok, lex);
+        }
         CHECK_TOK(tok, TOK_SEMICOLON);
 
         return ASTTypeAlias(std::move(params), std::move(type));
@@ -5053,7 +5057,13 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
             }
             switch (item.data.tag()) {
                 default:
-                    TODO(lex.pointSpan(), StringView("Interpolated item into impl: ") << item.data.tagStr());
+                    ERROR(item.span, E0000, StringView("Item is not allowed in an impl: ") << item.data.tagStr());
+                case ASTItem::TAG_Type: {
+                    auto& e = item.data.as_Type();
+                    impl.addType(item.span, mv$(item.attrs), item.vis, false, item.name, mv$(e.params_), e.type_);
+                    impl.items().back().data->as_Type().selfBounds = mv$(e.selfBounds);
+                    break;
+                }
                 case ASTItem::TAG_Function: {
                     auto& e = item.data.as_Function();
                     impl.addFunction(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));

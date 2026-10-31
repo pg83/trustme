@@ -1411,7 +1411,7 @@ namespace {
             static bool maybeWhere(TokenStreamRO& lex) {
                 if (lex.consumeIf(TOK_RWORD_WHERE)) {
                     do {
-                        if (lex.next() == TOK_BRACE_OPEN || lex.next() == TOK_SEMICOLON) {
+                        if (lex.next() == TOK_BRACE_OPEN || lex.next() == TOK_SEMICOLON || lex.next() == TOK_EQUAL) {
                             break;
                         }
                         if (lex.consumeIf(TOK_LIFETIME)) {
@@ -1554,11 +1554,16 @@ namespace {
                 if (!H::maybeGenerics(lex)) {
                     return false;
                 }
-
+                if (!H::maybeWhere(lex)) {
+                    return false;
+                }
                 if (!lex.consumeIf(TOK_EQUAL)) {
                     return false;
                 }
                 if (!consumeType(lex)) {
+                    return false;
+                }
+                if (!H::maybeWhere(lex)) {
                     return false;
                 }
                 if (!lex.consumeIf(TOK_SEMICOLON)) {

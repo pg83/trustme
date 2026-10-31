@@ -3441,7 +3441,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     TODO(sp, StringView("Match extern type"));
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    TODO(sp, StringView("Match union"));
+                    ERROR(sp, E0000, StringView("Union constants cannot be used in patterns"));
                 }
                 case HIRTypePathBinding::TAG_Enum: {
                     auto* enmRepr = TargetGetTypeRepr(sp, resolve, ty);
@@ -4649,69 +4649,19 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
 
     DEBUG(StringView("ty = ") << ty << StringView(", val = ") << val);
     switch ((*ty).tag()) {
-        case HIRType::TAG_Infer: {
-            BUG(sp, StringView("Hit _ in type - ") << ty);
-        }
-        case HIRType::TAG_Diverge: {
-            BUG(sp, StringView("Matching over !"));
-        }
         case HIRType::TAG_Primitive: {
             this->genDispatchPrimitive(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
             break;
         }
-        case HIRType::TAG_Pattern: {
-            BUG(sp, StringView("Pattern type was not reduced to its base type"));
-        }
         case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();
-
-            // TODO: What about `box` destructures?
-
-            switch (te.binding.tag()) {
-                case HIRTypePathBinding::TAG_Unbound: {
-                    BUG(sp, StringView("Encounterd unbound path - ") << te.path);
-                }
-                case HIRTypePathBinding::TAG_Opaque: {
-                    BUG(sp, StringView("Attempting to match over opaque type - ") << ty);
-                }
-                case HIRTypePathBinding::TAG_Struct: {
-                    /* Dispatch only sees non-Any rules after field lowering. */
-                    BUG(sp, StringView("Struct pattern was not lowered to field rules - ") << ty);
-                }
-                case HIRTypePathBinding::TAG_Union: {
-                    TODO(sp, StringView("Match over Union"));
-                }
-                case HIRTypePathBinding::TAG_ExternType: {
-                    TODO(sp, StringView("Match over ExternType - ") << ty);
-                }
-                case HIRTypePathBinding::TAG_Enum: {
-                    this->genDispatchEnum(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
-                    break;
-                }
-            }
+            ASSERT_BUG(sp, te.binding.is_Enum(), StringView("Pattern was not lowered to field rules - ") << ty);
+            this->genDispatchEnum(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
             break;
-        }
-        case HIRType::TAG_Generic: {
-            BUG(sp, StringView("Attempting to match a generic"));
-        }
-        case HIRType::TAG_TraitObject: {
-            BUG(sp, StringView("Attempting to match a trait object"));
-        }
-        case HIRType::TAG_ErasedType: {
-            BUG(sp, StringView("Attempting to match an erased type"));
-        }
-        case HIRType::TAG_Array: {
-            BUG(sp, StringView("Array patterns must be decomposed before dispatch"));
         }
         case HIRType::TAG_Slice: {
             this->genDispatchSlice(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
             break;
-        }
-        case HIRType::TAG_Tuple: {
-            BUG(sp, StringView("Match directly on tuple"));
-        }
-        case HIRType::TAG_Borrow: {
-            BUG(sp, StringView("Match directly on borrow"));
         }
         case HIRType::TAG_Pointer: {
             auto valUsize = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
@@ -4719,16 +4669,8 @@ void MatchGenGrouped::genDispatch(const std::vector<tRulesSubset>& rules, size_t
             this->genDispatchPrimitive(builder.resolve().crate.types.primitive(HIRCoreType::Usize), mv$(valUsize), rules, ofs, armTargets, defBlk);
             break;
         }
-        case HIRType::TAG_NamedFunction: {
-            BUG(sp, StringView("Attempting to match a function pointer - ") << ty);
-        }
-        case HIRType::TAG_Function: {
-            // TODO: Could this actually be valid?
-            BUG(sp, StringView("Attempting to match a function pointer - ") << ty);
-        }
-        case HIRType::TAG_NodeType: {
-            BUG(sp, StringView("Attempting to match a magic type - ") << ty);
-        }
+        default:
+            BUG(sp, StringView("Pattern was not lowered to a dispatchable type - ") << ty);
     }
 }
 
