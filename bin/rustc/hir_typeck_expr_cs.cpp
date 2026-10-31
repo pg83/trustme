@@ -8192,6 +8192,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                         if (srcInner->as_Infer().tyClass == HIRInferClass::None && sE.type >= e.type) {
                             this->context.equateTypes(sp, srcInner, dstInner);
                         }
+                    } else if (dstInner->is_TraitObject() && !srcInner->is_TraitObject()) {
+                        this->context.equateTypesCoerce(sp, tgtTy, node.value);
                     } else {
                     }
                     this->completed = true;

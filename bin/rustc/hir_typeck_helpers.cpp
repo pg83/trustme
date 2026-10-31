@@ -13059,6 +13059,16 @@ auto NextTraitGoalEvaluator::evaluateBuiltinUnsize(Candidate& candidate, const H
             }
         };
 
+        if (!source->is_TraitObject()) {
+            const auto& sized = resolve_.langSized();
+            combine(sized.components().empty()
+                ? resolve_.typeIsSized(span(), source)
+                : require(HIRTraitPath(HIRGenericPath(sized, {}))));
+            if (result == Certainty::NoSolution) {
+                return result;
+            }
+        }
+
         if (object->trait.path.path != HIRSimplePath()) {
             const auto nested = require(object->trait);
             if (nested != Certainty::Ambiguous || source->is_Infer()) {

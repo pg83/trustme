@@ -972,7 +972,11 @@ namespace {
                         outMetaVal = mutator.inTemporary(outMetaTy, MIRRValue::make_DstMeta({ptrValue.clone()}));
                     }
                 } else {
-                    MIR_ASSERT(state, state.resolve.typeIsSized(state.sp, srcTy), StringView("Attempting to get vtable for unsized type - ") << srcTy);
+                    const bool sourceSized = state.resolve.typeIsSized(state.sp, srcTy);
+                    if (!sourceSized && monomorphiseTypeNeeded(srcTy)) {
+                        return nullptr;
+                    }
+                    MIR_ASSERT(state, sourceSized, StringView("Attempting to get vtable for unsized type - ") << srcTy);
                     outMetaVal = createVtable(srcTy, de.trait, operationsContext(state).vtableName);
                 }
                 return outMetaTy;

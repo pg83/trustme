@@ -2556,48 +2556,16 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             if (state.resolve.typeNeedsDropGlue(sp, ty)) {
                 switch ((*ty).tag()) {
-                    case HIRType::TAG_Infer: {
-                        UNREACHABLE();
-                    }
-                    case HIRType::TAG_Generic: {
-                        UNREACHABLE();
-                    }
-                    case HIRType::TAG_ErasedType: {
-                        UNREACHABLE();
-                    }
-                    case HIRType::TAG_TraitObject: {
-                        TODO(sp, StringView("Drop glue for TraitObject? ") << ty);
-                    }
-                    case HIRType::TAG_Slice: {
-                        TODO(sp, StringView("Drop glue for Slice? ") << ty);
-                    }
+                    default:
+                        BUG(sp, StringView("Unexpected type requiring generated drop glue: ") << ty);
                     case HIRType::TAG_NodeType: {
                         TODO(sp, StringView("Drop glue for NodeType? ") << ty);
-                    }
-                    case HIRType::TAG_Diverge: {
-                        builder.terminateBlock(MIRTerminator::make_Unreachable({}));
-                        break;
-                    }
-                    case HIRType::TAG_Primitive: {
-                        break;
                     }
                     case HIRType::TAG_Pattern: {
                         break;
                     }
-                    case HIRType::TAG_NamedFunction: {
-                        break;
-                    }
-                    case HIRType::TAG_Function: {
-                        break;
-                    }
-                    case HIRType::TAG_Pointer: {
-                        break;
-                    }
                     case HIRType::TAG_Borrow: {
-                        auto& te = (*ty).as_Borrow();
-                        if (te.type == HIRBorrowType::Owned) {
-                            builder.pushStmtDrop(MIRLValue::newDeref(MIRLValue::newDeref(builder.self.clone())));
-                        }
+                        builder.pushStmtDrop(MIRLValue::newDeref(MIRLValue::newDeref(builder.self.clone())));
                         break;
                     }
                     case HIRType::TAG_Tuple: {
@@ -2615,12 +2583,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         break;
                     }
                     case HIRType::TAG_Array: {
-                        auto& te = (*ty).as_Array();
-                        auto size = te.size.as_Known();
-                        auto self = MIRLValue::newDeref(builder.self.clone());
-                        if (size > 0 && state.resolve.typeNeedsDropGlue(sp, te.inner)) {
-                            builder.pushStmtDrop(mv$(self));
-                        }
+                        builder.pushStmtDrop(MIRLValue::newDeref(builder.self.clone()));
                         break;
                     }
                     case HIRType::TAG_Path: {
@@ -2667,11 +2630,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Union: {
-                                const auto pbe = te.binding.as_Union();
-                                if (pbe->markings.hasDropImpl) {
-                                    builder.pushCallDrop(ty);
-                                    hasDrop = true;
-                                }
+                                builder.pushCallDrop(ty);
+                                hasDrop = true;
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Enum: {
