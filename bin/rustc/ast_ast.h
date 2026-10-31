@@ -411,9 +411,6 @@ public:
         return items_;
     }
 
-    void addType(Span sp, RcString name, ASTAttributeList attrs, ASTType* type);
-    void addFunction(Span sp, RcString name, ASTAttributeList attrs, ASTFunction fcn);
-    void addStatic(Span sp, RcString name, ASTAttributeList attrs, ASTStatic v);
 
     void setIsMarker();
     bool isMarker() const;
@@ -872,7 +869,6 @@ public:
     void addItem(ASTNamed<ASTItem> item);
     void addItem(Span sp, ASTVisibility vis, RcString name, ASTItem it, ASTAttributeList attrs);
     void addExtCrate(Span sp, ASTVisibility vis, RcString extName, RcString impName, ASTAttributeList attrs);
-    void addMacroInvocation(ASTMacroInvocation item);
 
     void addMacro(bool isExported, RcString name, MacroRulesPtr macro);
 

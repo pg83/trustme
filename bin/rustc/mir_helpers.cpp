@@ -1423,18 +1423,6 @@ MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resol
     }
 }
 
-void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt) {
-    BUG_ASSERT(&stmt >= &bb.statements.front());
-    BUG_ASSERT(&stmt <= &bb.statements.back());
-    this->setCurStmt(bb, &stmt - bb.statements.data());
-}
-
-void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx) {
-    BUG_ASSERT(&bb >= &fcn.blocks.front());
-    BUG_ASSERT(&bb <= &fcn.blocks.back());
-    this->setCurStmt(&bb - fcn.blocks.data(), stmtIdx);
-}
-
 void MIRTypeResolve::setCurStmt(unsigned int bbIdx, unsigned int stmtIdx) {
     this->bbIdx = bbIdx;
     this->stmtIdx = stmtIdx;

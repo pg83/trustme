@@ -128,18 +128,6 @@ ASTFunction ASTFunction::clone() const {
     return rv;
 }
 
-void ASTTrait::addType(Span sp, RcString name, ASTAttributeList attrs, ASTType* type) {
-    items_.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Type({ASTTypeAlias(ASTGenericParams(), mv$(type))})));
-}
-
-void ASTTrait::addFunction(Span sp, RcString name, ASTAttributeList attrs, ASTFunction fcn) {
-    items_.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Function({mv$(fcn)})));
-}
-
-void ASTTrait::addStatic(Span sp, RcString name, ASTAttributeList attrs, ASTStatic v) {
-    items_.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Static({mv$(v)})));
-}
-
 void ASTTrait::setIsMarker() {
     isMarker_ = true;
 }
@@ -346,10 +334,6 @@ void ASTModule::addItem(Span sp, ASTVisibility vis, RcString name, ASTItem it, A
 
 void ASTModule::addExtCrate(Span sp, ASTVisibility vis, RcString extName, RcString impName, ASTAttributeList attrs) {
     this->addItem(mv$(sp), mv$(vis), impName, ASTItem::make_Crate({mv$(extName)}), mv$(attrs));
-}
-
-void ASTModule::addMacroInvocation(ASTMacroInvocation item) {
-    this->addItem(item.span(), ASTVisibility::makeGlobal(), "", ASTItem(mv$(item)), ASTAttributeList{});
 }
 
 void ASTModule::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {

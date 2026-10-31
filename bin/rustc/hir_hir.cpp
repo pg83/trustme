@@ -881,21 +881,6 @@ bool HIRMarkerImpl::matchesType(const HIRType* type, tCbResolveType tyRes, HIRIm
     return matchesTypeRoot(params, this->type, type, tyRes, scratch);
 }
 
-bool HIRTraitImpl::matchesType(const HIRType* type, tCbResolveType tyRes) const {
-    HIRImplMatcherScratch scratch;
-    return matchesType(type, tyRes, scratch);
-}
-
-bool HIRTypeImpl::matchesType(const HIRType* type, tCbResolveType tyRes) const {
-    HIRImplMatcherScratch scratch;
-    return matchesType(type, tyRes, scratch);
-}
-
-bool HIRMarkerImpl::matchesType(const HIRType* type, tCbResolveType tyRes) const {
-    HIRImplMatcherScratch scratch;
-    return matchesType(type, tyRes, scratch);
-}
-
 bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& parent, HIRSpecializationBoundCallback& cb) const {
     Vector<const HIRType*> parentMappings;
     ImplMatcher parentMatcher(parentMappings, parent.params, types.objectPool());

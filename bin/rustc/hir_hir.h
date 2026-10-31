@@ -586,11 +586,6 @@ public:
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
-    bool matchesType(const HIRType* tr) const {
-        return matchesType(tr, HIRResolvePlaceholdersNop());
-    }
-
-    bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 };
 
 /* What a parent impl asks of an impl whose head lies within its own: each of the
@@ -648,11 +643,6 @@ public:
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
-    bool matchesType(const HIRType* tr) const {
-        return matchesType(tr, HIRResolvePlaceholdersNop());
-    }
-
-    bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 
 
     /* Does every type this impl applies to also match `parent`'s head?  If so, hand the
@@ -674,11 +664,6 @@ public:
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
-    bool matchesType(const HIRType* tr) const {
-        return matchesType(tr, HIRResolvePlaceholdersNop());
-    }
-
-    bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 };
 
 class HIRImplMatcherScratch {

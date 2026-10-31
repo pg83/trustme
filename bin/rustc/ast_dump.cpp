@@ -44,10 +44,6 @@ namespace {
 
         virtual void visit(ASTExprNodeTry& n) override;
 
-        void dumpToken(const Token& t);
-
-        void dumpTokentree(const TokenTree& tt);
-
         virtual void visit(ASTExprNodeMacro& n) override;
 
         virtual void visit(ASTExprNodeAsm& n) override;
@@ -1057,30 +1053,8 @@ auto RustPrinter::visit(ASTExprNodeTry& n) -> void {
     ASTNodeVisitor::visit(n.inner);
 }
 
-auto RustPrinter::dumpToken(const Token& t) -> void {
-    os << t.toStr() << StringView(" ");
-}
-
-auto RustPrinter::dumpTokentree(const TokenTree& tt) -> void {
-    if (tt.isToken()) {
-        dumpToken(tt.tok());
-    } else {
-        for (size_t i = 0; i < tt.size(); i++) {
-            dumpTokentree(tt[i]);
-        }
-    }
-}
-
 auto RustPrinter::visit(ASTExprNodeMacro& n) -> void {
-    exprRoot = false;
-    os << n.path << StringView("!");
-    if (n.ident != "") {
-        os << StringView(" ");
-        os << n.ident;
-    }
-    os << StringView(n.isBraced ? "{" : "(");
-    dumpTokentree(n.tokens);
-    os << StringView(n.isBraced ? "}" : ")");
+    BUG(n.span(), StringView("Unexpanded macro in AST dump"));
 }
 
 auto RustPrinter::visit(ASTExprNodeAsm& n) -> void {
@@ -1319,25 +1293,7 @@ auto RustPrinter::visit(ASTExprNodeLoop& n) -> void {
 }
 
 auto RustPrinter::visit(ASTExprNodeFor& n) -> void {
-    bool exprRoot = exprRoot;
-    exprRoot = false;
-
-    if (n.label.name != "") {
-        os << StringView("'") << n.label << StringView(": ");
-    }
-    os << StringView("for ");
-    printPattern(n.pattern, true);
-    os << StringView(" in ");
-    ASTNodeVisitor::visit(n.value);
-
-    if (exprRoot) {
-        os << StringView("\n");
-        os << indent();
-    } else {
-        os << StringView(" ");
-    }
-
-    ASTNodeVisitor::visit(n.code);
+    BUG(n.span(), StringView("Unexpanded for loop in AST dump"));
 }
 
 auto RustPrinter::visitIfletConditions(std::vector<ASTIfLetCondition>& conds) -> void {

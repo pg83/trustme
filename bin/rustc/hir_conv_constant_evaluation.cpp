@@ -2386,22 +2386,16 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     const size_t ptrSize = TargetGetPointerBits() / 8;
                     auto arg = localState.getLval(e.args.at(0).as_LValue());
                     auto vtablePtr = arg.slice(ptrSize).readPtr(state);
-                    MIR_ASSERT(state, vtablePtr.first >= EncodedLiteral::PTR_BASE, StringView("Invalid trait object vtable pointer"));
-                    MIR_ASSERT(state, vtablePtr.second, StringView("Trait object has no vtable relocation"));
-                    if (auto* staticRef = vtablePtr.second.asStaticref()) {
-                        if (const auto* path = staticRef->path().data.opt_UfcsKnown(); path && path->item == "vtable#") {
-                            size_t size;
-                            size_t align;
-                            MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, this->resolve, path->type, size, align), StringView("Invalid vtable source type ") << path->type);
-                            MIR_ASSERT(state, size != SIZE_MAX, StringView("Unsized vtable source type ") << path->type);
-                            return field == 1 ? size : align;
-                        }
-                        if (!staticRef->hasValue()) {
-                            vtablePtr.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
-                        }
+                    const auto* staticRef = vtablePtr.second ? vtablePtr.second.asStaticref() : nullptr;
+                    const auto* path = staticRef ? staticRef->path().data.opt_UfcsKnown() : nullptr;
+                    if (vtablePtr.first != EncodedLiteral::PTR_BASE || !path || path->item != "vtable#") {
+                        ERROR(state.sp, E0000, StringView("Invalid trait object vtable in constant layout query"));
                     }
-                    auto vtable = MIREvalValueRef(vtablePtr.second, vtablePtr.first - EncodedLiteral::PTR_BASE);
-                    return vtable.slice(field * ptrSize, ptrSize).readUsize(state);
+                    size_t size;
+                    size_t align;
+                    MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, this->resolve, path->type, size, align), StringView("Invalid vtable source type ") << path->type);
+                    MIR_ASSERT(state, size != SIZE_MAX, StringView("Unsized vtable source type ") << path->type);
+                    return field == 1 ? size : align;
                 };
                 MIRBinOp algebraicOp;
                 if (MIRGetFloatAlgebraicBinOp(te->name, algebraicOp)) {

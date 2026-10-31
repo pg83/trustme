@@ -4690,6 +4690,8 @@ auto DecoratorAllocErrorHandler::handle(const Span& sp, const ASTAttribute& attr
             const auto& otherPath = rv.first->second;
             ERROR(sp, E0000, StringView("Duplicate definition of #[alloc_error_handler] - ") << otherPath << StringView(" and ") << path);
         }
+    } else {
+        ERROR(sp, E0000, StringView("#[alloc_error_handler] on non-function ") << path);
     }
 }
 

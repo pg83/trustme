@@ -87,16 +87,11 @@ namespace {
 
         loopCountsT loopCounts;
 
-        bool peekCacheValid = false;
-        const SimplePatEnt* peekCache;
-
         MacroPatternStream(const std::vector<SimplePatEnt>& ents, const Vector<bool>* conditionReplay = nullptr);
 
         size_t curPos() const;
 
         const SimplePatEnt& next();
-
-        const SimplePatEnt& peek();
 
         void ifSucceeded();
 
@@ -1702,7 +1697,7 @@ namespace {
                     }
                 }
                 break;
-            case TOK_RWORD_TRAIT:
+            case TOK_RWORD_TRAIT: {
                 lex.consume();
             trait:
                 if (!lex.consumeIf(TOK_IDENT)) {
@@ -1712,21 +1707,33 @@ namespace {
                 if (!H::maybeGenerics(lex)) {
                     return false;
                 }
-                if (lex.consumeIf(TOK_COLON)) {
+                const bool isAlias = lex.consumeIf(TOK_EQUAL);
+                if ((isAlias && lex.next() != TOK_RWORD_WHERE) || lex.consumeIf(TOK_COLON)) {
                     do {
                         if (lex.consumeIf(TOK_LIFETIME)) {
                         } else {
+                            lex.consumeIf(TOK_QMARK);
+                            if (lex.consumeIf(TOK_RWORD_FOR) && !consumeTtAngle(lex)) {
+                                return false;
+                            }
                             if (!consumePath(lex, true)) {
                                 return false;
                             }
                         }
                     } while (lex.consumeIf(TOK_PLUS));
                 }
+                if (!H::maybeWhere(lex)) {
+                    return false;
+                }
+                if (isAlias) {
+                    return lex.consumeIf(TOK_SEMICOLON);
+                }
                 if (lex.next() != TOK_BRACE_OPEN) {
                     return false;
                 }
                 consumeTt(lex);
                 break;
+            }
             case TOK_RWORD_EXTERN:
                 lex.consume();
                 if (lex.consumeIf(TOK_RWORD_CRATE)) {
@@ -3059,11 +3066,6 @@ bool ParameterMappings::decCount(const Span& sp, const Vector<unsigned int>& ite
 }
 
 const SimplePatEnt& MacroPatternStream::next() {
-    if (peekCacheValid) {
-        peekCacheValid = false;
-        return *peekCache;
-    }
-
     for (;;) {
         if (!conditionReplay && lastWasCond) {
             conditionHistory.pushBack(conditionMet);
@@ -3853,14 +3855,6 @@ MacroPatternStream::MacroPatternStream(const std::vector<SimplePatEnt>& ents, co
 
 auto MacroPatternStream::curPos() const -> size_t {
     return curPos_;
-}
-
-auto MacroPatternStream::peek() -> const SimplePatEnt& {
-    if (!peekCacheValid) {
-        peekCache = &next();
-        peekCacheValid = true;
-    }
-    return *peekCache;
 }
 
 auto MacroPatternStream::getLoopIters() const -> const Vector<unsigned int>& {

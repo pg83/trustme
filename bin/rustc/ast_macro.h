@@ -26,8 +26,6 @@ public:
 
     ASTMacroInvocation clone() const;
 
-    void clear();
-
     const Span& span() const {
         return span_;
     }

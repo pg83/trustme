@@ -15,12 +15,6 @@ ASTMacroInvocation::ASTMacroInvocation(Span span, ASTPath macro, RcString ident,
 {
 }
 
-void ASTMacroInvocation::clear() {
-    macroPath = ASTPath();
-    ident = "";
-    input = TokenTree();
-}
-
 ASTMacroInvocation ASTMacroInvocation::clone() const {
     auto rv = ASTMacroInvocation(span_, ASTPath(macroPath), ident, input.clone());
     rv.delimiter_ = delimiter_;

@@ -81,8 +81,6 @@ namespace {
 
         bool take(char c);
 
-        void expect(char c, const char* description);
-
         static bool isIdentStart(unsigned char c);
 
         static bool isIdentContinue(unsigned char c);
@@ -384,12 +382,6 @@ auto CfgSpecParser::take(char c) -> bool {
         return true;
     }
     return false;
-}
-
-auto CfgSpecParser::expect(char c, const char* description) -> void {
-    if (!take(c)) {
-        fail(FMT(StringView("expected ") << description));
-    }
 }
 
 auto CfgSpecParser::isIdentStart(unsigned char c) -> bool {

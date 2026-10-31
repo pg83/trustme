@@ -111,10 +111,6 @@ private:
 public:
     MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, const MIRPathCallback& path, const HIRType* retType, const argsT& args, const MIRFunction& fcn);
 
-    void setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt);
-
-    void setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx);
-
     void setCurStmt(unsigned int bbIdx, unsigned int stmtIdx);
 
     void setCurStmtTerm(const MIRBasicBlock& bb);

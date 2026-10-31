@@ -1182,11 +1182,6 @@ const EncodedLiteral* freezeEncodedLiteral(ObjPool& pool, EncodedLiteral e) {
     return pool.make<EncodedLiteral>(mv$(e));
 }
 
-HIRSimplePath::HIRSimplePath(ThinVector<RcString> members)
-    : p(internMembers(std::move(members)))
-{
-}
-
 HIRSimplePath::HIRSimplePath()
     : p(nullptr)
 {

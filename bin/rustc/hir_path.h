@@ -58,7 +58,6 @@ private:
     {
     }
 
-    HIRSimplePath(ThinVector<RcString> members);
 
 public:
     HIRSimplePath();
