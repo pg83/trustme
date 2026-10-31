@@ -2179,13 +2179,9 @@ namespace {
                         return;
                     case VarState::TAG_Optional: {
                         auto flagIdx = newState.as_Optional();
-                        if (true || builder.getDropFlagDefault(sp, flagIdx) != false) {
-                            auto newFlag = builder.newDropFlag(false);
-                            builder.pushStmtSetDropflagOther(sp, newFlag, flagIdx);
-                            oldState = VarState::make_Optional(newFlag);
-                        } else {
-                            oldState = VarState::make_Optional(flagIdx);
-                        }
+                        auto newFlag = builder.newDropFlag(false);
+                        builder.pushStmtSetDropflagOther(sp, newFlag, flagIdx);
+                        oldState = VarState::make_Optional(newFlag);
                         return;
                     }
                     case VarState::TAG_MovedOut: {
@@ -2566,7 +2562,13 @@ namespace {
                         ASSERT_BUG(sp, ose.count == nse.count, StringView("PartialArray size mismatch - ") << oldState << StringView(" <= ") << newState);
                         for (const auto& kv : nse.otherStates) {
                             if (ose.otherStates.find(kv.first) == ose.otherStates.end()) {
-                                ose.otherStates.insert(std::make_pair(kv.first, ose.fillState->clone()));
+                                auto state = ose.fillState->clone();
+                                if (auto* flag = state.opt_Optional()) {
+                                    const auto alias = builder.newDropFlag(builder.getDropFlagDefault(sp, *flag));
+                                    builder.dropFlagAlias(*flag, alias);
+                                    *flag = alias;
+                                }
+                                ose.otherStates.insert(std::make_pair(kv.first, std::move(state)));
                             }
                         }
                         mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, *nse.fillState);
