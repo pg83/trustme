@@ -16508,16 +16508,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             };
             auto monomorph = MonomorphStatePtr(crate.types, nullptr, &candidate.impl.implParams, nullptr);
             for (const auto* nested : candidate.normalizationNestedGoals) {
-                const auto* traitBound = nested->opt_TraitBound();
-                if (!traitBound) {
-                    continue;
-                }
-                const auto* instantiated = monomorph.monomorphType(span(), traitBound->type, true);
+                const auto& traitBound = nested->as_TraitBound();
+                const auto* instantiated = monomorph.monomorphType(span(), traitBound.type, true);
                 const auto* bound = related(instantiated);
                 if (bound == instantiated || typeHasUnknown(bound)) {
                     continue;
                 }
-                const auto trait = monomorph.monomorphTraitpath(span(), traitBound->trait, true);
+                const auto trait = monomorph.monomorphTraitpath(span(), traitBound.trait, true);
                 if (paramsHaveUnknownTypes(trait.path.params) || !trait.typeBounds.empty()) {
                     continue;
                 }
