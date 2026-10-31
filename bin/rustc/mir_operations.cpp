@@ -4558,19 +4558,8 @@ namespace {
                                     case HIRCoreType::Isize:
                                         newValue = MIRConstant::make_Int({H::truncateS(ct, value), ct});
                                         break;
-                                    case HIRCoreType::F16:
-                                    case HIRCoreType::F32:
-                                    case HIRCoreType::F64:
-                                    case HIRCoreType::F128:
-                                        // TODO: Cast to float (can variants be casted to float?)
-                                        break;
-                                    case HIRCoreType::Char:
-                                        // TODO: Only `u8` can be casted to char (what about a u8 discriminator?)
-                                        break;
-                                    case HIRCoreType::Bool:
-                                        break;
-                                    case HIRCoreType::Str:
-                                        MIR_BUG(state, StringView("Casting to str"));
+                                    default:
+                                        MIR_BUG(state, StringView("Non-integer enum cast in constant propagation - ") << ct);
                                 }
                             } else {
                             }
@@ -5019,11 +5008,8 @@ namespace {
                                                     case HIRCoreType::U128:
                                                         replace = false;
                                                         break;
-                                                    case HIRCoreType::Char:
-                                                        MIR_BUG(state, StringView("Invalid use of ! on char"));
-                                                        break;
                                                     default:
-                                                        replace = false;
+                                                        MIR_BUG(state, StringView("Invalid unsigned operand for ! - ") << ve.t);
                                                         break;
                                                 }
                                                 newValue = MIRConstant::make_Uint({val, ve.t});
@@ -5046,29 +5032,17 @@ namespace {
                                                         val = H::truncateS(ve.t, ~val);
                                                         replace = true;
                                                         break;
-                                                    case HIRCoreType::Char:
-                                                        MIR_BUG(state, StringView("Invalid use of ! on char"));
-                                                        break;
                                                     default:
-                                                        replace = false;
+                                                        MIR_BUG(state, StringView("Invalid signed operand for ! - ") << ve.t);
                                                         break;
                                                 }
                                                 newValue = MIRConstant::make_Int({val, ve.t});
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_Float: {
                                                 break;
                                             }
                                             case MIRConstant::TAG_Bool: {
                                                 auto& ve = val.as_Bool();
                                                 newValue = MIRConstant::make_Bool({!ve.v});
                                                 replace = true;
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_Bytes: {
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_StaticString: {
                                                 break;
                                             }
                                             case MIRConstant::TAG_Encoded: {
@@ -5081,19 +5055,14 @@ namespace {
                                             case MIRConstant::TAG_Generic: {
                                                 break;
                                             }
-                                            case MIRConstant::TAG_Function: {
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_ItemAddr: {
+                                            default: {
+                                                MIR_BUG(state, StringView("Invalid constant operand for ! - ") << val);
                                                 break;
                                             }
                                         }
                                         break;
                                     case MIRUniOp::NEG:
                                         switch (val.tag()) {
-                                            case MIRConstant::TAG_Uint: {
-                                                break;
-                                            }
                                             case MIRConstant::TAG_Int: {
                                                 auto& ve = val.as_Int();
                                                 newValue = MIRConstant::make_Int({H::truncateS(ve.t, -ve.v), ve.t});
@@ -5108,15 +5077,6 @@ namespace {
                                                 }
                                                 break;
                                             }
-                                            case MIRConstant::TAG_Bool: {
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_Bytes: {
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_StaticString: {
-                                                break;
-                                            }
                                             case MIRConstant::TAG_Encoded: {
                                                 break;
                                             }
@@ -5127,10 +5087,8 @@ namespace {
                                             case MIRConstant::TAG_Generic: {
                                                 break;
                                             }
-                                            case MIRConstant::TAG_Function: {
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_ItemAddr: {
+                                            default: {
+                                                MIR_BUG(state, StringView("Invalid constant operand for unary - - ") << val);
                                                 break;
                                             }
                                         }
