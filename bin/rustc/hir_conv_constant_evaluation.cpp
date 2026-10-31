@@ -1193,9 +1193,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                     auto res = ti.mask(l * r);
                     auto max = ti.mask(~U128());
                     didOverflow = r != 0 && l > max / r;
-                    if (didOverflow && saturate) {
-                        res = max;
-                    }
                     dst.writeUint(state, ti.bits, res);
                     break;
                 }
@@ -1287,9 +1284,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                     const auto maxMagnitude = resultNegative ? minValue : maxValue;
                     didOverflow = rMagnitude != 0 && lMagnitude > maxMagnitude / rMagnitude;
                     auto res = ti.mask(lRaw * rRaw);
-                    if (didOverflow && saturate) {
-                        res = resultNegative ? minValue : maxValue;
-                    }
                     dst.writeUint(state, ti.bits, res);
                     break;
                 }

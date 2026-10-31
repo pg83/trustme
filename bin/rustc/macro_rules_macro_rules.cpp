@@ -1152,9 +1152,7 @@ namespace {
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                     exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_MATCH:
@@ -1166,9 +1164,7 @@ namespace {
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                     exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_WHILE:
@@ -1179,9 +1175,7 @@ namespace {
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                     exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_LOOP:
@@ -1324,6 +1318,9 @@ namespace {
                 case TOK_PERCENT_EQUAL:
                 case TOK_AMP_EQUAL:
                 case TOK_PIPE_EQUAL:
+                case TOK_CARET_EQUAL:
+                case TOK_DOUBLE_LT_EQUAL:
+                case TOK_DOUBLE_GT_EQUAL:
                     lex.consume();
                     break;
                 default:

@@ -3697,7 +3697,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, StringView("Invalid Value type in ") << pat);
                 }
             }
-            UNREACHABLE();
         }
 
         static S128 getPatternValueSigned(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
@@ -3715,7 +3714,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, StringView("Invalid signed Value type in ") << pat);
                 }
             }
-            UNREACHABLE();
         }
 
         static FloatValue getPatternValueFloat(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
@@ -3733,7 +3731,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, StringView("Invalid Value type in ") << pat);
                 }
             }
-            UNREACHABLE();
         }
 
         static MIRConstant getPatternValue(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val, const HIRCoreType& e) {
@@ -4123,9 +4120,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                                     break;
                                 }
                                 case HIRPatternData::TAG_PathValue: {
-                                    break;
-                                }
-                                case HIRPatternData::TAG_Value: {
                                     break;
                                 }
                                 case HIRPatternData::TAG_PathNamed: {
