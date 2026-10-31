@@ -4559,11 +4559,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             break;
         }
         case HIRType::TAG_NodeType: {
-            if (pat.data.is_Any()) {
-            } else {
-                ERROR(sp, E0000, StringView("Attempting to match over a closure/generator/async"));
-            }
-            break;
+            BUG(sp, StringView("Unextracted anonymous type in match - ") << ty);
         }
     }
     for (size_t i = 0; i < pat.implicitDerefCount; i++) {

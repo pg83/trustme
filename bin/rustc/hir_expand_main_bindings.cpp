@@ -1412,6 +1412,14 @@ void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
 
 #undef NEWNODE
 
+const HIRType* HIRExpandErasedTypeExpr(const WireBoard& wb, const HIRType* retTy, HIRExprPtr& exp) {
+    StaticTraitResolve resolve{wb};
+    resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
+    ErasedExprVisitorExtract ev(resolve);
+    ev.visitRoot(exp);
+    return resolve.revealOpaqueTypes(exp->span(), retTy);
+}
+
 void HIRExpandErasedType(const WireBoard& wb, HIRCrate& crate) {
     ErasedOuterVisitor ov(wb);
     ov.visitCrate(crate);

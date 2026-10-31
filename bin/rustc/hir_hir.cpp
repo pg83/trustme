@@ -352,7 +352,6 @@ namespace {
                 } else {
                     BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
-                break;
             }
             case HIRType::TAG_Slice: {
                 auto& le = (*left).as_Slice();
@@ -361,7 +360,6 @@ namespace {
                 } else {
                     BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
-                break;
             }
             case HIRType::TAG_Pattern: {
                 auto& le = (*left).as_Pattern();
@@ -370,7 +368,6 @@ namespace {
                 } else {
                     BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
-                break;
             }
             case HIRType::TAG_Array: {
                 auto& le = (*left).as_Array();
@@ -379,7 +376,6 @@ namespace {
                 } else {
                     BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
-                break;
             }
             case HIRType::TAG_Pointer: {
                 auto& le = (*left).as_Pointer();
@@ -391,7 +387,6 @@ namespace {
                 } else {
                     BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
-                break;
             }
             case HIRType::TAG_Borrow: {
                 auto& le = (*left).as_Borrow();
@@ -403,7 +398,6 @@ namespace {
                 } else {
                     BUG(sp, StringView("Mismatched types - ") << left << StringView(" and ") << right);
                 }
-                break;
             }
         }
         UNREACHABLE();
@@ -1589,6 +1583,7 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                 ep.state->stage = HIRExprState::Stage::ExpandRequest;
                 HIRExpandUfcsEverythingExpr(wb, *this, ep, ep.state->currentTraitImpl);
                 HIRExpandReborrowsExpr(wb, *this, ep);
+                retTy = HIRExpandErasedTypeExpr(wb, retTy, ep);
 
                 ep.state->stage = HIRExprState::Stage::Expand;
             }

@@ -35,5 +35,6 @@ void HIRExpandAnalyseClosureCaptures(const WireBoard& wb, const HIRExprState& st
 const HIRType* HIRExpandClosuresExpr(const WireBoard& wb, HIRCrate& crate, const HIRType* expTy, HIRExprPtr& exp);
 void HIRExpandUfcsEverythingExpr(const WireBoard& wb, const HIRCrate& crate, HIRExprPtr& exp, const HIRTraitImpl* currentTraitImpl = nullptr);
 void HIRExpandReborrowsExpr(const WireBoard& wb, const HIRCrate& crate, HIRExprPtr& exp);
+const HIRType* HIRExpandErasedTypeExpr(const WireBoard& wb, const HIRType* retTy, HIRExprPtr& exp);
 void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
 void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
