@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rank entirely uncovered braced C++ branches using the combined LCOV report."""
+"""Rank uncovered lines in braced C++ branches using the combined LCOV report."""
 
 import argparse
 import bisect
@@ -82,7 +82,22 @@ def read_counts(report):
     return counts
 
 
-def rank(root, report, revision=None, minimum=8):
+def uncovered_spans(measured, counts):
+    spans = []
+    current = None
+    for number in measured:
+        if counts[number]:
+            current = None
+        else:
+            if current is None:
+                current = {"first": number, "last": number, "missed": 0}
+                spans.append(current)
+            current["last"] = number
+            current["missed"] += 1
+    return sorted(spans, key=lambda span: (-span["missed"], span["first"]))[:4]
+
+
+def rank(root, report, revision=None, minimum=8, include_partial=False):
     result = []
     for name, counts in read_counts(report).items():
         if not name.startswith("bin/rustc/") or name.endswith("_ut.cpp"):
@@ -93,25 +108,35 @@ def rank(root, report, revision=None, minimum=8):
             source = (root / name).read_text()
         newlines = [-1, *[m.start() for m in re.finditer("\n", source)]]
         line_number = lambda offset: bisect.bisect_left(newlines, offset)
+        measured_numbers = sorted(counts)
         candidates = []
         for start, opening, closing, kind in branches(source):
             first, last = line_number(opening), line_number(closing)
             # Boundary lines can belong to a covered condition or neighbouring
             # case. Only executable lines strictly inside the braces decide.
-            measured = [number for number in counts if first < number < last]
-            if len(measured) < minimum or any(counts[number] for number in measured):
+            measured = measured_numbers[bisect.bisect_right(measured_numbers, first):
+                                        bisect.bisect_left(measured_numbers, last)]
+            missed = sum(counts[number] == 0 for number in measured)
+            covered = len(measured) - missed
+            if missed < minimum or (covered and not include_partial):
                 continue
-            candidates.append({
+            entry = {
                 "source": name, "line": line_number(start), "end_line": last,
-                "uncovered_lines": len(measured), "body_lines": last - first - 1,
+                "uncovered_lines": missed, "body_lines": last - first - 1,
                 "condition": " ".join(source[start:opening].split()),
                 "kind": kind, "start": start, "end": closing,
-            })
-        # Count an entirely uncovered outer branch once, not again through each
-        # of its nested branches. Overlapping sibling branches remain separate.
+            }
+            if include_partial:
+                entry.update(covered_lines=covered, measured_lines=len(measured),
+                             largest_zero_spans=uncovered_spans(measured, counts))
+            candidates.append(entry)
+        # Entirely uncovered outer branches subsume their children. Partial
+        # blocks keep nested branches to locate the gaps within a large body.
         for entry in candidates:
-            if not any(other["start"] < entry["start"] and entry["end"] <= other["end"]
-                       for other in candidates):
+            if include_partial or not any(
+                other["start"] < entry["start"] and entry["end"] <= other["end"]
+                for other in candidates
+            ):
                 result.append({k: v for k, v in entry.items() if k not in ("start", "end")})
     return sorted(result, key=lambda row: (-row["uncovered_lines"], row["source"], row["line"]))
 
@@ -121,16 +146,22 @@ def main():
     parser.add_argument("report", type=Path)
     parser.add_argument("--source-root", type=Path, default=Path.cwd())
     parser.add_argument("--source-revision", help="Git revision matching the coverage binary")
-    parser.add_argument("--minimum", type=int, default=8)
+    parser.add_argument("--minimum", type=int, default=8,
+                        help="Minimum number of uncovered measured body lines")
+    parser.add_argument("--include-partial", action="store_true",
+                        help="Include partially covered blocks and their nested branches")
     parser.add_argument("--limit", type=int, default=30)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
-    rows = rank(args.source_root, args.report, args.source_revision, args.minimum)
+    rows = rank(args.source_root, args.report, args.source_revision, args.minimum,
+                args.include_partial)
     if args.json:
         args.json.write_text(json.dumps(rows, indent=2) + "\n")
-    print("Missed  Block  Source:line  Condition")
+    print("Missed  Covered  Physical  Source:line  Condition" if args.include_partial
+          else "Missed  Physical  Source:line  Condition")
     for row in rows[:args.limit]:
-        print(f"{row['uncovered_lines']:6} {row['body_lines']:6}  "
+        covered = f" {row['covered_lines']:8}" if args.include_partial else ""
+        print(f"{row['uncovered_lines']:6}{covered} {row['body_lines']:9}  "
               f"{row['source']}:{row['line']}  {row['condition'][:160]}")
 
 
