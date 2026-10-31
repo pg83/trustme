@@ -973,11 +973,14 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         auto equals = spec.find('=');
         std::string kind;
         std::string path;
-        if (equals == std::string::npos) {
-            path = std::move(spec);
-        } else {
+        if (equals != std::string::npos) {
             kind = spec.substr(0, equals);
+        }
+        if (kind == "all" || kind == "crate" || kind == "dependency" || kind == "native" || kind == "framework") {
             path = spec.substr(equals + 1);
+        } else {
+            kind.clear();
+            path = std::move(spec);
         }
         if (path.empty()) {
             sysE << StringView("Option -L requires a non-empty path") << endL;
@@ -991,11 +994,8 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             this->crateSearchDirs.push_back(std::move(path));
         } else if (kind == "native") {
             this->nativeLibSearchDirs.push_back(std::move(path));
-        } else if (kind == "framework") {
-            this->frameworkSearchDirs.push_back(std::move(path));
         } else {
-            sysE << StringView("Unknown -L search path kind '") << kind << StringView("'") << endL;
-            exit(1);
+            this->frameworkSearchDirs.push_back(std::move(path));
         }
     };
 

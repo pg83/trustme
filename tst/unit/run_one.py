@@ -75,7 +75,16 @@ def main() -> int:
         raise RuntimeError(f"unsupported unit crate type: {crate_type}")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
     aux_builds = re.findall(r"^//@\s*aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE)
-    aux_search = set(re.findall(r"^//@\s*aux-search:\s*(\S+)\s*$", source_text, re.MULTILINE))
+    aux_search = {
+        os.path.splitext(os.path.basename(aux))[0]
+        for aux in re.findall(r"^//@\s*aux-search:\s*(\S+)\s*$", source_text, re.MULTILINE)
+    }
+    aux_directories = dict(re.findall(
+        r"^//@\s*aux-output-dir:\s*(\S+?)=(.+?)\s*$", source_text, re.MULTILINE
+    ))
+    for directory in aux_directories.values():
+        if os.path.isabs(directory) or ".." in directory.split("/"):
+            raise RuntimeError("aux-output-dir must stay inside the temporary work directory")
     proc_macro_aux_builds = re.findall(
         r"^//@\s*proc-macro-aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE
     )
@@ -133,7 +142,9 @@ def main() -> int:
             if aux_name in aux_search:
                 with open(aux_src, "rb") as aux_file:
                     suffix = "-" + hashlib.file_digest(aux_file, "sha256").hexdigest()[:16]
-            aux_rlib = os.path.join(work, f"lib{aux_name}{suffix}.rlib")
+            aux_directory = os.path.join(work, aux_directories.get(aux, ""))
+            os.makedirs(aux_directory, exist_ok=True)
+            aux_rlib = os.path.join(aux_directory, f"lib{aux_name}{suffix}.rlib")
             # an aux crate may name its own edition (`//@ edition: 2018` in the aux)
             with open(aux_src) as aux_file:
                 aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
@@ -145,7 +156,7 @@ def main() -> int:
                 env=env,
             )
             if aux_name in aux_search:
-                dependency_args.extend(("-L", work, "--extern", aux_name))
+                dependency_args.extend(("-L", aux_directory, "--extern", aux_name))
             else:
                 dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
