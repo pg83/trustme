@@ -507,7 +507,7 @@ public:
 };
 
 void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const stl::Vector<unsigned>& letElseInitializerTemps);
-void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
+void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val);
 
 const HIRType* MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
