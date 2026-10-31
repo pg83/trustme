@@ -5096,18 +5096,7 @@ void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const P
         builder.setCurBlock(next);
     }
 
-    // TODO: This is dead code (leading patterns should have been expanded, and there's an assert above for it)
-    if (e.minLen > e.trailingLen) {
-        auto next = builder.newBbUnlinked();
-        auto innerSet = tRulesSubset{1, /*is_arm_indexes=*/false};
-        innerSet.pushBb(e.leading, next);
-        auto inst = MatchGenGrouped{builder, sp, ty, val, {}, fieldPath.size()};
-        inst.genForSlice(innerSet, 0, defBlk);
-
-        builder.setCurBlock(next);
-    }
-
-    if (e.trailingLen != 0) {
+    if (!e.trailing.empty()) {
         auto next = builder.newBbUnlinked();
         auto innerSet = tRulesSubset{1, /*is_arm_indexes=*/false};
         innerSet.pushBb(e.trailing, next);

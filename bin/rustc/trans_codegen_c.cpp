@@ -4338,34 +4338,12 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                     const auto& ty = localMirRes.getParamType(ve.valL);
                     const auto& tyR = localMirRes.getParamType(ve.valR);
                     if (ty->is_Borrow()) {
+                        MIR_ASSERT(localMirRes, ve.op == MIRBinOp::EQ, StringView("Unexpected comparison of a reference - ") << e.src << StringView(" with ") << ty);
                         of << StringView("(slice_cmp(");
                         emitParam(ve.valL);
                         of << StringView(", ");
                         emitParam(ve.valR);
-                        of << StringView(")");
-                        switch (ve.op) {
-                            case MIRBinOp::EQ:
-                                of << StringView(" == 0");
-                                break;
-                            case MIRBinOp::NE:
-                                of << StringView(" != 0");
-                                break;
-                            case MIRBinOp::GT:
-                                of << StringView(" >  0");
-                                break;
-                            case MIRBinOp::GE:
-                                of << StringView(" >= 0");
-                                break;
-                            case MIRBinOp::LT:
-                                of << StringView(" <  0");
-                                break;
-                            case MIRBinOp::LE:
-                                of << StringView(" <= 0");
-                                break;
-                            default:
-                                MIR_BUG(localMirRes, StringView("Unknown comparison of a &-ptr - ") << e.src << StringView(" with ") << ty);
-                        }
-                        of << StringView(")");
+                        of << StringView(") == 0)");
                         break;
                     } else if (const auto* te = ty->opt_Pointer()) {
                         if (isDst(te->inner)) {
@@ -4865,12 +4843,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                                     auto vr = TargetGetTypeRepr(sp, resolve_, repr->fields[ve.index].ty);
                                     emitLvalue(e.dst);
                                     of << StringView(".DATA.var_") << ve.index << StringView("._") << (vr->fields.size() - 1) << StringView(" = ");
-                                    const auto& slotTy = vr->fields.back().ty;
-                                    if (slotTy->is_Pointer() || slotTy->is_Borrow() || slotTy->is_Function()) {
-                                        of << StringView("(");
-                                        emitCtype(slotTy);
-                                        of << StringView(")(uintptr_t)");
-                                    }
                                     of << re.tagValue(ve.index);
                                 }
                                 emitNewline = true;
