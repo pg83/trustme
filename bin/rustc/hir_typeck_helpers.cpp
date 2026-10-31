@@ -2143,15 +2143,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
             }
             return true;
         }
-        case HIRType::TAG_Primitive: {
-            return false;
-        }
-        case HIRType::TAG_Diverge: {
-            return false;
-        }
-        case HIRType::TAG_Generic: {
-            return false;
-        }
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_NodeType:
+            BUG(Span(), StringView("Type without inference variables passed the flag check: ") << ty);
         case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             return pathContainsIvars(e.path, onlyUnbound);
@@ -2176,9 +2172,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
             auto& e = (*ty).as_Array();
             return typeContainsIvars(e.inner, onlyUnbound);
         }
-        case HIRType::TAG_NodeType: {
-            return false;
-        }
         case HIRType::TAG_NamedFunction: {
             auto& e = (*ty).as_NamedFunction();
             return pathContainsIvars(e.path, onlyUnbound);
@@ -2196,6 +2189,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
             auto& e = (*ty).as_TraitObject();
             for (const auto& marker : e.markers) {
                 if (pathparamsContainIvars(marker.params, onlyUnbound)) {
+                    return true;
+                }
+            }
+            for (const auto& bound : e.trait.typeBounds) {
+                if (typeContainsIvars(bound.second.type, onlyUnbound)) {
                     return true;
                 }
             }
@@ -2393,6 +2391,15 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
             }
             if (le.trait.path.path != re.trait.path.path) {
                 return false;
+            }
+            if (le.trait.typeBounds.size() != re.trait.typeBounds.size()) {
+                return false;
+            }
+            auto rightBound = re.trait.typeBounds.begin();
+            for (auto leftBound = le.trait.typeBounds.begin(); leftBound != le.trait.typeBounds.end(); ++leftBound, ++rightBound) {
+                if (leftBound->first != rightBound->first || !typesEqual(leftBound->second.type, rightBound->second.type)) {
+                    return false;
+                }
             }
             return pathparamsEqual(le.trait.path.params, re.trait.path.params);
         }

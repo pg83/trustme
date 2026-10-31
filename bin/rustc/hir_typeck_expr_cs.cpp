@@ -4683,12 +4683,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                 break;
                             }
                             case HIRPatternPathBinding::TAG_Union: {
-                                auto& be = e.binding.as_Union();
-                                auto& p = e.path.data.as_Generic();
-                                BUG_ASSERT(be);
-                                context.addIvarsParams(p.params);
-                                possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
-                                break;
+                                BUG(sp, StringView("Union used as a value pattern"));
                             }
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
@@ -4717,12 +4712,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                 break;
                             }
                             case HIRPatternPathBinding::TAG_Union: {
-                                auto& be = e.binding.as_Union();
-                                auto& p = e.path.data.as_Generic();
-                                BUG_ASSERT(be);
-                                context.addIvarsParams(p.params);
-                                possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
-                                break;
+                                BUG(sp, StringView("Union used as a tuple pattern"));
                             }
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();

@@ -4669,6 +4669,9 @@ auto UfcsVisitor::visitPattern(HIRPattern& pat) -> void {
         case HIRPatternData::TAG_PathTuple: {
             auto& e = pat.data.as_PathTuple();
             this->resolvePatternBinding(sp, e.path, e.binding);
+            if (e.binding.is_Union()) {
+                ERROR(sp, E0000, StringView("Union patterns require named fields: ") << e.path);
+            }
             break;
         }
         case HIRPatternData::TAG_PathNamed: {
