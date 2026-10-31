@@ -1178,20 +1178,6 @@ namespace {
         }
     }
 
-    void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRConstant& p) {
-        if (auto* e = p.opt_Uint()) {
-            switch (e->t) {
-                case HIRCoreType::Usize:
-                    if (TargetGetPointerBits() == 32) {
-                        e->v &= U128(0xFFFFFFFF);
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-
     void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p);
 
     static void MIRCleanupAsmConst(const MIRTypeResolve& state, MirMutator& mutator, MIRAsmParam& p) {
@@ -1215,8 +1201,6 @@ namespace {
                 break;
             }
             case MIRParam::TAG_Constant: {
-                auto& e = p.as_Constant();
-                MIRCleanupConstant(state, mutator, e);
                 break;
             }
         }
@@ -1237,7 +1221,6 @@ namespace {
                 if (auto* lv = newRval.opt_Use()) {
                     p = MIRParam::make_LValue(std::move(*lv));
                 } else if (auto* c = newRval.opt_Constant()) {
-                    MIRCleanupConstant(state, mutator, *c);
                     p = MIRParam::make_Constant(std::move(*c));
                 } else {
                     auto tmpLv = mutator.inTemporary(mv$(cTy), mv$(newRval));
@@ -4402,16 +4385,12 @@ namespace {
                                     return v & U128(0xFFFFFFFF);
                                 case HIRCoreType::I64:
                                 case HIRCoreType::U64:
+                                case HIRCoreType::Isize:
+                                case HIRCoreType::Usize:
                                     return v & U128(UINT64_MAX);
                                 case HIRCoreType::I128:
                                 case HIRCoreType::U128:
                                     return v;
-                                case HIRCoreType::Isize:
-                                case HIRCoreType::Usize:
-                                    if (TargetGetPointerBits() < 64) {
-                                        return v & U128(UINT64_MAX >> (64 - TargetGetPointerBits()));
-                                    }
-                                    return v & U128(UINT64_MAX);
                                 default:
                                     BUG(Span(), StringView("Integer truncation with non-integer type ") << ct);
                             }
@@ -4502,9 +4481,8 @@ namespace {
                                             // TODO: Only `u8` can be casted to char
                                             break;
                                         case HIRCoreType::Bool:
-                                            break;
                                         case HIRCoreType::Str:
-                                            MIR_BUG(state, StringView("Casting to str"));
+                                            MIR_BUG(state, StringView("Casting to ") << *te);
                                     }
                                 }
                             } else if (knownValuesVar.count(se.val)) {
@@ -5022,9 +5000,6 @@ namespace {
                                                 replace = true;
                                                 break;
                                             }
-                                            case MIRConstant::TAG_Encoded: {
-                                                break;
-                                            }
                                             case MIRConstant::TAG_Const: {
                                                 // TODO:
                                                 break;
@@ -5051,9 +5026,6 @@ namespace {
                                                     newValue = MIRConstant::make_Float({-ve.v, ve.t});
                                                     replace = true;
                                                 }
-                                                break;
-                                            }
-                                            case MIRConstant::TAG_Encoded: {
                                                 break;
                                             }
                                             case MIRConstant::TAG_Const: {
@@ -5175,14 +5147,10 @@ namespace {
                             DEBUG(state << stmt);
                         } else if (const auto* ce = e->src.opt_Use()) {
                             if (ce->is_Local()) {
-                                auto it1 = knownValues.find(*ce);
-                                auto it2 = knownValuesVar.find(*ce);
-                                BUG_ASSERT(!(it1 != knownValues.end() && it2 != knownValuesVar.end()));
-                                if (it1 != knownValues.end()) {
-                                    knownValues.insert(std::make_pair(e->dst.clone(), it1->second.clone()));
-                                    DEBUG(state << stmt);
-                                } else if (it2 != knownValuesVar.end()) {
-                                    knownValuesVar.insert(std::make_pair(e->dst.clone(), it2->second));
+                                MIR_ASSERT(state, !knownValues.count(*ce), StringView("Known constant use was not replaced"));
+                                auto it = knownValuesVar.find(*ce);
+                                if (it != knownValuesVar.end()) {
+                                    knownValuesVar.insert(std::make_pair(e->dst.clone(), it->second));
                                     DEBUG(state << stmt);
                                 } else {
                                 }
@@ -6917,8 +6885,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             break;
                         }
                         case MIRRValue::TAG_Constant: {
-                            auto& re = se.src.as_Constant();
-                            MIRCleanupConstant(state, mutator, re);
                             break;
                         }
                         case MIRRValue::TAG_SizedArray: {
@@ -7077,9 +7043,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         } else if (litPtr) {
                             DEBUG(StringView("Replace constant ") << *ce->p << StringView(" with ") << *litPtr);
                             se.src = MIRCleanupLiteralToRValue(state, mutator, *litPtr, mv$(ty), params, mv$(*ce->p));
-                            if (auto* p = se.src.opt_Constant()) {
-                                MIRCleanupConstant(state, mutator, *p);
-                            }
                         } else {
                             DEBUG(StringView("No replacement for constant ") << *ce->p);
                         }
