@@ -209,10 +209,6 @@ namespace {
 
         void sendChar(u32 ch);
 
-        void sendInt(eCoreType ct, U128 v);
-
-        void sendFloat(eCoreType ct, FloatValue v);
-
         void sendSpanDef(size_t index, const Span& sp);
 
         size_t spanFor(const Ident::Hygiene& h, const Span& sp);
@@ -1081,92 +1077,6 @@ auto ProcMacroInv::sendChar(u32 ch) -> void {
     this->sendV128u(ch);
 }
 
-auto ProcMacroInv::sendInt(eCoreType ct, U128 v) -> void {
-    u8 size;
-    switch (ct) {
-        case CORETYPE_ANY:
-            size = 0;
-            if (0) {
-                case CORETYPE_UINT:
-                    size = 1;
-            }
-            if (0) {
-                case CORETYPE_U8:
-                    size = 8;
-            }
-            if (0) {
-                case CORETYPE_U16:
-                    size = 16;
-            }
-            if (0) {
-                case CORETYPE_U32:
-                    size = 32;
-            }
-            if (0) {
-                case CORETYPE_U64:
-                    size = 64;
-            }
-            if (0) {
-                case CORETYPE_U128:
-                    size = 128;
-            }
-            if (0)
-                ;
-            this->sendU8(static_cast<u8>(TokenClass::UnsignedInt));
-            this->sendU8(size);
-            break;
-        case CORETYPE_INT:
-            size = 1;
-            if (0) {
-                case CORETYPE_I8:
-                    size = 8;
-            }
-            if (0) {
-                case CORETYPE_I16:
-                    size = 16;
-            }
-            if (0) {
-                case CORETYPE_I32:
-                    size = 32;
-            }
-            if (0) {
-                case CORETYPE_I64:
-                    size = 64;
-            }
-            if (0) {
-                case CORETYPE_I128:
-                    size = 128;
-            }
-            if (0)
-                ;
-            this->sendU8(static_cast<u8>(TokenClass::SignedInt));
-            this->sendU8(size);
-            break;
-        default:
-            BUG(parentSpan, StringView("Unknown integer type"));
-    }
-    this->sendV128u(v);
-}
-
-auto ProcMacroInv::sendFloat(eCoreType ct, FloatValue v) -> void {
-    this->sendU8(static_cast<u8>(TokenClass::Float));
-    switch (ct) {
-        case CORETYPE_ANY:
-            this->sendU8(0);
-            break;
-        case CORETYPE_F32:
-            this->sendU8(32);
-            break;
-        case CORETYPE_F64:
-            this->sendU8(64);
-            break;
-        default:
-            BUG(parentSpan, StringView("Unknown float type"));
-    }
-    double wireValue = static_cast<double>(v);
-    this->sendBytesRaw(&wireValue, sizeof(wireValue));
-}
-
 auto ProcMacroInv::sendSpanDef(size_t index, const Span& sp) -> void {
     this->sendU8(static_cast<u8>(TokenClass::SpanDef));
     this->sendV128u(index);
@@ -1348,24 +1258,19 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTEGER:
             if (tok.datatype() == CORETYPE_CHAR) {
                 pmi.sendChar(tok.intval().truncateU64());
-            } else if (tok.spelling() != RcString()) {
+            } else {
                 auto text = tok.toStr();
                 pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
-            } else {
-                pmi.sendInt(tok.datatype(), tok.intval());
             }
             break;
         case TOK_CHAR:
             pmi.sendChar(tok.intval().truncateU64());
             break;
-        case TOK_FLOAT:
-            if (tok.spelling() != RcString()) {
-                auto text = tok.toStr();
-                pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
-            } else {
-                pmi.sendFloat(tok.datatype(), tok.floatval());
-            }
+        case TOK_FLOAT: {
+            auto text = tok.toStr();
+            pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
             break;
+        }
         case TOK_STRING:
         case TOK_BYTESTRING:
         case TOK_CSTRING:
