@@ -1722,12 +1722,8 @@ namespace {
             DEBUG(StringView("ty = ") << ity << StringView(", val = ") << val);
             const auto& ty = ity;
             switch ((*ty).tag()) {
-                case HIRType::TAG_Infer: {
-                    BUG(sp, StringView("Hit _ in type - ") << ty);
-                }
-                case HIRType::TAG_Diverge: {
-                    BUG(sp, StringView("Matching over !"));
-                }
+                default:
+                    BUG(sp, StringView("Pattern rule was not reduced to a supported comparison - ") << rule << StringView(" against ") << ty);
                 case HIRType::TAG_Primitive: {
                     auto& te = (*ty).as_Primitive();
                     switch (te) {
@@ -1936,29 +1932,11 @@ namespace {
                     }
                     break;
                 }
-                case HIRType::TAG_Pattern: {
-                    BUG(sp, StringView("Pattern type was not reduced to its base type"));
-                }
                 case HIRType::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     switch (te.binding.tag()) {
-                        case HIRTypePathBinding::TAG_Unbound: {
-                            BUG(sp, StringView("Encounterd unbound path - ") << te.path);
-                        }
-                        case HIRTypePathBinding::TAG_Opaque: {
-                            BUG(sp, StringView("Attempting to match over opaque type - ") << ty);
-                        }
-                        case HIRTypePathBinding::TAG_Struct: {
-                            /* The ruleset builder lowers struct patterns and
-                               struct constants to field rules; Any was skipped. */
-                            BUG(sp, StringView("Struct pattern was not lowered to field rules - ") << ty);
-                        }
-                        case HIRTypePathBinding::TAG_Union: {
-                            TODO(sp, StringView("Match over Union"));
-                        }
-                        case HIRTypePathBinding::TAG_ExternType: {
-                            TODO(sp, StringView("Match over ExternType"));
-                        }
+                        default:
+                            BUG(sp, StringView("Nominal pattern rule was not reduced to an enum comparison - ") << rule << StringView(" against ") << ty);
                         case HIRTypePathBinding::TAG_Enum: {
                             const auto pbe = te.binding.as_Enum();
                             auto monomorph = [&](const auto& ty) {
@@ -1997,17 +1975,15 @@ namespace {
                     }
                     break;
                 }
-                case HIRType::TAG_Generic: {
-                    BUG(sp, StringView("Attempting to match a generic"));
-                }
-                case HIRType::TAG_TraitObject: {
-                    BUG(sp, StringView("Attempting to match a trait object"));
-                }
-                case HIRType::TAG_ErasedType: {
-                    BUG(sp, StringView("Attempting to match an erased type"));
-                }
-                case HIRType::TAG_Array: {
-                    TODO(sp, StringView("Match directly on array?"));
+                case HIRType::TAG_Pointer: {
+                    ASSERT_BUG(sp, rule.is_Value() && rule.as_Value().is_Uint(), StringView("Pointer pattern is not an integer address - ") << rule);
+                    const auto* usizeType = builder.resolve().crate.types.primitive(HIRCoreType::Usize);
+                    auto address = builder.lvalueOrTemp(sp, usizeType, MIRRValue::make_Cast({mv$(val), usizeType}));
+                    auto comparison = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(address), MIRBinOp::EQ, rule.as_Value().clone()}));
+                    auto successor = builder.newBbUnlinked();
+                    builder.endBlock(MIRTerminator::make_If({mv$(comparison), successor, failBb}));
+                    builder.setCurBlock(successor);
+                    break;
                 }
                 case HIRType::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
@@ -2057,24 +2033,6 @@ namespace {
                         BUG(sp, StringView("Invalid rule type for slice - ") << rule);
                     }
                     break;
-                }
-                case HIRType::TAG_Tuple: {
-                    TODO(sp, StringView("Match directly on tuple?"));
-                }
-                case HIRType::TAG_Borrow: {
-                    TODO(sp, StringView("Match directly on borrow?"));
-                }
-                case HIRType::TAG_Pointer: {
-                    BUG(sp, StringView("Attempting to match a pointer - ") << rule << StringView(" against ") << ty);
-                }
-                case HIRType::TAG_NamedFunction: {
-                    BUG(sp, StringView("Attempting to match a function pointer - ") << rule << StringView(" against ") << ty);
-                }
-                case HIRType::TAG_Function: {
-                    BUG(sp, StringView("Attempting to match a function pointer - ") << rule << StringView(" against ") << ty);
-                }
-                case HIRType::TAG_NodeType: {
-                    BUG(sp, StringView("Attempting to match a magic type - ") << rule << StringView(" against ") << ty);
                 }
             }
         }
@@ -3636,8 +3594,12 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             break;
         }
         case HIRType::TAG_Pointer: {
+            const auto pointerBytes = TargetGetPointerBits() / 8;
+            size_t size;
+            if (!TargetGetSizeOf(sp, resolve, ty, size) || size != pointerBytes || lit.getReloc()) {
+                ERROR(sp, E0000, StringView("Only integer-derived thin pointers can be used in patterns"));
+            }
             this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(TargetGetPointerBits() / 8), HIRCoreType::Usize})));
-            //TODO(sp, StringView("Match literal with pointer? ") << lit);
             break;
         }
         case HIRType::TAG_NamedFunction: {

@@ -5872,7 +5872,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
                     break;
                 default:
-                    compileErrorGeneric("Expected { or ; after module name");
+                    ERROR(lex.pointSpan(), E0000, StringView("Expected { or ; after module name"));
             }
             itemName = mv$(name);
             itemData = ASTItem(mv$(submod));
