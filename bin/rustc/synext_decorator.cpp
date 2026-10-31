@@ -1100,13 +1100,6 @@ namespace {
     }
 
     bool substituteType(ASTType*& type, const RcString& from, ASTType* to) {
-        if (const auto* generic = type->data.opt_Generic()) {
-            if (generic->name == from) {
-                type = to->clone();
-                return true;
-            }
-            return false;
-        }
         if (const auto* path = type->data.opt_Path()) {
             if ((*path)->isTrivial() && (*path)->asTrivial() == from) {
                 type = to->clone();
@@ -1116,6 +1109,13 @@ namespace {
 
         bool changed = false;
         switch (type->data.tag()) {
+            case TypeData::TAG_Generic: {
+                if (type->data.as_Generic().name != from) {
+                    return false;
+                }
+                type = to->clone();
+                return true;
+            }
             case TypeData::TAG_None: {
                 break;
             }
@@ -1172,9 +1172,6 @@ namespace {
             case TypeData::TAG_Pattern: {
                 auto& e = type->data.as_Pattern();
                 changed |= substituteType(e.inner, from, to);
-                break;
-            }
-            case TypeData::TAG_Generic: {
                 break;
             }
             case TypeData::TAG_Path: {

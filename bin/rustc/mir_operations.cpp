@@ -4326,7 +4326,7 @@ namespace {
                     for (auto& w : lv.wrappers) {
                         if (w.is_Index()) {
                             auto it = knownValues.find(MIRLValue::newLocal(w.as_Index()));
-                            if (it != knownValues.find(lv) && !it->second.is_Const() && !it->second.is_Generic()) {
+                            if (it != knownValues.end() && !it->second.is_Const() && !it->second.is_Generic()) {
                                 MIR_ASSERT(state, it->second.is_Uint(), StringView("Indexing with non-Uint constant - ") << it->second);
                                 MIR_ASSERT(state, it->second.as_Uint().t == HIRCoreType::Usize, StringView("Indexing with non-usize constant - ") << it->second);
                                 auto idx = it->second.as_Uint().v;
@@ -4340,7 +4340,7 @@ namespace {
                     if (!lv.wrappers.empty() && lv.wrappers.front().is_Deref() && !lv.root.is_Static()) {
                         auto ilv = MIRLValue(lv.root.clone(), {});
                         auto it = knownValues.find(ilv);
-                        if (it != knownValues.find(lv)) {
+                        if (it != knownValues.end()) {
                             DEBUG(StringView("Known deref source: ") << ilv << StringView(" == ") << it->second);
                             if (it->second.is_ItemAddr() && it->second.as_ItemAddr().offset == U128(0)) {
                                 lv.wrappers.erase(lv.wrappers.begin());
@@ -4377,9 +4377,8 @@ namespace {
                                 case HIRCoreType::Isize:
                                     return sext(u, TargetGetPointerBits());
                                 default:
-                                    break;
+                                    BUG(Span(), StringView("Signed truncation with non-signed type ") << ct);
                             }
-                            return v;
                         }
 
                         static S128 sext(U128 v, unsigned bits) {
@@ -4413,12 +4412,9 @@ namespace {
                                         return v & U128(UINT64_MAX >> (64 - TargetGetPointerBits()));
                                     }
                                     return v & U128(UINT64_MAX);
-                                case HIRCoreType::Char:
-                                    break;
                                 default:
-                                    break;
+                                    BUG(Span(), StringView("Integer truncation with non-integer type ") << ct);
                             }
-                            return v;
                         }
                     };
 
@@ -4843,7 +4839,6 @@ namespace {
                                             switch (valR.tag()) {
                                                 default:
                                                     MIR_BUG(state, StringView("Mismatched types for eBinOp::BIT_SHL - ") << valL << StringView(" >> ") << valR);
-                                                    break;
                                                 case MIRConstant::TAG_Int: {
                                                     auto& re = valR.as_Int();
                                                     shiftLenR = re.v.getInner();
@@ -4877,7 +4872,6 @@ namespace {
                                             switch (valR.tag()) {
                                                 default:
                                                     MIR_BUG(state, StringView("Mismatched types for eBinOp::BIT_SHR - ") << valL << StringView(" >> ") << valR);
-                                                    break;
                                                 case MIRConstant::TAG_Int: {
                                                     auto& re = valR.as_Int();
                                                     shiftLenR = re.v.getInner();
@@ -4906,10 +4900,6 @@ namespace {
                                                 }
                                             }
                                         } break;
-                                        // TODO: Other binary operations
-                                        // Could emit a TODO?
-                                        default:
-                                            break;
                                     }
 
                                     if (newValue != MIRConstant()) {
@@ -4962,21 +4952,10 @@ namespace {
                                 }
                                 if (newValue != MIRParam()) {
                                     DEBUG(state << StringView(" ") << e->dst << StringView(" = ") << newValue);
-                                    switch (newValue.tag()) {
-                                        case MIRParam::TAG_LValue: {
-                                            auto& v = newValue.as_LValue();
-                                            e->src = mv$(v);
-                                            break;
-                                        }
-                                        case MIRParam::TAG_Borrow: {
-                                            auto& _ = newValue.as_Borrow();
-                                            UNREACHABLE();
-                                        }
-                                        case MIRParam::TAG_Constant: {
-                                            auto& v = newValue.as_Constant();
-                                            e->src = mv$(v);
-                                            break;
-                                        }
+                                    if (auto* value = newValue.opt_Constant()) {
+                                        e->src = mv$(*value);
+                                    } else {
+                                        e->src = mv$(newValue.as_LValue());
                                     }
                                     changed = true;
                                 }
@@ -5010,7 +4989,6 @@ namespace {
                                                         break;
                                                     default:
                                                         MIR_BUG(state, StringView("Invalid unsigned operand for ! - ") << ve.t);
-                                                        break;
                                                 }
                                                 newValue = MIRConstant::make_Uint({val, ve.t});
                                                 break;
@@ -5034,7 +5012,6 @@ namespace {
                                                         break;
                                                     default:
                                                         MIR_BUG(state, StringView("Invalid signed operand for ! - ") << ve.t);
-                                                        break;
                                                 }
                                                 newValue = MIRConstant::make_Int({val, ve.t});
                                                 break;
@@ -5057,7 +5034,6 @@ namespace {
                                             }
                                             default: {
                                                 MIR_BUG(state, StringView("Invalid constant operand for ! - ") << val);
-                                                break;
                                             }
                                         }
                                         break;
@@ -5089,7 +5065,6 @@ namespace {
                                             }
                                             default: {
                                                 MIR_BUG(state, StringView("Invalid constant operand for unary - - ") << val);
-                                                break;
                                             }
                                         }
                                         break;
