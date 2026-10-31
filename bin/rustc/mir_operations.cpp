@@ -6921,7 +6921,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         case MIRRValue::TAG_DstMeta: {
                             auto& re = se.src.as_DstMeta();
-                            const HIRType* tmp;
                             const auto& ty = state.getLvalueType(re.val);
 
                             if (const auto* array = ty->opt_Array()) {
@@ -6943,25 +6942,12 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
-                            const HIRType* cleanedTmp;
                             const auto* cleanedTy = state.getLvalueType(re.val);
-                            const HIRType* ityP;
-                            if (const auto* te = cleanedTy->opt_Borrow()) {
-                                ityP = te->inner;
-                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
-                                ityP = te->inner;
-                            } else if (cleanedTy->is_TraitObject()) {
-                                ityP = cleanedTy;
-                                MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), StringView("DstMeta on bare trait object with no deref: ") << re.val);
-                                re.val.wrappers.pop_back();
-                            } else {
-                                BUG(Span(), StringView("Unexpected input type for DstMeta - ") << cleanedTy);
-                            }
+                            MIR_ASSERT(state, cleanedTy->is_Borrow() || cleanedTy->is_Pointer(), StringView("Unexpected input type for DstMeta - ") << cleanedTy);
                             break;
                         }
                         case MIRRValue::TAG_DstPtr: {
                             auto& re = se.src.as_DstPtr();
-                            const HIRType* tmp;
                             const auto& ty = state.getLvalueType(re.val);
                             if (!state.resolve.typeIsSized(state.sp, ty)) {
                                 MIRCleanupLValue(state, mutator, re.val);
@@ -6972,21 +6958,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
-                            const HIRType* cleanedTmp;
                             const auto* cleanedTy = state.getLvalueType(re.val);
-                            const HIRType* ityP;
-                            if (const auto* te = cleanedTy->opt_Borrow()) {
-                                ityP = te->inner;
-                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
-                                ityP = te->inner;
-                            } else if (cleanedTy->is_TraitObject()) {
-                                ityP = cleanedTy;
-                                MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), StringView("DstPtr on bare trait object with no deref: ") << re.val);
-                                re.val.wrappers.pop_back();
-                            } else {
-                                BUG(Span(), StringView("Unexpected input type for DstMeta - ") << cleanedTy);
-                            }
-                            (void)ityP; // TODO: What is this needed for?
+                            MIR_ASSERT(state, cleanedTy->is_Borrow() || cleanedTy->is_Pointer(), StringView("Unexpected input type for DstPtr - ") << cleanedTy);
                             break;
                         }
                         case MIRRValue::TAG_MakeDst: {

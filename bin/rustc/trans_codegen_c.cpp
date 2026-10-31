@@ -7678,10 +7678,18 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 } break;
                 case TypeReprVariantMode::TAG_NonZero: {
                     auto& ve = repr->variants.as_NonZero();
+                    const auto* tagTy = physicalEnumTagType(TargetGetInnerType(sp, resolve_, *repr, ve.field.index, ve.field.subFields));
+                    const bool emulated128 = typeIsEmulatedI128(tagTy);
+                    if (emulated128) {
+                        of << (tagTy == HIRCoreType::I128 ? "cmp128s(" : "cmp128(");
+                    }
                     of << StringView("(*");
                     emitParam(e.args.at(0));
                     of << StringView(")");
                     emitEnumPath(repr, ve.field);
+                    if (emulated128) {
+                        of << (tagTy == HIRCoreType::I128 ? ", make128s(0))" : ", make128(0))");
+                    }
                     of << StringView(" ");
                     of << StringView(ve.zeroVariant ? "==" : "!=");
                     of << StringView(" 0");
