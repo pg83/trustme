@@ -111,20 +111,12 @@ struct Ident {
     Ident& operator=(Ident&& x) = default;
     Ident& operator=(const Ident& x) = default;
 
-    RcString intoString() {
-        return std::move(name);
-    }
-
     RcString hygienicName() const {
         return hygiene.applyToItemName(name);
     }
 
     bool operator==(const char* s) const {
         return this->name == s;
-    }
-
-    bool sameName(const Ident& x) const {
-        return this->name == x.name;
     }
 
     bool sameToken(const Ident& x) const {

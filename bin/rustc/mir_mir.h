@@ -264,10 +264,6 @@ struct MIRLValue {
 
     MIRLValue cloneUnwrapped(unsigned count = 1) const;
 
-    bool isSubsetOf(const MIRLValue& other) const {
-        return root == other.root && other.wrappers.size() >= wrappers.size() && std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
-    }
-
     class RefCommon {
     protected:
         const MIRLValue* lv_;

@@ -245,7 +245,7 @@ private:
     }
 };
 
-bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
+void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache);
 
 void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr);
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr);

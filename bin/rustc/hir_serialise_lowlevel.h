@@ -43,7 +43,6 @@ struct HIRSerialiseWriter {
 
     void writeU8(u8 v);
     void writeI64(i64 v);
-    void writeI128(S128 v);
     void writeString(const std::string& v);
     void closeObject();
 
@@ -98,10 +97,6 @@ struct HIRSerialiseReader {
 
     u64 readU64() {
         return readRaw<u64>();
-    }
-
-    double readDouble() {
-        return readRaw<double>();
     }
 
     size_t readCount() {

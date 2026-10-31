@@ -69,11 +69,6 @@ MonomorphState MonomorphState::clone() const {
     return rv;
 }
 
-void MonomorphState::setImplParams(HIRPathParams pp) {
-    ppImpl = &ppImplData;
-    ppImplData = std::move(pp);
-}
-
 const HIRType* MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
     return types.generic(ty);
 }

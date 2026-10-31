@@ -33,22 +33,6 @@ static inline const HIRType* monomorphiseTypeWithOpt(const Span& sp, const HIRTy
     return monomorphiseTypeNeeded(tpl) ? mono.monomorphType(sp, tpl, allowInfer) : tpl;
 }
 
-static inline const HIRPath& monomorphisePathWithOpt(const Span& sp, HIRPath& tmp, const HIRPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphisePathNeeded(tpl) ? tmp = mono.monomorphPath(sp, tpl, allowInfer) : tpl);
-}
-
-static inline const HIRGenericPath& monomorphiseGenericpathWithOpt(const Span& sp, HIRGenericPath& tmp, const HIRGenericPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphiseGenericpathNeeded(tpl) ? tmp = mono.monomorphGenericpath(sp, tpl, allowInfer) : tpl);
-}
-
-static inline const HIRTraitPath& monomorphiseTraitpathWithOpt(const Span& sp, HIRTraitPath& tmp, const HIRTraitPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphiseTraitpathNeeded(tpl) ? tmp = mono.monomorphTraitpath(sp, tpl, allowInfer) : tpl);
-}
-
-static inline const HIRPathParams& monomorphisePathparamsWithOpt(const Span& sp, HIRPathParams& tmp, const HIRPathParams& tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphisePathparamsNeeded(tpl) ? tmp = mono.monomorphPathParams(sp, tpl, allowInfer) : tpl);
-}
-
 struct MonomorphStatePtr: public MonomorphiserPP {
     const HIRType* selfTy;
     const HIRPathParams* ppImpl;
@@ -89,8 +73,6 @@ struct MonomorphState: public MonomorphiserPP {
     MonomorphState& operator=(MonomorphState&& x);
 
     MonomorphState clone() const;
-
-    void setImplParams(HIRPathParams pp);
 
     bool hasTypes() const {
         return (ppMethod && ppMethod->hasParams()) || (ppImpl && ppImpl->hasParams());

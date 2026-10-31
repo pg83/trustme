@@ -211,8 +211,6 @@ namespace {
 
         const RcString* originalResponsePlaceholderName(const RcString& canonical) const;
 
-        const Vector<const HIRType*>& ivarNodes() const;
-
         size_t typeSlotCount() const;
 
         size_t valueSlotCount() const;
@@ -9765,10 +9763,6 @@ auto CanonicalizeTraitGoal::originalResponsePlaceholderName(const RcString& cano
         }
     }
     return nullptr;
-}
-
-auto CanonicalizeTraitGoal::ivarNodes() const -> const Vector<const HIRType*>& {
-    return ivarNodes_;
 }
 
 auto CanonicalizeTraitGoal::typeSlotCount() const -> size_t {

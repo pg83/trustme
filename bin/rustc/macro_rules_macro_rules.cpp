@@ -54,8 +54,6 @@ namespace {
 
         const std::vector<CapturedVar>& mappings() const;
 
-        size_t layerCount() const;
-
         void setLoopCounts(loopCountsT loopCounts);
 
         void insert(unsigned int nameIndex, const Vector<unsigned int>& iterations, InterpolatedFragment data);
@@ -3832,10 +3830,6 @@ ParameterMappings::ParameterMappings()
 
 auto ParameterMappings::mappings() const -> const std::vector<CapturedVar>& {
     return mappings_;
-}
-
-auto ParameterMappings::layerCount() const -> size_t {
-    return layerCount_ + 1;
 }
 
 auto ParameterMappings::setLoopCounts(loopCountsT loopCounts) -> void {

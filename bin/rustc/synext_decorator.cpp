@@ -468,8 +468,6 @@ namespace {
 
         ASTExprNode* getValOk(const RcString& coreName, ASTExprNode* inner) const;
 
-        ASTExprNode* getValOkUnit(ObjPool& pool, const RcString& coreName) const;
-
         const char* traitName() const override;
 
         ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
@@ -4189,10 +4187,6 @@ auto DeriverRustcDecodable::getValErrStr(ObjPool& pool, const RcString& coreName
 auto DeriverRustcDecodable::getValOk(const RcString& coreName, ASTExprNode* inner) const -> ASTExprNode* {
     auto& pool = inner->pool();
     return makeAstExprNode<ASTExprNodeCallPath>(pool, getPath(coreName, "result", "Result", "Ok"), vec$(mv$(inner)));
-}
-
-auto DeriverRustcDecodable::getValOkUnit(ObjPool& pool, const RcString& coreName) const -> ASTExprNode* {
-    return getValOk(coreName, makeAstExprNode<ASTExprNodeTuple>(pool, decltype(ASTExprNodeTuple::values)()));
 }
 
 auto DeriverRustcDecodable::traitName() const -> const char* {

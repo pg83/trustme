@@ -25,18 +25,10 @@ public:
         return ASTLifetimeRef("static", BINDING_STATIC);
     }
 
-    static ASTLifetimeRef newInfer() {
-        return ASTLifetimeRef("_", BINDING_INFER);
-    }
-
     void setBinding(u16 b);
 
     bool isUnbound() const {
         return binding_ == BINDING_UNBOUND;
-    }
-
-    bool isInfer() const {
-        return binding_ == BINDING_INFER;
     }
 
     const Ident& name() const {

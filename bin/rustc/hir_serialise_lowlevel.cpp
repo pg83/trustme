@@ -346,10 +346,6 @@ void HIRSerialiseWriter::writeI64(i64 v) {
     writeU64(static_cast<u64>(v));
 }
 
-void HIRSerialiseWriter::writeI128(S128 v) {
-    writeU128(v.getInner());
-}
-
 void HIRSerialiseWriter::writeString(const std::string& v) {
     writeString(v.size(), v.c_str());
 }

@@ -134,10 +134,6 @@ public:
         return edition >= e;
     }
 
-    bool editionBefore(ASTEdition e) const {
-        return edition < e;
-    }
-
     ProtoSpan startSpan() const;
     Span endSpan(ProtoSpan ps) const;
     Span pointSpan() const;

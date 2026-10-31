@@ -258,8 +258,6 @@ public:
 
     void pushStmtSetDropflagVal(const Span& sp, unsigned int index, bool value);
     void pushStmtSetDropflagOther(const Span& sp, unsigned int index, unsigned int other);
-    void pushStmtSetDropflagDefault(const Span& sp, unsigned int index);
-
     void pushStmt(const Span& sp, MIRStatement stmt);
 
     void setDropEmitter(MIRDropEmitter* emitter) {
@@ -457,9 +455,6 @@ public:
     public:
         static SavedActiveLocal storageOnly();
 
-        const VarState& getState() const {
-            return state;
-        }
     };
 
     std::map<unsigned, SavedActiveLocal> getActiveLocals(const Span& sp, std::set<unsigned>& savedDropFlags) const;

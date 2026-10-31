@@ -1525,15 +1525,8 @@ namespace {
                 case HIRType::TAG_Array: {
                     auto& e = (*curTy).as_Array();
                     curTy = e.inner;
-                    if (idx < FIELD_INDEX_MAX) {
-                        ASSERT_BUG(sp, idx < e.size.as_Known(), StringView("Index out of range"));
-                        lval = MIRLValue::newField(mv$(lval), idx);
-                    } else {
-                        idx -= FIELD_INDEX_MAX;
-                        idx = FIELD_INDEX_MAX - idx;
-                        ASSERT_BUG(sp, idx < e.size.as_Known(), StringView("Index out of range"));
-                        TODO(sp, StringView("Index ") << idx << StringView(" from end of array ") << lval);
-                    }
+                    ASSERT_BUG(sp, idx < e.size.as_Known(), StringView("Index out of range"));
+                    lval = MIRLValue::newField(mv$(lval), idx);
                     break;
                 }
                 case HIRType::TAG_Slice: {
@@ -4331,7 +4324,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         }
                     } else {
                         if (!pe.trailing.empty()) {
-                            ASSERT_BUG(sp, arraySize - pe.trailing.size() < FIELD_INDEX_MAX, StringView("Trailing slice rules after a too-large array gap"));
+                            ASSERT_BUG(sp, arraySize - pe.trailing.size() <= static_cast<u16>(-1), StringView("Array pattern field index cannot be encoded"));
                             fieldPath.back() = static_cast<u16>(arraySize - pe.trailing.size());
                             for (const auto& subpat : pe.trailing) {
                                 this->appendFrom(sp, subpat, e.inner);
@@ -5737,10 +5730,6 @@ void MirBuilder::pushStmtSetDropflagVal(const Span& sp, unsigned int idx, bool v
 
 void MirBuilder::pushStmtSetDropflagOther(const Span& sp, unsigned int idx, unsigned int other) {
     this->pushStmt(sp, MIRStatement::make_SetDropFlag({idx, false, other}));
-}
-
-void MirBuilder::pushStmtSetDropflagDefault(const Span& sp, unsigned int idx) {
-    this->pushStmt(sp, MIRStatement::make_SetDropFlag({idx, this->getDropFlagDefault(sp, idx), ~0u}));
 }
 
 void MirBuilder::pushStmt(const Span& sp, MIRStatement stmt) {

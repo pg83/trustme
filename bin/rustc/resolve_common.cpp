@@ -81,14 +81,6 @@ namespace {
     }
 }
 
-// TODO: Function that turns a relative path into a canonical absolute path to the containing module
-
-ResolveModuleRef ResolveLookupGetModule(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath) {
-    ResolveState rs(sp, settings, crate);
-
-    return rs.getModule(basePath, path, ignoreLast, outPath);
-}
-
 ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath) {
     TRACE_FUNCTION_F(StringView("path=") << path << StringView(" in ") << basePath);
     ResolveState rs(span, settings, crate);

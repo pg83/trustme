@@ -2980,9 +2980,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\tmemcpy(&rv, out, sizeof(rv));\n");
             of << StringView("\treturn rv;\n");
         } else {
-            // TODO: Hand off to compiler-specific intrinsics
-
-            of << StringView("\tassert(!\"Extern LLVM: ") << item.linkage.name << StringView("\"); abort();\n");
+            ERROR(sp, E0000, StringView("Unsupported LLVM intrinsic `") << item.linkage.name << StringView("` referenced by ") << p);
         }
         of << StringView("}\n\n");
         mirRes = nullptr;

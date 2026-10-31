@@ -82,10 +82,6 @@ public:
         requireConstCalls = true;
     }
 
-    StaticTraitResolve& getResolve() {
-        return this->resolve;
-    }
-
 private:
     void pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, const HIRType* exp, HIRFunction::argsT argDefs, std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 

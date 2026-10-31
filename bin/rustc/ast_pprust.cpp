@@ -69,11 +69,9 @@ namespace {
         void eof();
         void word(StringView w);
         void spaces(i64 n);
-        void zerobreak();
         void space();
         void hardbreak();
         bool isBeginningOfLine() const;
-        void trailingComma();
         void trailingCommaOrSpace();
         void offset(i64 off);
 
@@ -670,10 +668,6 @@ void Printer::spaces(i64 n) {
     this->breakOffset(n, 0);
 }
 
-void Printer::zerobreak() {
-    this->spaces(0);
-}
-
 void Printer::space() {
     this->spaces(1);
 }
@@ -685,10 +679,6 @@ void Printer::hardbreak() {
 bool Printer::isBeginningOfLine() const {
     const auto* last = this->lastToken();
     return last == nullptr || last->isHardbreak();
-}
-
-void Printer::trailingComma() {
-    this->scanBreak(makeBreak(0, 0, ','));
 }
 
 void Printer::trailingCommaOrSpace() {

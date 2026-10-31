@@ -3649,7 +3649,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         return HIRGenericPath(gp.path.parent(), gp.params.clone());
     }
 
-    bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl);
+    void visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl);
 
     template <typename T>
     void fix_param_count_(const Span& sp, Context& context, const HIRType* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
@@ -3747,7 +3747,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         }
     }
 
-    bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl) {
+    void visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl) {
         auto& e = path.data.as_UfcsInherent();
         context.selectWellFormed(sp, e.type);
         auto lookupType = context.revealOpaqueTypes(e.type);
@@ -3765,7 +3765,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             implPtr = selection.impl;
         }
         if (certainty == SolverCertainty::Ambiguous) {
-            return false;
+            ERROR(sp, E0000, StringView("Multiple applicable inherent functions for ") << path);
         }
         if (certainty == SolverCertainty::NoSolution || !implPtr) {
             ERROR(sp, E0000, StringView("Failed to locate function ") << path);
@@ -3795,7 +3795,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         }
         e.type = context.revealOpaqueTypes(e.type);
 
-        return true;
     }
 
     bool resolveInherentPathValue(Context& context, HIRExprNodePathValue& node) {
@@ -7378,13 +7377,13 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
 }
 
 /// TODO: If the function has multiple mismatched options, tell the caller to try again later?
-bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRTypeImpl* selectedInherentImpl);
+void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRTypeImpl* selectedInherentImpl);
 
-bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) {
-    return visitCallPopulateCache(context, sp, path, cache, nullptr);
+void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) {
+    visitCallPopulateCache(context, sp, path, cache, nullptr);
 }
 
-bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRTypeImpl* selectedInherentImpl) {
+void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRTypeImpl* selectedInherentImpl) {
     TRACE_FUNCTION_FR(path, path);
     BUG_ASSERT(cache.argTypes.length() == 0);
 
@@ -7512,9 +7511,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
             TODO(sp, StringView("Hit a UfcsUnknown (") << path << StringView(") - Is this an error?"));
         }
         case HIRPathData::TAG_UfcsInherent: {
-            if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr, selectedInherentImpl)) {
-                return false;
-            }
+            visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr, selectedInherentImpl);
             break;
         }
     }
@@ -7552,8 +7549,6 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         applyBoundsAsRules(context, sp, *cache.topParams, monomorph, /*is_impl_level=*/true);
     }
     applyBoundsAsRules(context, sp, *cache.fcnParams, monomorph, /*is_impl_level=*/false);
-
-    return true;
 }
 
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRType* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr) {
@@ -8470,27 +8465,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeTupleVariant& node) -> void {
 }
 
 auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
-    if (!visitCallPopulateCache(this->context, node.span(), node.path, node.cache)) {
-        DEBUG(StringView("- CallPath still ambiguous - trying again later"));
-        return;
-    }
-    BUG_ASSERT(node.cache.argTypes.length() >= 1);
-    unsigned int expArgc = node.cache.argTypes.length() - 1;
-    if (node.args.size() != expArgc) {
-        if (node.cache.fcn->variadic && node.args.size() > expArgc) {
-        } else {
-            ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.path << StringView(" - exp ") << expArgc << StringView(" got ") << node.args.size());
-        }
-    }
-    /* Upstream `check_argument_types`: each argument is coerced into its expected
-       parameter type, and the declared parameter type is then equal to it. */
-    const auto expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), this->context.callExpectation(node), node.cache.argTypes, 0);
-    for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-        coerceCallArgument(this->context, node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i], true, true);
-    }
-    this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
-    this->context.requireSized(node.span(), node.resType);
-    this->completed = true;
+    noRevisit(node);
 }
 
 auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIRType* ty, const HIRPathParams& traitPp) -> AsyncCallResult {
@@ -8929,7 +8904,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
 
         node.methodPath = mv$(fcnPath);
 
-        ASSERT_BUG(sp, visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache, selectedMethod.inherentImpl), StringView("Selected method became ambiguous while populating its cache: ") << node.methodPath);
+        visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache, selectedMethod.inherentImpl);
         if (node.params.hasParams()) {
             const HIRPathParams* selectedParams = nullptr;
             if (const auto* method = node.methodPath.data.opt_UfcsKnown()) {
@@ -12130,31 +12105,26 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
     const auto* expected = this->expectationFor(node);
     this->context.rememberCallExpectation(node, expected);
 
-    Vector<const HIRType*> expectedInputs;
-    const bool cacheOk = visitCallPopulateCache(this->context, node.span(), node.path, node.cache);
-    if (cacheOk) {
-        BUG_ASSERT(node.cache.argTypes.length() >= 1);
-        unsigned int expArgc = node.cache.argTypes.length() - 1;
+    visitCallPopulateCache(this->context, node.span(), node.path, node.cache);
+    BUG_ASSERT(node.cache.argTypes.length() >= 1);
+    unsigned int expArgc = node.cache.argTypes.length() - 1;
 
-        if (node.args.size() != expArgc) {
-            if (node.cache.fcn->variadic && node.args.size() > expArgc) {
-            } else {
-                ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.path << StringView(" - exp ") << expArgc << StringView(" got ") << node.args.size());
-            }
+    if (node.args.size() != expArgc) {
+        if (node.cache.fcn->variadic && node.args.size() > expArgc) {
+        } else {
+            ERROR(node.span(), E0000, StringView("Incorrect number of arguments to ") << node.path << StringView(" - exp ") << expArgc << StringView(" got ") << node.args.size());
         }
-
-        // TODO: Figure out a way to disable coercions in desugared for loops (will speed up typecheck)
-
-        /* Upstream `check_argument_types`: each argument is coerced into its expected
-           parameter type, and the declared parameter type is then equal to it. */
-        expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), expected, node.cache.argTypes, 0);
-        for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
-            expectedInputs.mut(i) = this->coerceArgument(node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i]);
-        }
-        this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
-    } else {
-        this->context.addRevisit(node);
     }
+
+    // TODO: Figure out a way to disable coercions in desugared for loops (will speed up typecheck)
+
+    /* Upstream `check_argument_types`: each argument is coerced into its expected
+       parameter type, and the declared parameter type is then equal to it. */
+    auto expectedInputs = this->context.expectedInputsForExpectedOutput(node.span(), expected, node.cache.argTypes, 0);
+    for (unsigned int i = 0; i < node.cache.argTypes.length() - 1; i++) {
+        expectedInputs.mut(i) = this->coerceArgument(node.span(), node.cache.argTypes[i], expectedInputs[i], node.args[i]);
+    }
+    this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
 
     {
         auto _ = this->pushInnerCoerceScoped(true);
@@ -12164,9 +12134,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeCallPath& node) -> void {
             this->inheritDivergence(node, *val);
         }
     }
-    if (cacheOk) {
-        this->context.requireSized(node.span(), node.resType);
-    }
+    this->context.requireSized(node.span(), node.resType);
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeCallValue& node) -> void {

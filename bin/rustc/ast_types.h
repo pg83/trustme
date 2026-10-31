@@ -151,10 +151,6 @@ struct ASTType {
         return data.is_Unit();
     }
 
-    bool isPrimitive() const {
-        return data.is_Primitive();
-    }
-
     bool isPath() const {
         return data.is_Path();
     }
@@ -167,20 +163,8 @@ struct ASTType {
         return *data.as_Path();
     }
 
-    bool isTypeParam() const {
-        return data.is_Generic();
-    }
-
     const RcString& typeParam() const {
         return data.as_Generic().name;
-    }
-
-    bool isReference() const {
-        return data.is_Borrow();
-    }
-
-    bool isPointer() const {
-        return data.is_Pointer();
     }
 
     bool isTuple() const {
