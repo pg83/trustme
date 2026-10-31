@@ -615,9 +615,7 @@ namespace {
             }
         }
         if (typeMode && lex.next() == TOK_PAREN_OPEN) {
-            if (!consumeTt(lex)) {
-                return false;
-            }
+            consumeTt(lex);
             if (lex.consumeIf(TOK_THINARROW)) {
                 if (!consumeType(lex)) {
                     return false;
@@ -698,9 +696,7 @@ namespace {
                     if (lex.next() != TOK_PAREN_OPEN && lex.next() != TOK_SQUARE_OPEN && lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                 }
                 return true;
             case TOK_AMP:
@@ -738,9 +734,7 @@ namespace {
                 if (lex.next() != TOK_PAREN_OPEN) {
                     return false;
                 }
-                if (!consumeTt(lex)) {
-                    return false;
-                }
+                consumeTt(lex);
                 if (lex.consumeIf(TOK_THINARROW)) {
                     consumeType(lex);
                 }
@@ -790,13 +784,9 @@ namespace {
                 case TOK_DOUBLE_LT:
                     consumePath(lex);
                     if (lex.next() == TOK_BRACE_OPEN) {
-                        if (!consumeTt(lex)) {
-                            return false;
-                        }
+                        consumeTt(lex);
                     } else if (lex.next() == TOK_PAREN_OPEN) {
-                        if (!consumeTt(lex)) {
-                            return false;
-                        }
+                        consumeTt(lex);
                     } else if (lex.next() == TOK_EXCLAM) {
                         lex.consume();
                         if (!consumeTt(lex)) {
@@ -831,9 +821,7 @@ namespace {
                     return true;
                 case TOK_PAREN_OPEN:
                 case TOK_SQUARE_OPEN:
-                    if (!consumeTt(lex)) {
-                        return false;
-                    }
+                    consumeTt(lex);
                     if (allowOr && lex.consumeIf(TOK_PIPE)) {
                         continue;
                     }
@@ -862,6 +850,7 @@ namespace {
                         case TOK_IDENT:
                         case TOK_RWORD_SUPER:
                         case TOK_RWORD_SELF:
+                        case TOK_RWORD_CRATE:
                         case TOK_DOUBLE_COLON:
                         case TOK_INTERPOLATED_PATH:
                             consumePath(lex);
@@ -899,6 +888,7 @@ namespace {
                     case TOK_IDENT:
                     case TOK_RWORD_SUPER:
                     case TOK_RWORD_SELF:
+                    case TOK_RWORD_CRATE:
                     case TOK_DOUBLE_COLON:
                     case TOK_INTERPOLATED_PATH:
                         consumePath(lex);
