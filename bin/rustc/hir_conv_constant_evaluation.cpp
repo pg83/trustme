@@ -2268,7 +2268,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
     switch (terminator.tag()) {
         default:
             MIR_BUG(state, StringView("Unexpected terminator - ") << terminator);
-            break;
         case MIRTerminator::TAG_Goto: {
             auto& e = terminator.as_Goto();
             return e;
@@ -2346,7 +2345,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             } else {
                 return e.targets[targetIdx];
             }
-            break;
         }
         case MIRTerminator::TAG_Drop: {
             auto& e = terminator.as_Drop();
@@ -2422,32 +2420,57 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     }
                 } else if (te->name == "size_of_val") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    size_t sizeVal;
-                    size_t alignVal;
-                    if (ty->is_TraitObject()) {
-                        sizeVal = readTraitObjectVtableUsize(1);
-                    } else if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
-                        deferUnloweredLayout(ty);
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << ty);
-                    }
-                    if (sizeVal == SIZE_MAX) {
-                        size_t itemSize;
-                        if (const auto* slice = ty->opt_Slice()) {
-                            if (!TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
+                    struct ValueLayout {
+                        size_t size;
+                        size_t align;
+                    };
+                    const auto roundSize = [&](size_t size, size_t align) {
+                        MIR_ASSERT(state, align != 0 && (align & (align - 1)) == 0, StringView("Invalid DST alignment"));
+                        const size_t padding = (align - size % align) % align;
+                        MIR_ASSERT(state, padding <= SIZE_MAX - size, StringView("DST size overflow"));
+                        return size + padding;
+                    };
+                    const auto dynamicLayout = [&](auto&& recurse, const HIRType* type) -> ValueLayout {
+                        if (type->is_TraitObject()) {
+                            return {readTraitObjectVtableUsize(1), readTraitObjectVtableUsize(2)};
+                        }
+                        size_t size;
+                        size_t align;
+                        if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, type, size, align)) {
+                            deferUnloweredLayout(type);
+                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << type);
+                        }
+                        if (size != SIZE_MAX) {
+                            return {size, align};
+                        }
+                        if (const auto* slice = type->opt_Slice(); slice || type == HIRCoreType::Str) {
+                            size_t itemSize = 1;
+                            if (slice && !TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
                                 deferUnloweredLayout(slice->inner);
                                 BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << slice->inner);
                             }
-                        } else if (ty == HIRCoreType::Str) {
-                            itemSize = 1;
-                        } else {
-                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("unsized tail of ") << ty);
+                            auto arg = localState.getLval(e.args.at(0).as_LValue());
+                            const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
+                            MIR_ASSERT(state, itemSize == 0 || len <= SIZE_MAX / itemSize, StringView("`size_of_val` overflow for ") << type);
+                            return {len * itemSize, align};
                         }
-                        auto arg = localState.getLval(e.args.at(0).as_LValue());
-                        const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
-                        MIR_ASSERT(state, itemSize == 0 || len <= SIZE_MAX / itemSize, StringView("`size_of_val` overflow for ") << ty);
-                        sizeVal = len * itemSize;
-                    }
-                    dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
+                        const auto* repr = TargetGetTypeRepr(state.sp, this->resolve, type);
+                        MIR_ASSERT(state, repr && !repr->fields.empty(), StringView("Expected a DST wrapper - ") << type);
+                        const auto& field = repr->fields.back();
+                        const auto tail = recurse(recurse, field.ty);
+                        auto tailAlign = tail.align;
+                        if (const auto* path = type->opt_Path(); path && path->binding.is_Struct()) {
+                            const auto packing = path->binding.as_Struct()->maxFieldAlignment;
+                            if (packing != 0) {
+                                tailAlign = std::min(tailAlign, static_cast<size_t>(packing));
+                            }
+                        }
+                        const auto offset = roundSize(field.offset, tailAlign);
+                        MIR_ASSERT(state, tail.size <= SIZE_MAX - offset, StringView("DST tail size overflow"));
+                        const auto fullAlign = std::max(align, tailAlign);
+                        return {roundSize(offset + tail.size, fullAlign), fullAlign};
+                    };
+                    dst.writeUint(state, TargetGetPointerBits(), U128(dynamicLayout(dynamicLayout, ty).size));
                 } else if (te->name == "align_of" || te->name == "min_align_of") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t alignVal;
@@ -2561,6 +2584,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), StringView("bswap with non-primitive ") << ty);
                     auto ti = TypeInfo::forType(ty);
+                    MIR_ASSERT(state, ti.ty == TypeInfo::Signed || ti.ty == TypeInfo::Unsigned, StringView("bswap with non-integer ") << ty);
                     auto val = localState.readParamUint(ti.bits, e.args.at(0));
 
                     struct H {
@@ -2582,25 +2606,20 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     };
 
                     U128 rv;
-                    switch (ty->as_Primitive()) {
-                        case HIRCoreType::I8:
-                        case HIRCoreType::U8:
+                    switch (ti.bits) {
+                        case 8:
                             rv = val;
                             break;
-                        case HIRCoreType::I16:
-                        case HIRCoreType::U16:
+                        case 16:
                             rv = U128(H::bswap16(val.truncateU64()));
                             break;
-                        case HIRCoreType::I32:
-                        case HIRCoreType::U32:
+                        case 32:
                             rv = U128(H::bswap32(val.truncateU64()));
                             break;
-                        case HIRCoreType::I64:
-                        case HIRCoreType::U64:
+                        case 64:
                             rv = U128(H::bswap64(val.truncateU64()));
                             break;
-                        case HIRCoreType::I128:
-                        case HIRCoreType::U128:
+                        case 128:
                             rv = H::bswap128(val);
                             break;
                         default:
@@ -3167,7 +3186,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             } else {
                 MIR_BUG(state, StringView("Unexpected terminator - ") << terminator);
             }
-            break;
         }
         case MIRTerminator::TAG_TailCall: {
             auto& e = terminator.as_TailCall();
@@ -3204,10 +3222,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
             }
             MIR_BUG(state, StringView("Intrinsic used as an explicit tail-call target"));
-            break;
         }
     }
-    MIR_BUG(state, StringView("Unreachable terminator"));
 }
 
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
