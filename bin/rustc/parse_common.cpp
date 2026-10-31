@@ -3616,6 +3616,17 @@ ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
             DEBUG(StringView("Set module from ") << lex.parseState().module->path() << StringView(" to ") << localMod->path());
             lex.parseState().module = localMod.get();
         }
+        auto pathSpan = lex.tokenStartSpan(tok);
+        PUTBACK(tok, lex);
+        auto path = ParsePath(lex, PATH_GENERIC_EXPR);
+        GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
+        auto* definition = ParseExprMacro(lex, mv$(path), mv$(pathSpan));
+        if (!static_cast<ASTExprNodeMacro*>(definition)->isBraced) {
+            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+            addSilenceIfEnd = true;
+        }
+        definition->setAttrs(mv$(itemAttrs));
+        return definition;
     }
 
     switch (tok.type()) {

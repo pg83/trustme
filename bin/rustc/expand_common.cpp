@@ -2407,6 +2407,7 @@ auto CExpandExpr::curMod() -> ASTModule& {
 
 auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
     const auto outerUnusedAttributes = this->unusedAttributes;
+    const bool outerAssignLhs = this->inAssignLhs;
     if (cnode) {
         auto attrs = mv$(cnode->attrs());
         CfgExpandAttrs(expandState.wb, attrs);
@@ -2449,6 +2450,7 @@ auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
     }
     BUG_ASSERT(!this->replacement);
     this->unusedAttributes = outerUnusedAttributes;
+    this->inAssignLhs = outerAssignLhs;
     return cnode;
 }
 
@@ -2847,7 +2849,7 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
             }
 
             void invalid(const ASTExprNode& v) {
-                ERROR(v.span(), E0000, typeid(v).name() << StringView(" isn't valid on the LHS of an assignemnt"));
+                ERROR(v.span(), E0000, StringView("invalid left-hand side of assignment"));
             }
 
             void visit(ASTExprNodeBlock& v) override {
@@ -2903,7 +2905,9 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
                 std::vector<ASTPattern> end;
                 for (auto& m : values) {
                     if (isRest(m)) {
-                        ASSERT_BUG(sp, !isSplit, StringView("Multiple `..` in tuple pattern?"));
+                        if (isSplit) {
+                            ERROR(sp, E0000, StringView("multiple rest expressions in a destructuring assignment"));
+                        }
                         isSplit = true;
                         start = std::move(end);
                         continue;
@@ -2987,7 +2991,7 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
 
             void visit(ASTExprNodeStructLiteral& v) override {
                 if (v.baseValue) {
-                    TODO(v.span(), StringView("Struct literal with `..value` in destructured assignment"));
+                    ERROR(v.span(), E0000, StringView("functional record updates are not allowed in destructuring assignments"));
                 }
                 std::vector<ASTStructPatternEntry> subpats;
                 for (auto& m : v.values) {
@@ -3006,14 +3010,16 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
 
             void visit(ASTExprNodeArray& v) override {
                 if (v.size) {
-                    TODO(v.span(), StringView("Sized Array literal in destructured assignment"));
+                    ERROR(v.span(), E0000, StringView("array repetition is not allowed in a destructuring assignment"));
                 } else {
                     bool isSplit = false;
                     std::vector<ASTPattern> leading;
                     std::vector<ASTPattern> trailing;
                     for (auto& m : v.values) {
                         if (isRest(m)) {
-                            ASSERT_BUG(v.span(), !isSplit, StringView("Multiple `..` in slice pattern?"));
+                            if (isSplit) {
+                                ERROR(v.span(), E0000, StringView("multiple rest expressions in a destructuring assignment"));
+                            }
                             isSplit = true;
                             leading = std::move(trailing);
                             continue;
