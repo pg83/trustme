@@ -3594,7 +3594,7 @@ auto TypeVisitor::visitEnum(const HIRType* selfType, const HIRGenericPath& path,
 
 auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
     Span sp;
-    if (visitTyWith(ty, [](const HIRType* inner) {
+    if (ty->mayHaveAssociatedType() || visitTyWith(ty, [](const HIRType* inner) {
         return inner->is_ErasedType();
     })) {
         const HIRType* revealed = ty;

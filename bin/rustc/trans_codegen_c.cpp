@@ -6747,7 +6747,7 @@ auto CodeGeneratorC::emitReifiedFunctionName(const HIRPath& path, bool preserveT
 }
 
 auto CodeGeneratorC::monomorphiseFcnReturn(const HIRFunction& item, const TransParams& params) -> const HIRType* {
-    if (monomorphiseTypeNeeded(item.returnType)) {
+    if (item.returnType->mayHaveAssociatedType() || monomorphiseTypeNeeded(item.returnType)) {
         return resolve_.expandAssociatedTypes(Span(), params.monomorphType(Span(), item.returnType));
     } else {
         return item.returnType;

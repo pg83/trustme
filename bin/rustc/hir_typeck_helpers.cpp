@@ -540,9 +540,10 @@ struct TraitResolution::NextTraitGoalEvaluator {
         const void* solverEnvironmentOwner;
         u64 solverEnvironmentGeneration;
         bool coherence;
+        bool revealSpecializableAssociated;
         GoalContext* next;
 
-        GoalContext(const TypingEnvironment* environment, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const void* solverEnvironmentOwner, u64 solverEnvironmentGeneration, bool coherence, GoalContext* next);
+        GoalContext(const TypingEnvironment* environment, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const void* solverEnvironmentOwner, u64 solverEnvironmentGeneration, bool coherence, bool revealSpecializableAssociated, GoalContext* next);
 
         bool permanent() const {
             return environment != nullptr;
@@ -1039,18 +1040,6 @@ const HIRType* SolverImpl::getType(HIRTypeInterner& types, const char* name, con
     const auto ownParams = defaultIt->second.generics.makeNopParams(types, 1);
     auto defaultType = MonomorphStatePtr(types, types.self(), &traitImpl->traitArgs, &ownParams).monomorphType(sp, defaultIt->second.defaultValue);
     return SolverImplTraitMonomorph(types, *traitImpl, implParams, params).monomorphType(sp, defaultType);
-}
-
-bool SolverImpl::moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const {
-    if (traitImpl) {
-        return other.traitImpl && traitImpl->moreSpecificThan(types, *other.traitImpl);
-    }
-    if (other.traitImpl) {
-        return false;
-    }
-    BUG_ASSERT(type == other.type);
-    BUG_ASSERT(traitArgs == other.traitArgs);
-    return associated.size() > other.associated.size();
 }
 
 const HIRType* SolverImpl::monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRType* type, const HIRPathParams& methodParams) const {
@@ -4123,12 +4112,13 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
     return false;
 }
 
-TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
+TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait, bool revealSpecializableAssociated)
     : TraitResolveCommon(wb)
     , langDeref_(wb.langItems->deref())
     , ivars(ivars)
     , visPath(visPath)
     , currentTraitPath_(currentTrait)
+    , revealSpecializableAssociated_(revealSpecializableAssociated)
     , eatCachePool(ObjPool::fromMemory())
     , eatCache(eatCachePool.mutPtr())
     , solverExistentials_(eatCachePool.mutPtr())
@@ -6610,7 +6600,8 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                 }
                 return result;
             }
-            if (ivars.pathparamsContainIvars(destinationParams, false) || ivars.pathparamsContainIvars(sourceParams, false)) {
+            if (sourcePath->path.data.as_Generic().path == board().langItems->phantomData()
+                || ivars.pathparamsContainIvars(destinationParams, false) || ivars.pathparamsContainIvars(sourceParams, false)) {
                 return relateEquality(destination, source);
             }
             auto result = SolverCertainty::Proven;
@@ -10073,7 +10064,7 @@ auto NextTraitGoalEvaluator::goalIsConcrete(const HIRSimplePath& trait, const Ca
 }
 
 auto NextTraitGoalEvaluator::crateCacheUsable() const -> bool {
-    return !coherenceMode && resolve_.solverEnvIsEmpty();
+    return !coherenceMode && !resolve_.revealSpecializableAssociated_ && resolve_.solverEnvIsEmpty();
 }
 
 auto NextTraitGoalEvaluator::crateCacheEnv(bool suppressAmbiguity) const -> SolverParamEnv {
@@ -11225,7 +11216,7 @@ auto NextTraitGoalEvaluator::refreshContext() -> void {
     const void* owner = resolve_.solverEnvIsEmpty() ? nullptr : static_cast<const void*>(&resolve_);
     const u64 generation = owner ? resolve_.solverEnvGeneration : 0;
     const auto sameContext = [&](const GoalContext& context) {
-        return context.environment == environment && context.implGenerics == implGenerics && context.itemGenerics == itemGenerics && context.solverEnvironmentOwner == owner && context.solverEnvironmentGeneration == generation && context.coherence == coherenceMode;
+        return context.environment == environment && context.implGenerics == implGenerics && context.itemGenerics == itemGenerics && context.solverEnvironmentOwner == owner && context.solverEnvironmentGeneration == generation && context.coherence == coherenceMode && context.revealSpecializableAssociated == resolve_.revealSpecializableAssociated_;
     };
     if (context_ && sameContext(*context_)) {
         return;
@@ -11237,6 +11228,7 @@ auto NextTraitGoalEvaluator::refreshContext() -> void {
     hash = hashMix(hash, reinterpret_cast<uintptr_t>(owner));
     hash = hashMix(hash, generation);
     hash = hashMix(hash, coherenceMode ? 1 : 0);
+    hash = hashMix(hash, resolve_.revealSpecializableAssociated_ ? 1 : 0);
     auto* head = table.contexts.find(hash);
     for (auto* node = head ? *head : nullptr; node; node = node->next) {
         if (sameContext(*node)) {
@@ -11244,7 +11236,7 @@ auto NextTraitGoalEvaluator::refreshContext() -> void {
             return;
         }
     }
-    auto* node = table.pool->make<GoalContext>(environment, implGenerics, itemGenerics, owner, generation, coherenceMode, head ? *head : nullptr);
+    auto* node = table.pool->make<GoalContext>(environment, implGenerics, itemGenerics, owner, generation, coherenceMode, resolve_.revealSpecializableAssociated_, head ? *head : nullptr);
     if (head) {
         *head = node;
     } else {
@@ -13259,6 +13251,13 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
     Certainty result = Certainty::Proven;
     for (const auto& requirement : *associated) {
         const auto& aty = requirement.second;
+        if (!resolve_.revealSpecializableAssociated_ && impl.isTraitImpl()) {
+            const auto item = impl.traitImpl->types.find(requirement.first);
+            if (item != impl.traitImpl->types.end() && item->second.isSpecialisable) {
+                result = Certainty::Ambiguous;
+                continue;
+            }
+        }
         if (!impl.isTraitImpl() && aty.atyParams.hasParams()) {
             result = Certainty::Ambiguous;
             continue;
@@ -15925,6 +15924,18 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     };
 
     auto emitResponse = [&](SolverImpl response, Certainty certainty, const Candidate* responseCandidate = nullptr, bool exposeImpl = true) {
+        if (!resolve_.revealSpecializableAssociated_ && response.isTraitImpl()) {
+            const auto specializable = [&](const char* name) {
+                const auto item = response.traitImpl->types.find(name);
+                return item != response.traitImpl->types.end() && item->second.isSpecialisable;
+            };
+            if (assocName && assocName[0] && specializable(assocName)) {
+                return emitForcedAmbiguity();
+            }
+            if (canonicalAssociated && std::any_of(canonicalAssociated->begin(), canonicalAssociated->end(), [&](const auto& requirement) { return specializable(requirement.first.c_str()); })) {
+                return emitForcedAmbiguity();
+            }
+        }
         canonicalizer.freeze();
         auto canonicalResponse = monomorphCandidateImpl(response, canonicalizer);
         SolverResponse solverResponse;
@@ -15994,14 +16005,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     const Candidate* inheritedFrom = nullptr;
                     if (output == nullptr && candidate->impl.isTraitImpl()) {
                         const auto considerInherited = [&](const Candidate* source) {
-                            if (!source || !source->impl.isTraitImpl() || !candidate->impl.moreSpecificThan(crate.types, source->impl)) {
+                            if (!source || !source->impl.isTraitImpl() || !specializes(*candidate->impl.traitImpl, *source->impl.traitImpl)) {
                                 return;
                             }
                             auto sourceImpl = monomorphCandidateImpl(source->impl, canonicalizer);
                             if (sourceImpl.getType(crate.types, assocName, itemParams) == nullptr) {
                                 return;
                             }
-                            if (!inheritedFrom || source->impl.moreSpecificThan(crate.types, inheritedFrom->impl)) {
+                            if (!inheritedFrom || specializes(*source->impl.traitImpl, *inheritedFrom->impl.traitImpl)) {
                                 inheritedFrom = source;
                             }
                         };
@@ -16587,9 +16598,10 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 return false;
             }
         }
-        auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() ? nullptr : &rootAssociated);
+        const bool deferAssociated = hasAssociatedItemQuery && candidate->impl.isTraitImpl();
+        auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() || deferAssociated ? nullptr : &rootAssociated);
         candidate->traitCertainty = certainty;
-        if (!candidate->isNegative() && rootAssociated.empty()) {
+        if (!candidate->isNegative() && rootAssociated.empty() && !deferAssociated) {
             const auto assocCertainty = matchRootAssociated(trait, *candidate, assocName, candidateAssocType, canonicalAssocParams);
             if (assocCertainty == Certainty::NoSolution) {
                 certainty = Certainty::NoSolution;
@@ -16800,7 +16812,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (!shadowed->impl.isTraitImpl()) {
             return;
         }
-        if (!winner->specializationItemSource || shadowed->impl.moreSpecificThan(crate.types, winner->specializationItemSource->impl)) {
+        if (!winner->specializationItemSource || specializes(*shadowed->impl.traitImpl, *winner->specializationItemSource->impl.traitImpl)) {
             winner->specializationItemSource = shadowed;
         }
     };
@@ -16814,6 +16826,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         return head;
     };
+    const auto hasLiteralInput = [](const HIRType* type) {
+        return visitTyWith(type, [](const HIRType* inner) {
+            const auto* infer = inner->opt_Infer();
+            return infer && infer->isLit();
+        });
+    };
+    const bool pendingLiteral = hasLiteralInput(canonical.type)
+        || std::any_of(canonical.params.types.begin(), canonical.params.types.end(), hasLiteralInput);
     for (size_t i = 0; i < frame.viable.length(); i++) {
         if (frame.viable[i]->discarded) {
             continue;
@@ -16827,13 +16847,13 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             if (!left.isTraitImpl() || !right.isTraitImpl()) {
                 continue;
             }
-            if (coherenceMode) {
+            if (coherenceMode || pendingLiteral) {
                 continue;
             }
             if (frame.viable[i]->certainty != Certainty::Proven && frame.viable[j]->certainty != Certainty::Proven) {
                 continue;
             }
-            if (responsesEqual(*frame.viable[i], *frame.viable[j], assocName, canonicalAssocParams, valueName)) {
+            if (!hasAssociatedItemQuery && responsesEqual(*frame.viable[i], *frame.viable[j], assocName, canonicalAssocParams, valueName)) {
                 continue;
             }
             /* An instantiated head is read normalized: the default `impl<I: IntoIterator,
@@ -17150,13 +17170,14 @@ NextTraitGoalEvaluator::GoalKey::GoalKey(size_t hash, const HIRSimplePath& trait
     }
 }
 
-NextTraitGoalEvaluator::GoalContext::GoalContext(const TypingEnvironment* environment, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const void* solverEnvironmentOwner, u64 solverEnvironmentGeneration, bool coherence, GoalContext* next)
+NextTraitGoalEvaluator::GoalContext::GoalContext(const TypingEnvironment* environment, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const void* solverEnvironmentOwner, u64 solverEnvironmentGeneration, bool coherence, bool revealSpecializableAssociated, GoalContext* next)
     : environment(environment)
     , implGenerics(implGenerics)
     , itemGenerics(itemGenerics)
     , solverEnvironmentOwner(solverEnvironmentOwner)
     , solverEnvironmentGeneration(solverEnvironmentGeneration)
     , coherence(coherence)
+    , revealSpecializableAssociated(revealSpecializableAssociated)
     , next(next)
 {
 }

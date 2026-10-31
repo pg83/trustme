@@ -295,6 +295,22 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 return x == crate.types.self();
             }));
             bool monomorphNeeded = transFcn->pp.hasTypes() || isMethod;
+            if (!monomorphNeeded && fcn.code.mir) {
+                struct RevealVisitor final: MIRVisitor {
+                    bool needed = false;
+
+                    const HIRType* visitType(const HIRType* type) override {
+                        needed |= type->mayHaveAssociatedType();
+                        return type;
+                    }
+                } visitor;
+                const Span span;
+                auto path = makeCallable<MIRPathCb>([&](auto& os) { os << fcnEnt.first; });
+                MIRTypeResolve state(span, resolve, path, fcn.returnType, fcn.args, *fcn.code.mir);
+                visitor.visitFunction(state, *fcn.code.mir);
+                monomorphNeeded = visitor.needed || fcn.returnType->mayHaveAssociatedType()
+                    || std::any_of(fcn.args.begin(), fcn.args.end(), [](const auto& arg) { return arg.second->mayHaveAssociatedType(); });
+            }
 
             if (monomorphNeeded) {
                 const auto& path = fcnEnt.first;

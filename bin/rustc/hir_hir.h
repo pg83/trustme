@@ -654,7 +654,6 @@ public:
 
     bool matchesType(const HIRType* tr, tCbResolveType tyRes) const;
 
-    bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
 
     /* Does every type this impl applies to also match `parent`'s head?  If so, hand the
        callback what `parent` additionally requires of such a type - its where-clauses

@@ -45,7 +45,6 @@ struct SolverImpl {
     HIRPathParams getTraitParams(HIRTypeInterner& types) const;
     const HIRType* getTraitTyParam(HIRTypeInterner& types, unsigned index) const;
     const HIRType* getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
-    bool moreSpecificThan(HIRTypeInterner& types, const SolverImpl& other) const;
     const HIRType* monomorphImplType(HIRTypeInterner& types, const Span& sp, const HIRType* type, const HIRPathParams& methodParams = {}) const;
     HIRTraitPath monomorphImplTraitPath(HIRTypeInterner& types, const Span& sp, const HIRTraitPath& traitPath, const HIRPathParams& methodParams = {}) const;
 };
@@ -790,6 +789,7 @@ public:
 
 private:
     const HIRGenericPath* currentTraitPath_;
+    const bool revealSpecializableAssociated_;
 
     struct EatCacheEntry {
         u64 generation;
@@ -835,7 +835,7 @@ private:
 public:
     SolverCertainty probeTypeRelation(const Span& sp, const HIRType* left, const HIRType* right) const;
 
-    TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
+    TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait, bool revealSpecializableAssociated = false);
     ~TraitResolution();
 
     void setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams);

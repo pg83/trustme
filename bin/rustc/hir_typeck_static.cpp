@@ -193,7 +193,7 @@ struct StaticTraitResolve::NextSolverBridge {
     HIRSimplePath visibility;
     TraitResolution resolve_;
 
-    explicit NextSolverBridge(const WireBoard& wb);
+    NextSolverBridge(const WireBoard& wb, OpaqueReveal reveal);
 
     bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback);
 
@@ -222,7 +222,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
 
     if (!nextSolver) {
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
     return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
 }
@@ -881,7 +881,7 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span&
     }
     if (!nextSolver) {
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
     auto selection = nextSolver->selectInherentImpl(sp, implGenerics_, itemGenerics_, pe.type, pe.item, InherentItemKind::Type);
     if (selection.certainty != SolverCertainty::Proven || !selection.impl) {
@@ -934,7 +934,7 @@ const HIRType* StaticTraitResolve::normalizeForItemLookup(const Span& sp, const 
     }
     if (!nextSolver) {
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
     const auto* output = nextSolver->normalize(sp, implGenerics_, itemGenerics_, input);
     return output ? output : input;
@@ -989,7 +989,7 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp
 
     if (!nextSolver) {
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
     const auto* output = nextSolver->normalize(sp, implGenerics_, itemGenerics_, input);
     if (output != nullptr) {
@@ -1060,7 +1060,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRType* type) const {
 
     if (!nextSolver) {
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
     const bool proven = nextSolver->typeIsCopy(sp, implGenerics_, itemGenerics_, type);
     if (environment) {
@@ -1084,7 +1084,7 @@ bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRType* type) const 
 auto StaticTraitResolve::evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph) const -> SolverCertainty {
     if (!nextSolver) {
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
     return nextSolver->evaluateGenericBounds(sp, implGenerics_, itemGenerics_, definition, parameters, monomorph);
 }
@@ -2131,7 +2131,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
 
                 if (!nextSolver) {
                     ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-                    nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+                    nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
                 }
                 SolverMayApplyCb<decltype(visitImpl)> callback(visitImpl);
                 const auto* selfPath = pe.type->opt_Path();
@@ -2211,7 +2211,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             outParams.ppMethod = &pe.params;
             if (!nextSolver) {
                 ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
-                nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+                nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
             }
             auto selection = nextSolver->selectInherentImpl(sp, implGenerics_, itemGenerics_, pe.type, pe.item, InherentItemKind::Value, &pe.implParams);
             if (selection.certainty == SolverCertainty::Ambiguous) {
@@ -2352,10 +2352,10 @@ const HIRType* StaticTraitResolve::monomorphExpand(const Span& sp, const HIRType
     return rv;
 }
 
-StaticTraitResolve::NextSolverBridge::NextSolverBridge(const WireBoard& wb)
+StaticTraitResolve::NextSolverBridge::NextSolverBridge(const WireBoard& wb, OpaqueReveal reveal)
     : ivars(wb.crate->types)
     , visibility(wb.crate->crateName, {})
-    , resolve_(ivars, wb, nullptr, nullptr, visibility, nullptr)
+    , resolve_(ivars, wb, nullptr, nullptr, visibility, nullptr, reveal == OpaqueReveal::All)
 {
 }
 
