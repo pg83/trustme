@@ -9384,7 +9384,9 @@ auto ExprVisitorApply::checkTypeResolvedTop(const Span& sp, const HIRType* ty) c
 auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRType* topType) const -> void {
     if (v.is_Infer()) {
         auto val = ivars.getValue(v).clone();
-        ASSERT_BUG(sp, !val.is_Infer(), StringView("Failure to infer ") << v << StringView(" in ") << topType);
+        if (val.is_Infer()) {
+            ERROR(sp, E0000, StringView("Failed to infer const argument ") << v << StringView(" in ") << topType);
+        }
         v = std::move(val);
     }
     if (v.is_Unevaluated()) {

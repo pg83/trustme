@@ -821,8 +821,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     Certainty unifyProbe(const HIRType* left, const HIRType* right);
 
-    Certainty unifyValueProbe(const HIRConstGeneric& left, const HIRConstGeneric& right);
-
+    Certainty evaluateHeadValueEquality(const Candidate& candidate, const HIRConstGeneric& left, const HIRConstGeneric& right);
     void appendRelationEffects(Candidate& candidate, SolverResponse response);
 
     Certainty solveRelationGoal(Candidate& candidate, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const HIRTraitPath::assocListT* associated);
@@ -12679,10 +12678,8 @@ auto NextTraitGoalEvaluator::unifyProbe(const HIRType* left, const HIRType* righ
     return resolve_.probeTypeRelation(span(), left, right);
 }
 
-auto NextTraitGoalEvaluator::unifyValueProbe(const HIRConstGeneric& left, const HIRConstGeneric& right) -> Certainty {
-    if (left == right) {
-        return Certainty::Proven;
-    }
+auto NextTraitGoalEvaluator::evaluateHeadValueEquality(const Candidate& candidate, const HIRConstGeneric& left, const HIRConstGeneric& right) -> Certainty {
+    TRACE_FUNCTION_F(left << StringView(" = ") << right);
     const auto snapshot = resolve_.ivars.snapshot();
     Unifier unifier(span(), resolve_.ivars, &resolve_);
     const auto outcome = unifier.unifyValues(left, right);
@@ -12691,10 +12688,16 @@ auto NextTraitGoalEvaluator::unifyValueProbe(const HIRConstGeneric& left, const 
     if (outcome == Unifier::Outcome::Mismatch) {
         return Certainty::NoSolution;
     }
-    if (boundInference || outcome == Unifier::Outcome::Ambiguous) {
+    if (boundInference) {
         return Certainty::Ambiguous;
     }
-    return Certainty::Proven;
+    const auto* leftInfer = left.opt_Infer();
+    const auto* rightInfer = right.opt_Infer();
+    /* A declared clause holds once its input equality is applied. An impl's pending
+       const match still has to become decidable before it can be selected. */
+    const bool declaredClause = candidate.source == CandidateSource::ParamEnv || candidate.source == CandidateSource::AliasBound;
+    const bool bindsInput = declaredClause && ((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index)));
+    return outcome == Unifier::Outcome::Proven || bindsInput ? Certainty::Proven : Certainty::Ambiguous;
 }
 
 auto NextTraitGoalEvaluator::appendRelationEffects(Candidate& candidate, SolverResponse response) -> void {
@@ -13929,7 +13932,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         headEqualitiesAreIdentity = headEqualitiesAreIdentity && normalizesToIdentity && equalityResult == Certainty::Proven;
     }
     for (const auto& equality : candidate->headValueEqualities) {
-        const auto equalityResult = unifyValueProbe(equality.left, equality.right);
+        const auto equalityResult = evaluateHeadValueEquality(*candidate, equality.left, equality.right);
         if (equalityResult == Certainty::NoSolution) {
             return Certainty::NoSolution;
         }
@@ -14433,10 +14436,10 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
         return Certainty::Ambiguous;
     }
-    if (selfIsUnresolvedProjectionOverIvar(goalType)) {
-        return Certainty::Ambiguous;
-    }
-    if (selfIsUnimplementedProjection(goalType)) {
+    /* Item bounds can determine a projection's arguments before its value is known.
+       Only declared bounds are usable then; matching an impl would guess its value. */
+    const bool unresolvedProjection = selfIsUnresolvedProjectionOverIvar(goalType);
+    if (!unresolvedProjection && selfIsUnimplementedProjection(goalType)) {
         return Certainty::NoSolution;
     }
     const auto& resolvedType = resolve_.resolveType(goalType);
@@ -14567,7 +14570,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     {
         const auto* previousAssemblyCanonicalizer = assemblyCanonicalizer_;
         assemblyCanonicalizer_ = &canonicalizer;
-        assembleCandidates(frameIndex, trait, canonical.params, canonical.type);
+        assembleCandidates(frameIndex, trait, canonical.params, canonical.type, !unresolvedProjection, !unresolvedProjection);
         assemblyCanonicalizer_ = previousAssemblyCanonicalizer;
     }
 
@@ -14617,7 +14620,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
        like any other type, and no viable candidate is "unimplemented" for it. */
     const auto* selfInfer = resolvedType->opt_Infer();
     const bool selfIsTypeVariable = selfInfer && !selfInfer->isLit();
-    const bool inferMayUnlock = selfIsTypeVariable || paramsHoldOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)));
+    const bool inferMayUnlock = unresolvedProjection || selfIsTypeVariable || paramsHoldOpaque || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)));
     if (sawAmbiguous || inferMayUnlock || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
         return cacheResult(Certainty::Ambiguous);
     }
@@ -15203,10 +15206,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         goalType = normalizeGoalInput(goalType);
         goalParams = goalParams.mapTypes([&](const HIRType* param) { return normalizeGoalInput(param); });
     }
-    if (selfIsUnresolvedProjectionOverIvar(goalType)) {
-        return emitForcedAmbiguity();
-    }
-    if (selfIsUnimplementedProjection(goalType)) {
+    const bool unresolvedProjection = selfIsUnresolvedProjectionOverIvar(goalType);
+    if (!unresolvedProjection && selfIsUnimplementedProjection(goalType)) {
         return false;
     }
     const auto& resolvedType = resolve_.resolveType(goalType);
@@ -15493,7 +15494,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 return resolve_.typeContainsIvars(closure->returnType);
             });
         };
-        if (selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (aliasHoldsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
+        if (unresolvedProjection || selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (aliasHoldsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
             return emitForcedAmbiguity();
         }
         return false;
@@ -16292,7 +16293,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         {
             const auto* previousAssemblyCanonicalizer = assemblyCanonicalizer_;
             assemblyCanonicalizer_ = &canonicalizer;
-            assembleCandidates(frameIndex, trait, canonical.params, canonical.type, includeRootMagicCandidates);
+            assembleCandidates(frameIndex, trait, canonical.params, canonical.type, includeRootMagicCandidates && !unresolvedProjection, !unresolvedProjection);
             assemblyCanonicalizer_ = previousAssemblyCanonicalizer;
         }
     }
