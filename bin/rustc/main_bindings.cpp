@@ -1506,12 +1506,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else {
                     CfgSetFlag(settings, mv$(name));
                 }
-            } else if (const char* checkCfgSpec = checkWithArg("check-cfg")) {
-                std::string error;
-                if (!CfgSetCheckSpec(settings, checkCfgSpec, error)) {
-                    sysE << StringView("invalid `--check-cfg` argument: `") << checkCfgSpec << StringView("`: ") << error << endL;
-                    exit(1);
-                }
+            } else if (checkWithArg("check-cfg") != nullptr) {
             } else if (const char* envSpec = checkWithArg("env-set")) {
                 const char* separator = std::strchr(envSpec, '=');
                 if (separator == nullptr || separator == envSpec) {

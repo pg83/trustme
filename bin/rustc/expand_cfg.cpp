@@ -280,10 +280,6 @@ void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, 
     value = parsed.second ? std::move(*parsed.second) : std::string();
 }
 
-bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error) {
-    return true;
-}
-
 void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level) {
     auto interned = RcString::newInterned(name);
     auto it = settings.lintLevels.find(interned);

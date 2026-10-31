@@ -34,8 +34,9 @@ def main():
             binary = str(rustc.resolve())
             wrapper.write_text(
                 f"#!{sys.executable}\nimport os, sys\n"
-                f"os.execv({binary!r}, [{binary!r}, *sys.argv[1:], "
-                "'-Zdump-ast', '-Zdump-hir', '-Zdump-mir'])\n"
+                "dumps = [] if os.environ.get('TRUSTME_CLI_EXACT_ARGS') == '1' else "
+                "['-Zdump-ast', '-Zdump-hir', '-Zdump-mir']\n"
+                f"os.execv({binary!r}, [{binary!r}, *sys.argv[1:], *dumps])\n"
             )
             wrapper.chmod(0o755)
             environment["RUSTC"] = str(wrapper)

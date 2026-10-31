@@ -58,7 +58,6 @@ void CfgPrintStable(const Settings& settings, stl::ZeroCopyOutput& os);
 void CfgSetFlag(Settings& settings, std::string name);
 void CfgSetValue(Settings& settings, std::string name, std::string val);
 void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value);
-bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error);
 void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level);
 void CfgSetLintCap(Settings& settings, CfgLintLevel level);
 bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs);

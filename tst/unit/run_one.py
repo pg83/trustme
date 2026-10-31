@@ -3,6 +3,9 @@
 Each unit test is its own graph node — a self-contained regression for one
 compiler fix. Binaries and test harnesses must exit 0; `//@ crate-type: lib`
 units are compile-only, as are units with `//@ compile-only`.
+`reject-flags` checks own/native diagnostics before a successful normal run;
+`stdout-flags` checks CLI query output, and `compile-variant` also runs the
+program with the given flags. `$OUT` names each temporary output path.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -45,6 +48,24 @@ def main() -> int:
         shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
     )
     compile_flags = [flag.replace("$DIR", os.path.dirname(src)) for flag in compile_flags]
+    reject_options = re.findall(
+        r"^//@\s*reject-flags:\s*(.*?)\s*=>\s*(.+?)\s*\|\|\s*(.+?)\s*$",
+        source_text, re.MULTILINE,
+    )
+    if len(reject_options) != len(re.findall(r"^//@\s*reject-flags:", source_text, re.MULTILINE)):
+        raise RuntimeError("reject-flags requires FLAGS => OWN_DIAGNOSTIC || NATIVE_DIAGNOSTIC")
+    compile_variants = [
+        shlex.split(flags) for flags in re.findall(
+            r"^//@\s*compile-variant:\s*(.+)$", source_text, re.MULTILINE
+        )
+    ]
+    stdout_options = re.findall(
+        r"^//@\s*stdout-flags:\s*(.*?)\s*=>\s*(.+?)\s*$", source_text, re.MULTILINE
+    )
+    if len(stdout_options) != len(re.findall(r"^//@\s*stdout-flags:", source_text, re.MULTILINE)):
+        raise RuntimeError("stdout-flags requires FLAGS => EXPECTED_OUTPUT")
+    if compile_fail_match and (reject_options or compile_variants or stdout_options):
+        raise RuntimeError("compile-fail cannot be combined with CLI checks or compile variants")
     chaos_match = re.search(r"^//@\s*chaos:\s*(\S+)\s*$", source_text, re.MULTILINE)
     crate_type_match = re.search(
         r"^//@\s*crate-type:\s*([a-z_]+)\s*$", source_text, re.MULTILINE
@@ -128,13 +149,44 @@ def main() -> int:
             else:
                 dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
+        base_flags = [flag.replace("$OUT", binary) for flag in compile_flags]
         if chaos_match:
             rustc = lib.require_env("RUSTC_CHAOS")
             env["TRUSTME_CHAOS"] = chaos_match.group(1)
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
+        for flags, own_diagnostic, native_diagnostic in reject_options:
+            extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
+                     for flag in shlex.split(flags)]
+            rejected = subprocess.run(
+                [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+                 *dependency_args, *base_flags, *extra],
+                env=dict(env, TRUSTME_CLI_EXACT_ARGS="1"),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
+                check=False,
+            )
+            expected = (native_diagnostic if system_rustc else own_diagnostic).encode()
+            diagnostic = rejected.stdout + rejected.stderr
+            if (rejected.returncode == 0 or expected not in diagnostic
+                    or b"BUG:" in diagnostic or b"internal compiler error" in diagnostic):
+                sys.stderr.buffer.write(diagnostic[-16384:])
+                raise RuntimeError(f"option rejection failed: {extra!r}, expected {expected!r}")
+            print(f"option rejection: {extra!r}: {expected.decode()}", flush=True)
+        for flags, expected in stdout_options:
+            extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
+                     for flag in shlex.split(flags)]
+            inspected = subprocess.run(
+                [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+                 *dependency_args, *base_flags, *extra],
+                env=dict(env, TRUSTME_CLI_EXACT_ARGS="1"),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, check=False,
+            )
+            if inspected.returncode or expected.encode() not in inspected.stdout:
+                sys.stderr.buffer.write((inspected.stdout + inspected.stderr)[-16384:])
+                raise RuntimeError(f"option output failed: {extra!r}, expected {expected!r}")
+            print(f"option output: {extra!r}: {expected}", flush=True)
         command = lib.wrap_gdb(
             [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-             *mode, "--edition", edition, *dependency_args, *compile_flags]
+             *mode, "--edition", edition, *dependency_args, *base_flags]
         )
         expected_failure = compile_fail_match is not None
         if expected_failure:
@@ -172,6 +224,21 @@ def main() -> int:
                 raise RuntimeError("test harness contains no tests")
         if test_harness or (crate_type == "bin" and not compile_only):
             lib.run([binary], env=env, timeout=60)
+        for index, flags in enumerate(compile_variants):
+            variant = f"{binary}-variant{index}"
+            extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", variant)
+                     for flag in flags]
+            variant_flags = [flag.replace("$OUT", variant) for flag in compile_flags]
+            lib.run(lib.wrap_gdb(
+                [rustc, src, "-L", os.path.join(libstd, "release"), "-o", variant,
+                 *mode, "--edition", edition, *dependency_args, *variant_flags, *extra]
+            ), env=env)
+            for suffix, expected in output_checks:
+                with open(variant + suffix, encoding="utf-8") as output:
+                    if expected not in output.read():
+                        raise RuntimeError(f"compiler output {suffix} does not contain {expected!r}")
+            if test_harness or (crate_type == "bin" and not compile_only):
+                lib.run([variant], env=env, timeout=60)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     open(stamp, "w").close()
