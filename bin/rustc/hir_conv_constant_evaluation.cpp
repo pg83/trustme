@@ -4842,12 +4842,9 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
     }
 
     switch ((*ty).tag()) {
-        case HIRType::TAG_Diverge: {
-            return false;
-        }
-        case HIRType::TAG_Infer: {
-            return true;
-        }
+        default:
+            MIR_BUG(state, StringView("Unexpected type requiring constant drop: ") << ty);
+        case HIRType::TAG_Generic:
         case HIRType::TAG_ErasedType: {
             return true;
         }
@@ -4857,24 +4854,9 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
             MIR_ASSERT(state, repr->fields.empty(), StringView("Unlowered closure has fields in its representation: ") << ty);
             return false;
         }
-        case HIRType::TAG_Generic: {
-            return true;
-        }
-        case HIRType::TAG_Primitive: {
-            return false;
-        }
         case HIRType::TAG_Pattern: {
             auto& te = (*ty).as_Pattern();
             return valueNeedsNonConstDrop(te.inner, value);
-        }
-        case HIRType::TAG_Pointer: {
-            return false;
-        }
-        case HIRType::TAG_NamedFunction: {
-            return false;
-        }
-        case HIRType::TAG_Function: {
-            return false;
         }
         case HIRType::TAG_Borrow: {
             MIR_BUG(state, StringView("Owned references cannot be dropped during constant evaluation: ") << ty);
@@ -4890,12 +4872,8 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
             }
 
             switch (te.binding.tag()) {
-                case HIRTypePathBinding::TAG_Unbound: {
-                    return true;
-                }
-                case HIRTypePathBinding::TAG_Opaque: {
-                    return true;
-                }
+                default:
+                    MIR_BUG(state, StringView("Unexpected nominal type requiring constant drop: ") << ty);
                 case HIRTypePathBinding::TAG_ExternType: {
                     return false;
                 }
@@ -4930,14 +4908,10 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
                     return valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size));
                 }
             }
-            MIR_BUG(state, StringView("Unreachable path binding"));
         }
         case HIRType::TAG_Array: {
             auto& te = (*ty).as_Array();
             auto count = te.size.as_Known();
-            if (count == 0) {
-                return false;
-            }
             auto size = sizeOfOrBug(te.inner);
             for (size_t i = 0; i < count; i++) {
                 if (valueNeedsNonConstDrop(te.inner, value.slice(i * size, size))) {
@@ -4964,7 +4938,6 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
             return false;
         }
     }
-    MIR_BUG(state, StringView("Unreachable type while checking a constant drop"));
 }
 
 auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, const HIRType** outTy) -> MIREvalStaticRefPtr {

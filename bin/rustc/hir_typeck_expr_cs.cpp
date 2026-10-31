@@ -8026,7 +8026,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             return;
         }
         case HIRType::TAG_Generic: {
-            TODO(sp, StringView("_Cast Generic"));
+            bad_cast(sp, srcTy, tgtTy, "dst");
+            break;
         }
         case HIRType::TAG_TraitObject: {
             bad_cast(sp, srcTy, tgtTy, "dst");
@@ -8084,8 +8085,10 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                         case HIRCoreType::Bool:
                         case HIRCoreType::Char:
                         case HIRCoreType::Str:
+                        case HIRCoreType::F16:
                         case HIRCoreType::F32:
                         case HIRCoreType::F64:
+                        case HIRCoreType::F128:
                             ERROR(sp, E0000, StringView("Invalid cast to pointer from ") << srcTy);
                         default:
                             break;
