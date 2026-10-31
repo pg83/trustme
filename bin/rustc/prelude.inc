@@ -763,9 +763,60 @@ static inline f128 f128_sub(f128 a, f128 b) { return f128_encode(f128_decode(a) 
 static inline f128 f128_mul(f128 a, f128 b) { return f128_encode(f128_decode(a) * f128_decode(b)); }
 static inline f128 f128_div(f128 a, f128 b) { return f128_encode(f128_decode(a) / f128_decode(b)); }
 static inline f128 f128_mod(f128 a, f128 b) {
-    f128_native lhs = f128_decode(a);
-    f128_native rhs = f128_decode(b);
-    return f128_encode(lhs - __builtin_truncf128(lhs / rhs) * rhs);
+    u64 av[2], bv[2];
+    __builtin_memcpy(av, &a, sizeof(a));
+    __builtin_memcpy(bv, &b, sizeof(b));
+    const u64 sign = av[1] & (1ull << 63);
+    u64 ah = av[1] & 0x7fffffffffffffffull, al = av[0];
+    u64 bh = bv[1] & 0x7fffffffffffffffull, bl = bv[0];
+    int ae = (int)(ah >> 48), be = (int)(bh >> 48);
+    if (ae == 0x7fff || (be == 0x7fff && ((bh & 0xffffffffffffull) || bl)) || !(bh | bl))
+        return make_f128_bits(0x7fff800000000000ull, 0);
+    if (be == 0x7fff || ah < bh || (ah == bh && al < bl)) return a;
+    if (ah == bh && al == bl) return make_f128_bits(sign, 0);
+    ah &= 0xffffffffffffull;
+    bh &= 0xffffffffffffull;
+    if (ae) ah |= 1ull << 48;
+    else {
+        ae = 1;
+        while (!(ah & (1ull << 48))) {
+            ah = (ah << 1) | (al >> 63);
+            al <<= 1;
+            --ae;
+        }
+    }
+    if (be) bh |= 1ull << 48;
+    else {
+        be = 1;
+        while (!(bh & (1ull << 48))) {
+            bh = (bh << 1) | (bl >> 63);
+            bl <<= 1;
+            --be;
+        }
+    }
+    for (;;) {
+        if (ah > bh || (ah == bh && al >= bl)) {
+            const u64 borrow = al < bl;
+            al -= bl;
+            ah -= bh + borrow;
+            if (!(ah | al)) return make_f128_bits(sign, 0);
+        }
+        if (ae == be) break;
+        ah = (ah << 1) | (al >> 63);
+        al <<= 1;
+        --ae;
+    }
+    while (!(ah & (1ull << 48))) {
+        ah = (ah << 1) | (al >> 63);
+        al <<= 1;
+        --be;
+    }
+    if (be > 0) return make_f128_bits(sign | ((u64)be << 48) | (ah & 0xffffffffffffull), al);
+    for (int i = 1; i > be; --i) {
+        al = (al >> 1) | (ah << 63);
+        ah >>= 1;
+    }
+    return make_f128_bits(sign | ah, al);
 }
 static inline f128 f128_neg(f128 v) { return f128_encode(-f128_decode(v)); }
 

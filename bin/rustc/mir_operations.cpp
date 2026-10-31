@@ -4594,7 +4594,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::ADD - ") << valL << StringView(" + ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Float: {
                                                     auto& le = valL.as_Float();
                                                     auto& re = valR.as_Float();
@@ -4622,7 +4622,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::SUB - ") << valL << StringView(" + ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Float: {
                                                     auto& le = valL.as_Float();
                                                     auto& re = valR.as_Float();
@@ -4650,7 +4650,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::MUL - ") << valL << StringView(" * ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Float: {
                                                     auto& le = valL.as_Float();
                                                     auto& re = valR.as_Float();
@@ -4678,7 +4678,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::DIV - ") << valL << StringView(" / ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Float: {
                                                     auto& le = valL.as_Float();
                                                     auto& re = valR.as_Float();
@@ -4710,6 +4710,8 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::MOD - ") << valL << StringView(" % ") << valR);
                                             switch (valL.tag()) {
                                                 default:
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
+                                                case MIRConstant::TAG_Float:
                                                     break;
                                                 case MIRConstant::TAG_Int: {
                                                     auto& le = valL.as_Int();
@@ -4734,7 +4736,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::BIT_AND - ") << valL << StringView(" & ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Bool: {
                                                     auto& le = valL.as_Bool();
                                                     auto& re = valR.as_Bool();
@@ -4761,7 +4763,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::BIT_OR - ") << valL << StringView(" | ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Bool: {
                                                     auto& le = valL.as_Bool();
                                                     auto& re = valR.as_Bool();
@@ -4788,7 +4790,7 @@ namespace {
                                             MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::BIT_XOR - ") << valL << StringView(" ^ ") << valR);
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Bool: {
                                                     auto& le = valL.as_Bool();
                                                     auto& re = valR.as_Bool();
@@ -4832,7 +4834,7 @@ namespace {
                                             auto shiftLen = shiftLenR.truncateU64();
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Int: {
                                                     auto& le = valL.as_Int();
                                                     newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
@@ -4865,7 +4867,7 @@ namespace {
                                             auto shiftLen = shiftLenR.truncateU64();
                                             switch (valL.tag()) {
                                                 default:
-                                                    break;
+                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
                                                 case MIRConstant::TAG_Int: {
                                                     auto& le = valL.as_Int();
                                                     newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
@@ -7244,42 +7246,15 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             auto& e = *ep;
             if (auto* pathP = e.fcn.opt_Path()) {
                 auto& path = *pathP;
-                if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& traitObject = pe.type->as_TraitObject();
-                    if (traitObject.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
-                        return true;
-                    })) {
-                        e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
-                    }
-                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
-                    const auto& pe = path.data.as_UfcsKnown();
-                    const auto& fcnTy = pe.type->as_NamedFunction();
-                    if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
-                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.length();
-                        MIR_ASSERT(state, e.args.size() == 2, StringView("Named function tail call requires two arguments"));
-                        auto argsLvalue = mv$(e.args[1].as_LValue());
-                        e.args.clear();
-                        e.args.reserve(nArgs);
-                        for (unsigned int i = 0; i < nArgs; i++) {
-                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
-                        }
-                        switch (fcnTy.def.tag()) {
-                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
-                                const auto _ = fcnTy.def.as_Function();
-                                e.fcn = fcnTy.path.clone();
-                                break;
-                            }
-                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-                                const auto _ = fcnTy.def.as_StructConstructor();
-                                MIR_BUG(state, StringView("Struct constructor used as an explicit tail-call target"));
-                                break;
-                            }
-                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
-                                auto& _ = fcnTy.def.as_EnumConstructor();
-                                MIR_BUG(state, StringView("Enum constructor used as an explicit tail-call target"));
-                                break;
-                            }
+                if (const auto* pathData = path.data.opt_UfcsKnown()) {
+                    const auto& pe = *pathData;
+                    MIR_ASSERT(state, pe.trait.path != resolve.langFn() && pe.trait.path != resolve.langFnMut() && pe.trait.path != resolve.langFnOnce(), StringView("Callable trait used as an explicit tail-call target"));
+                    if (pe.type->is_TraitObject()) {
+                        const auto& traitObject = pe.type->as_TraitObject();
+                        if (traitObject.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
+                            return true;
+                        })) {
+                            e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
                         }
                     }
                 }
