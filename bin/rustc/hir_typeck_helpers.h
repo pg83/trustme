@@ -554,6 +554,7 @@ enum class SolverCoercionOp : u8 {
 
 struct SolverOpenStepCallback {
     virtual bool awaitsProducer(const HIRType* step) = 0;
+    virtual bool constValuesEqual(const Span& sp, const HIRConstGeneric& left, const HIRConstGeneric& right) = 0;
 };
 
 struct SolverCoercionConstraint {

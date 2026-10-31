@@ -1633,21 +1633,59 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
     }
 
     struct OpenStepOfRule final: SolverOpenStepCallback {
-        const Context& context;
-        const Context::Coercion* rule;
+        Context& context;
+        const Context::Coercion& rule;
 
-        OpenStepOfRule(const Context& context, const Context::Coercion* rule)
+        OpenStepOfRule(Context& context, const Context::Coercion& rule)
             : context(context)
             , rule(rule)
         {
         }
 
         bool awaitsProducer(const HIRType* step) override {
-            return rule && openPointeeAwaitsItsProducer(context, *rule, step);
+            return openPointeeAwaitsItsProducer(context, rule, step);
+        }
+
+        bool constValuesEqual(const Span& sp, const HIRConstGeneric& left, const HIRConstGeneric& right) override {
+            struct InferDetector final: HIRVisitor {
+                bool open = false;
+                explicit InferDetector(HIRTypeInterner& types): HIRVisitor(nullptr, types) {}
+                void visitConstgeneric(HIRConstGeneric& value) override {
+                    open |= value.is_Infer();
+                    HIRVisitor::visitConstgeneric(value);
+                }
+                const HIRType* visitType(const HIRType* type) override {
+                    open |= type->is_Infer();
+                    return visitTypeDefaultViaHooks(type);
+                }
+            } detector(context.crate.types);
+            auto l = left.clone();
+            auto r = right.clone();
+            detector.visitConstgeneric(l);
+            detector.visitConstgeneric(r);
+            if (detector.open) {
+                return false;
+            }
+            const auto snapshot = context.ivars.snapshot();
+            STD_DEFER { context.ivars.rollbackTo(snapshot); };
+            NormalizeConstValues normalize(context);
+            normalize.visitConstgeneric(l);
+            normalize.visitConstgeneric(r);
+            if (l.is_Evaluated() != r.is_Evaluated()) {
+                ConvertHIRConstantEvaluateConstGeneric(sp, context.resolve.board(), context.crate, l);
+                ConvertHIRConstantEvaluateConstGeneric(sp, context.resolve.board(), context.crate, r);
+            }
+            Unifier probe(sp, context.ivars, &context.resolve);
+            ConstExprEquate equate{context, sp, &probe};
+            const bool equal = l == r || equate.equateIdentity(l, r) || equate.equateIdentity(r, l)
+                || (l.is_Unevaluated() && r.is_Unevaluated() && equate.equate(*l.as_Unevaluated(), *r.as_Unevaluated()));
+            return equal && context.ivars.mutationGeneration == snapshot.generation
+                && probe.pending().empty() && probe.pendingValues().empty();
         }
     };
 
-    CoerceResult checkCoerceTys(const Context& context, const Span& sp, const HIRType* dst, const HIRType* srcR, Context* contextMut = nullptr, HIRExprNodeP* nodePtrPtr = nullptr, const Context::Coercion* rule = nullptr) {
+    CoerceResult checkCoerceTys(Context& context, const Span& sp, const HIRType* dst, const HIRType* srcR, HIRExprNodeP& value, const Context::Coercion& rule) {
+        auto* nodePtrPtr = &value;
         auto src = srcR;
         TRACE_FUNCTION_F(dst << StringView(" := ") << src);
         if (context.ivars.typesEqual(dst, src)) {
@@ -1655,46 +1693,38 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         }
 
         OpenStepOfRule openStep(context, rule);
-        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Coercion, false, false, rule ? &openStep : nullptr);
-        if (nodePtrPtr && solverResponse.reachedAutoderefLimit) {
+        auto solverResponse = context.resolve.evaluateCoercionGoal(sp, dst, src, SolverCoercionOp::Coercion, false, false, &openStep);
+        if (solverResponse.reachedAutoderefLimit) {
             ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
         }
         if (solverResponse.effects.certainty == SolverCertainty::NoSolution) {
             return CoerceResult::Equality;
         }
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
-            if (contextMut) {
-                applyOpenCoercionEffects(*contextMut, sp, solverResponse.effects);
-            }
+            applyOpenCoercionEffects(context, sp, solverResponse.effects);
             return CoerceResult::Unknown;
         }
-        if (contextMut) {
-            contextMut->applySolverResponse(sp, solverResponse.effects);
-        }
+        context.applySolverResponse(sp, solverResponse.effects);
 
         const auto retagYieldingValue = [&]() {
-            if (nodePtrPtr) {
-                auto* valueNode = nodePtrPtr;
-                while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
-                    ASSERT_BUG(block->span(), block->valueNode, StringView("Coercion reached a non-yielding block"));
-                    block->resType = dst;
-                    valueNode = &block->valueNode;
-                }
-                (*valueNode)->resType = dst;
+            auto* valueNode = nodePtrPtr;
+            while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
+                ASSERT_BUG(block->span(), block->valueNode, StringView("Coercion reached a non-yielding block"));
+                block->resType = dst;
+                valueNode = &block->valueNode;
             }
+            (*valueNode)->resType = dst;
             return CoerceResult::Custom;
         };
         const auto castYieldingValue = [&](const HIRType* type) {
-            if (contextMut && nodePtrPtr) {
-                auto* valueNode = nodePtrPtr;
-                while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
-                    ASSERT_BUG(block->span(), block->valueNode, StringView("Coercion reached a non-yielding block"));
-                    block->resType = dst;
-                    valueNode = &block->valueNode;
-                }
-                auto span = (*valueNode)->span();
-                *valueNode = NEWNODE(type, span, Cast, mv$(*valueNode), type);
+            auto* valueNode = nodePtrPtr;
+            while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
+                ASSERT_BUG(block->span(), block->valueNode, StringView("Coercion reached a non-yielding block"));
+                block->resType = dst;
+                valueNode = &block->valueNode;
             }
+            auto span = (*valueNode)->span();
+            *valueNode = NEWNODE(type, span, Cast, mv$(*valueNode), type);
             return CoerceResult::Custom;
         };
         const auto& adjustment = solverResponse.adjustment;
@@ -1705,9 +1735,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             case SolverCoercionAdjustmentKind::Never:
                 /* Upstream `apply_adjustments`: the variable `!` was coerced into is a
                    diverging type variable (`diverging_type_vars`). */
-                if (contextMut) {
-                    contextMut->markDivergingIvar(dst);
-                }
+                context.markDivergingIvar(dst);
                 return CoerceResult::Custom;
             case SolverCoercionAdjustmentKind::Retag:
                 return retagYieldingValue();
@@ -1719,40 +1747,36 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 if (adjustment.intermediateType == nullptr) {
                     return adjustment.innerRelation == SolverCoercionRelation::Equality ? CoerceResult::Equality : CoerceResult::Unsize;
                 }
-                if (contextMut && nodePtrPtr) {
-                    auto* valueNode = nodePtrPtr;
-                    while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
-                        ASSERT_BUG(block->span(), block->valueNode, StringView("Raw-pointer coercion reached a non-yielding block"));
-                        block->resType = dst;
-                        valueNode = &block->valueNode;
-                    }
-                    auto span = (*valueNode)->span();
-                    *valueNode = NEWNODE(adjustment.intermediateType, span, Cast, mv$(*valueNode), adjustment.intermediateType);
-                    if (adjustment.innerRelation == SolverCoercionRelation::Coercion) {
-                        span = (*valueNode)->span();
-                        *valueNode = NEWNODE(dst, span, Unsize, mv$(*valueNode), dst);
-                    }
-                    contextMut->ivars.markChange();
+                auto* valueNode = nodePtrPtr;
+                while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
+                    ASSERT_BUG(block->span(), block->valueNode, StringView("Raw-pointer coercion reached a non-yielding block"));
+                    block->resType = dst;
+                    valueNode = &block->valueNode;
                 }
+                auto span = (*valueNode)->span();
+                *valueNode = NEWNODE(adjustment.intermediateType, span, Cast, mv$(*valueNode), adjustment.intermediateType);
+                if (adjustment.innerRelation == SolverCoercionRelation::Coercion) {
+                    span = (*valueNode)->span();
+                    *valueNode = NEWNODE(dst, span, Unsize, mv$(*valueNode), dst);
+                }
+                context.ivars.markChange();
                 return CoerceResult::Custom;
             }
             case SolverCoercionAdjustmentKind::BorrowToPointer: {
-                if (contextMut && nodePtrPtr) {
-                    auto& nodePtr = *nodePtrPtr;
-                    if (adjustment.innerRelation == SolverCoercionRelation::Coercion) {
-                        ASSERT_BUG(sp, adjustment.intermediateType, StringView("Borrow-to-pointer unsize has no intermediate type"));
-                        auto span = nodePtr->span();
-                        nodePtr = NEWNODE(adjustment.intermediateType, span, Unsize, mv$(nodePtr), adjustment.intermediateType);
-                    }
+                auto& nodePtr = *nodePtrPtr;
+                if (adjustment.innerRelation == SolverCoercionRelation::Coercion) {
+                    ASSERT_BUG(sp, adjustment.intermediateType, StringView("Borrow-to-pointer unsize has no intermediate type"));
                     auto span = nodePtr->span();
-                    nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
+                    nodePtr = NEWNODE(adjustment.intermediateType, span, Unsize, mv$(nodePtr), adjustment.intermediateType);
                 }
+                auto span = nodePtr->span();
+                nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
                 return CoerceResult::Custom;
             }
             case SolverCoercionAdjustmentKind::Borrow: {
                 HIRExprNodeP* adjustedNodePtr = nodePtrPtr;
                 bool changed = false;
-                if (adjustment.intermediateType != nullptr && contextMut && adjustedNodePtr) {
+                if (adjustment.intermediateType != nullptr) {
                     while (auto* block = cast<HIRExprNodeBlock>(adjustedNodePtr->get())) {
                         ASSERT_BUG(block->span(), block->valueNode, StringView("Borrow coercion reached a non-yielding block"));
                         block->resType = dst;
@@ -1763,12 +1787,11 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     auto span = nodePtr->span();
                     nodePtr = NEWNODE(intermediate.inner, span, Deref, mv$(nodePtr));
                     nodePtr = NEWNODE(adjustment.intermediateType, span, Borrow, intermediate.type, mv$(nodePtr));
-                    contextMut->ivars.markChange();
+                    context.ivars.markChange();
                     changed = true;
                 }
                 if (!adjustment.sourceAutoderef.empty()) {
-                    ASSERT_BUG(sp, contextMut && adjustedNodePtr, StringView("Borrow coercion autoderef has no adjustment target"));
-                    addCoerceBorrow(*contextMut, *adjustedNodePtr, adjustment.sourceAutoderef.back(), [&](auto& valueNode) -> void {
+                    addCoerceBorrow(context, *adjustedNodePtr, adjustment.sourceAutoderef.back(), [&](auto& valueNode) -> void {
                         for (const auto* type : adjustment.sourceAutoderef) {
                             auto span = valueNode->span();
                             ASSERT_BUG(span, !valueNode->resType->is_Array(), StringView("Array->Slice shouldn't be in deref coercions"));
@@ -1782,10 +1805,8 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     if (!changed) {
                         return CoerceResult::Unsize;
                     }
-                    if (contextMut && adjustedNodePtr) {
-                        auto span = (*adjustedNodePtr)->span();
-                        *adjustedNodePtr = NEWNODE(dst, span, Unsize, mv$(*adjustedNodePtr), dst);
-                    }
+                    auto span = (*adjustedNodePtr)->span();
+                    *adjustedNodePtr = NEWNODE(dst, span, Unsize, mv$(*adjustedNodePtr), dst);
                     return CoerceResult::Custom;
                 }
                 return changed ? CoerceResult::Custom : CoerceResult::Equality;
@@ -2210,7 +2231,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             return false;
         }
 
-        const auto coercionResult = checkCoerceTys(context, sp, tyDst, tySrc, &context, &nodePtr, &v);
+        const auto coercionResult = checkCoerceTys(context, sp, tyDst, tySrc, nodePtr, v);
         switch (coercionResult) {
             case CoerceResult::Fail:
                 return false;

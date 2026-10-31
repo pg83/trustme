@@ -5992,7 +5992,17 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
         Unifier unifier(sp, ivars, this);
         const auto equality = unifier.unify(normalizedDestination, normalizedSource);
         ivars.rollbackTo(snapshot);
-        if (equality == Unifier::Outcome::Proven) {
+        bool constEqual = equality == Unifier::Outcome::Ambiguous && unifier.pending().empty()
+            && !unifier.pendingValues().empty() && openStep;
+        if (constEqual) {
+            for (const auto& pending : unifier.pendingValues()) {
+                if (!openStep->constValuesEqual(sp, pending.left, pending.right)) {
+                    constEqual = false;
+                    break;
+                }
+            }
+        }
+        if (equality == Unifier::Outcome::Proven || constEqual) {
             result.relation = SolverCoercionRelation::Equality;
         } else {
             const auto* destinationPath = resolvedDestination->opt_Path();
@@ -6170,7 +6180,8 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const auto* leftGeneric = pending.left.opt_Generic();
             const auto* rightGeneric = pending.right.opt_Generic();
             if (!((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index))
-                || (effects && ((leftGeneric && leftGeneric->isSolverExistential()) || (rightGeneric && rightGeneric->isSolverExistential()))))) {
+                || (effects && ((leftGeneric && leftGeneric->isSolverExistential()) || (rightGeneric && rightGeneric->isSolverExistential()))))
+                && !(constraint.openStep && constraint.openStep->constValuesEqual(sp, pending.left, pending.right))) {
                 ambiguous = true;
             }
         }
@@ -6240,7 +6251,8 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         for (const auto& pending : unifier.pendingValues()) {
             const auto* leftInfer = pending.left.opt_Infer();
             const auto* rightInfer = pending.right.opt_Infer();
-            if (!((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index)))) {
+            if (!((leftInfer && isSolverCanonicalInfer(leftInfer->index)) || (rightInfer && isSolverCanonicalInfer(rightInfer->index)))
+                && !(constraint.openStep && constraint.openStep->constValuesEqual(sp, pending.left, pending.right))) {
                 ambiguous = true;
             }
         }
@@ -6582,7 +6594,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const auto& markings = sourceStruct->structMarkings;
             if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
                 ASSERT_BUG(sp, markings.coerceParam < sourceParams.types.size() && sourceParams.types.size() == destinationParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
-                auto result = markings.coerceUnsized == HIRStructMarkings::Coerce::Passthrough ? evaluateCoercionConstraint(sp, SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion}, destinationParams.types[markings.coerceParam], equalities, effects, deferred, reachedAutoderefLimit, nullptr, exportPlaceholderEqualities) : unsize(destinationParams.types[markings.coerceParam], sourceParams.types[markings.coerceParam]);
+                auto innerConstraint = SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion};
+                innerConstraint.openStep = constraint.openStep;
+                auto result = markings.coerceUnsized == HIRStructMarkings::Coerce::Passthrough ? evaluateCoercionConstraint(sp, innerConstraint, destinationParams.types[markings.coerceParam], equalities, effects, deferred, reachedAutoderefLimit, nullptr, exportPlaceholderEqualities) : unsize(destinationParams.types[markings.coerceParam], sourceParams.types[markings.coerceParam]);
                 for (size_t i = 0; result != SolverCertainty::NoSolution && i < sourceParams.types.size(); i++) {
                     if (i == markings.coerceParam) {
                         continue;

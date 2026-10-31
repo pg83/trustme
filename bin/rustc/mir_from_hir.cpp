@@ -13,6 +13,7 @@
 #include "hir_expr_state.h"
 #include "mir_operations.h"
 #include "hir_typeck_common.h"
+#include "hir_typeck_helpers.h"
 #include "mir_visit_crate_mir.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
@@ -10227,8 +10228,17 @@ auto ExprVisitorConv::visit(HIRExprNodeCast& node) -> void {
             case HIRType::TAG_Function: {
                 auto& de = (*tyOut).as_Function();
                 if (tyIn->is_Function()) {
-                    const auto& sourceArgs = tyIn->as_Function().argTypes;
-                    ASSERT_BUG(node.span(), de.argTypes.length() == sourceArgs.length() && std::equal(de.argTypes.begin(), de.argTypes.end(), sourceArgs.begin()), tyIn);
+                    const auto& source = tyIn->as_Function();
+                    ASSERT_BUG(node.span(), de.argTypes.length() == source.argTypes.length()
+                        && de.abi == source.abi && de.isVariadic == source.isVariadic
+                        && (!source.isUnsafe || de.isUnsafe), tyIn);
+                    HMTypeInferrence table(builder.crate().types);
+                    Unifier signature(node.span(), table, nullptr, {.rigidGenericsAreDistinct = true});
+                    for (size_t i = 0; i < de.argTypes.length(); i++) {
+                        ASSERT_BUG(node.span(), signature.unify(de.argTypes[i], source.argTypes[i]) != Unifier::Outcome::Mismatch, tyIn);
+                    }
+                    ASSERT_BUG(node.span(), signature.unify(de.rettype, source.rettype) != Unifier::Outcome::Mismatch
+                        && signature.pending().empty(), tyIn);
                 } else if (tyIn->is_NamedFunction()) {
                     // TODO: Extra checks?
                 } else {
