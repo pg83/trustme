@@ -328,9 +328,48 @@ namespace {
         void noRevisit(HIRExprNode& n);
     };
 
+    struct NormalizeConstValues final: HIRVisitor {
+        Context& context;
+
+        explicit NormalizeConstValues(Context& context)
+            : HIRVisitor(nullptr, context.crate.types)
+            , context(context)
+        {
+        }
+
+        void visitConstgeneric(HIRConstGeneric& value) override {
+            if (value.is_Infer()) {
+                const auto& resolved = context.ivars.getValue(value);
+                if (resolved != value) {
+                    value = resolved.clone();
+                }
+            }
+            HIRVisitor::visitConstgeneric(value);
+            if (const auto* unevaluated = value.opt_Unevaluated()) {
+                auto& expr = *(*unevaluated)->expr;
+                if (expr.get()) {
+                    /* Equality can precede the crate pass over impl const arguments. */
+                    ASSERT_BUG(Span(), expr.state, StringView("Unbound const expression in value equality"));
+                    ConvertHIRResolveUFCSExpr(context.resolve.board(), context.crate, HIRItemPath(expr.state->modPath), expr);
+                }
+            }
+        }
+
+        const HIRType* visitType(const HIRType* type) override {
+            if (type->is_Infer()) {
+                type = context.ivars.getType(type);
+            }
+            return visitTypeDefaultViaHooks(type);
+        }
+    };
+
     struct ConstExprEquate {
         Context& context;
         const Span& sp;
+        Unifier* probe = nullptr;
+
+        bool equateType(const HIRType* left, const HIRType* right) const;
+        bool equateValue(const HIRConstGeneric& left, const HIRConstGeneric& right) const;
 
         const HIRConstGeneric* getParam(const HIRConstGenericUnevaluated& value, unsigned int binding) const;
 
@@ -354,6 +393,92 @@ namespace {
 
         bool equate(const HIRConstGenericUnevaluated& left, const HIRConstGenericUnevaluated& right) const;
     };
+
+    struct CollectConstExpressions final: HIRVisitor {
+        ThinVector<HIRConstGeneric> values;
+
+        explicit CollectConstExpressions(HIRTypeInterner& types)
+            : HIRVisitor(nullptr, types)
+        {
+        }
+
+        void visitConstgeneric(HIRConstGeneric& value) override {
+            if (value.is_Unevaluated() && value.as_Unevaluated()->expr->get()) {
+                values.push_back(value.clone());
+            }
+            HIRVisitor::visitConstgeneric(value);
+        }
+
+        const HIRType* visitType(const HIRType* type) override {
+            return visitTypeDefaultViaHooks(type);
+        }
+    };
+
+    void inferConstFromBounds(Context& context, const Span& sp, const HIRType* type) {
+        CollectConstExpressions inputs(context.crate.types);
+        (void)inputs.visitType(type);
+        if (inputs.values.empty()) {
+            return;
+        }
+        CollectConstExpressions witnesses(context.crate.types);
+        for (const auto& bound : context.resolve.traitBounds()) {
+            (void)witnesses.visitType(bound.first.first);
+        }
+        struct ResolveInputs final: MonomorphiserNop {
+            HMTypeInferrence& ivars;
+
+            ResolveInputs(HIRTypeInterner& types, HMTypeInferrence& ivars)
+                : MonomorphiserNop(types)
+                , ivars(ivars)
+            {
+            }
+
+            const HIRType* monomorphType(const Span&, const HIRType* type, bool = true) const override {
+                return ivars.expandIvars(type);
+            }
+
+            HIRConstGeneric monomorphConstgeneric(const Span&, const HIRConstGeneric& value, bool) const override {
+                auto resolved = value.clone();
+                ivars.expandIvars(resolved);
+                return resolved;
+            }
+        } resolveInputs(context.crate.types, context.ivars);
+
+        NormalizeConstValues normalize(context);
+        for (auto& witness : witnesses.values) {
+            normalize.visitConstgeneric(witness);
+        }
+        for (auto& input : inputs.values) {
+            normalize.visitConstgeneric(input);
+            const auto& actual = *input.as_Unevaluated();
+            const HIRConstGenericUnevaluated* selected = nullptr;
+            HIRConstGeneric resolvedInput;
+            bool disagree = false;
+            for (const auto& witness : witnesses.values) {
+                const auto snapshot = context.ivars.snapshot();
+                Unifier probe(sp, context.ivars, &context.resolve);
+                const bool matches = ConstExprEquate{context, sp, &probe}.equate(actual, *witness.as_Unevaluated())
+                    && probe.pending().empty() && probe.pendingValues().empty();
+                if (matches) {
+                    auto substituted = resolveInputs.monomorphConstgeneric(sp, input, true);
+                    const auto& proposed = *substituted.as_Unevaluated();
+                    if (!selected) {
+                        selected = &*witness.as_Unevaluated();
+                        resolvedInput = std::move(substituted);
+                    } else {
+                        const auto& previous = *resolvedInput.as_Unevaluated();
+                        disagree |= previous.selfType != proposed.selfType || previous.paramsImpl != proposed.paramsImpl || previous.paramsItem != proposed.paramsItem;
+                    }
+                }
+                context.ivars.rollbackTo(snapshot);
+            }
+            if (selected && !disagree) {
+                /* A where-clause proves this expression evaluatable under its own
+                   substitution. Preserve only an unambiguous matching substitution. */
+                (void)ConstExprEquate{context, sp}.equate(actual, *selected);
+            }
+        }
+    }
 
     struct AssociatedStallCollector {
         Context& context;
@@ -4241,43 +4366,7 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                 auto normalizedL = l.clone();
                 auto normalizedR = r.clone();
 
-                struct NormalizeValues: HIRVisitor {
-                    Context& context;
-
-                    explicit NormalizeValues(Context& context)
-                        : HIRVisitor(nullptr, context.crate.types)
-                        , context(context)
-                    {
-                    }
-
-                    void visitConstgeneric(HIRConstGeneric& value) override {
-                        if (value.is_Infer()) {
-                            const auto& resolved = context.ivars.getValue(value);
-                            if (resolved != value) {
-                                value = resolved.clone();
-                            }
-                        }
-                        HIRVisitor::visitConstgeneric(value);
-                        if (const auto* unevaluated = value.opt_Unevaluated()) {
-                            auto& expr = *(*unevaluated)->expr;
-                            if (expr.get()) {
-                                /* Equality can precede the crate pass over impl const arguments. */
-                                ASSERT_BUG(Span(), expr.state, StringView("Unbound const expression in value equality"));
-                                ConvertHIRResolveUFCSExpr(context.resolve.board(), context.crate, HIRItemPath(expr.state->modPath), expr);
-                            }
-                        }
-                    }
-
-                    [[nodiscard]] const HIRType* visitType(const HIRType* type) override {
-                        if (type->is_Infer()) {
-                            const auto resolved = context.ivars.getType(type);
-                            if (resolved != type) {
-                                type = resolved;
-                            }
-                        }
-                        return visitTypeDefaultViaHooks(type);
-                    }
-                } normalizeValues{*this};
+                NormalizeConstValues normalizeValues{*this};
 
                 normalizeValues.visitConstgeneric(normalizedL);
                 normalizeValues.visitConstgeneric(normalizedR);
@@ -5926,6 +6015,7 @@ HIRExprNodeP Context::createAutoderef(HIRExprNodeP valNode, const HIRType* tyDst
 }
 
 void Context::registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait) {
+    inferConstFromBounds(*this, sp, type);
     const auto* resolved = getType(type);
     const auto alreadyRegistered = std::any_of(solverObligations.begin(), solverObligations.end(), [&](const SolverObligation& obligation) {
         const auto* previous = getType(obligation.type);
@@ -9753,6 +9843,22 @@ auto ExprVisitorPrint::noRevisit(HIRExprNode& n) -> void {
     os << StringView("_") << typeid(n).name() << StringView(" {") << context.ivars.fmtType(n.resType) << StringView("}");
 }
 
+auto ConstExprEquate::equateType(const HIRType* left, const HIRType* right) const -> bool {
+    if (probe) {
+        return probe->unify(left, right) != Unifier::Outcome::Mismatch;
+    }
+    context.equateTypesInner(sp, left, right);
+    return true;
+}
+
+auto ConstExprEquate::equateValue(const HIRConstGeneric& left, const HIRConstGeneric& right) const -> bool {
+    if (probe) {
+        return probe->unifyValues(left, right) != Unifier::Outcome::Mismatch;
+    }
+    context.equateValues(sp, left, right);
+    return true;
+}
+
 auto ConstExprEquate::getParam(const HIRConstGenericUnevaluated& value, unsigned int binding) const -> const HIRConstGeneric* {
     const HIRPathParams* params = nullptr;
     switch (binding >> 8) {
@@ -9800,8 +9906,7 @@ auto ConstExprEquate::equateIdentity(const HIRConstGeneric& value, const HIRCons
     if (!replacement || *replacement == value) {
         return false;
     }
-    context.equateValues(sp, *replacement, other);
-    return true;
+    return equateValue(*replacement, other);
 }
 
 auto ConstExprEquate::equateLiteral(const HIRExprNodeLiteral& left, const HIRExprNodeLiteral& right) const -> bool {
@@ -9931,10 +10036,14 @@ auto ConstExprEquate::equatePath(const HIRConstGenericUnevaluated& leftValue, co
             return false;
         }
         for (unsigned int i = 0; i < leftParams.types.size(); i++) {
-            context.equateTypesInner(sp, leftParams.types[i], rightParams.types[i]);
+            if (!equateType(leftParams.types[i], rightParams.types[i])) {
+                return false;
+            }
         }
         for (unsigned int i = 0; i < leftParams.values.size(); i++) {
-            context.equateValues(sp, leftParams.values[i], rightParams.values[i]);
+            if (!equateValue(leftParams.values[i], rightParams.values[i])) {
+                return false;
+            }
         }
         return true;
     };
@@ -9954,8 +10063,7 @@ auto ConstExprEquate::equatePath(const HIRConstGenericUnevaluated& leftValue, co
             if (l.item != r.item || !equateParams(l.params, r.params)) {
                 return false;
             }
-            context.equateTypesInner(sp, l.type, r.type);
-            return true;
+            return equateType(l.type, r.type);
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& l = leftPath.data.as_UfcsKnown();
@@ -9963,8 +10071,7 @@ auto ConstExprEquate::equatePath(const HIRConstGenericUnevaluated& leftValue, co
             if (l.trait.path != r.trait.path || l.item != r.item || !equateParams(l.trait.params, r.trait.params) || !equateParams(l.params, r.params)) {
                 return false;
             }
-            context.equateTypesInner(sp, l.type, r.type);
-            return true;
+            return equateType(l.type, r.type);
         }
         case HIRPathData::TAG_UfcsUnknown: {
             BUG(sp, StringView("Unresolved path in normalized const expression"));
@@ -10014,8 +10121,7 @@ auto ConstExprEquate::equateNode(const HIRConstGenericUnevaluated& leftValue, co
         if (!lParam || !rParam) {
             return l->binding == r->binding;
         }
-        context.equateValues(sp, *lParam, *rParam);
-        return true;
+        return equateValue(*lParam, *rParam);
     }
     if (const auto* l = cast<const HIRExprNodeLiteral>(&left)) {
         if (const auto* r = cast<const HIRExprNodeLiteral>(&right)) {
@@ -10048,8 +10154,7 @@ auto ConstExprEquate::equateNode(const HIRConstGenericUnevaluated& leftValue, co
         if (!r) {
             return false;
         }
-        context.equateTypesInner(sp, l->dstType, r->dstType);
-        return equateNode(leftValue, *l->value, rightValue, *r->value);
+        return equateType(l->dstType, r->dstType) && equateNode(leftValue, *l->value, rightValue, *r->value);
     }
     if (const auto* l = cast<const HIRExprNodeCallPath>(&left)) {
         const auto* r = cast<const HIRExprNodeCallPath>(&right);

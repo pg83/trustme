@@ -14788,9 +14788,31 @@ auto NextTraitGoalEvaluator::appendResponseObligations(ThinVector<SolverObligati
     }
 
     auto needsResponse = [&](const HIRType* type) {
-        return visitTyWith(type, [&](const HIRType* inner) {
-            return inner->is_Infer() || inner->is_NodeType() || containsDefiningOpaque(inner);
-        });
+        if (containsDefiningOpaque(type)) {
+            return true;
+        }
+        struct Visitor final: HIRVisitor {
+            bool found = false;
+
+            explicit Visitor(HIRTypeInterner& types)
+                : HIRVisitor(nullptr, types)
+            {
+            }
+
+            void visitConstgeneric(HIRConstGeneric& value) override {
+                found |= value.is_Infer();
+                if (!found) {
+                    HIRVisitor::visitConstgeneric(value);
+                }
+            }
+
+            const HIRType* visitType(const HIRType* inner) override {
+                found |= inner->is_Infer() || inner->is_NodeType();
+                return found ? inner : visitTypeDefaultViaHooks(inner);
+            }
+        } visitor(crate.types);
+        (void)visitor.visitType(type);
+        return visitor.found;
     };
     auto isNormalizationGoal = [&](const HIRGenericBound& bound) {
         for (const auto* nested : candidate->normalizationNestedGoals) {
