@@ -782,7 +782,7 @@ std::string Token::toStr() const {
         case TOK_PLUS_EQUAL:
             return "+=";
         case TOK_DASH_EQUAL:
-            return "-";
+            return "-=";
         case TOK_PERCENT_EQUAL:
             return "%=";
         case TOK_SLASH_EQUAL:
@@ -812,9 +812,9 @@ std::string Token::toStr() const {
         case TOK_DOUBLE_GT:
             return ">>";
         case TOK_DOUBLE_LT_EQUAL:
-            return "<=";
+            return "<<=";
         case TOK_DOUBLE_GT_EQUAL:
-            return ">=";
+            return ">>=";
 
         case TOK_DOLLAR:
             return "$";

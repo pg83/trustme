@@ -60,7 +60,6 @@ namespace {
         size_t reserveCount() override;
         void finishCount(size_t at) override;
         CloseOnDrop openObject(const char* name) override;
-        CloseOnDrop openAnonObject() override;
 
         unsigned stringIndex(const RcString& v);
     };
@@ -229,11 +228,6 @@ HIRSerialiseWriter::CloseOnDrop WriterImpl::openObject(const char* name) {
     return CloseOnDrop(*this);
 }
 
-HIRSerialiseWriter::CloseOnDrop WriterImpl::openAnonObject() {
-    writeU8(HIRSerialiseReader::TAG_OPEN_ANON);
-    return CloseOnDrop(*this);
-}
-
 ReaderImpl::ReaderImpl(const std::string& path)
     : data()
 {
@@ -340,15 +334,6 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name)
             abort();
         }
         seen = ObjectName{name, index};
-    }
-    return CloseOnDrop(*this);
-}
-
-HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openAnonObject() {
-    auto v = readU8();
-    if (v != TAG_OPEN_ANON) {
-        sysE << StringView("Expected OpenAnon, got ") << unsigned(v) << endL;
-        abort();
     }
     return CloseOnDrop(*this);
 }

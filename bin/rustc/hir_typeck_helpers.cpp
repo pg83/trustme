@@ -222,25 +222,6 @@ namespace {
         HIRConstGeneric canonicalValueSlot(size_t slot) const;
     };
 
-    struct InstantiateCanonicalTraitResponse final: public Monomorphiser {
-        const std::vector<std::pair<RcString, RcString>>& goalNames;
-        const struct CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
-        const u64 instance;
-        mutable std::vector<std::pair<RcString, RcString>> freshNames;
-
-        RcString instantiatePlaceholderName(const RcString& canonical) const;
-
-        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const std::vector<std::pair<RcString, RcString>>& goalNames, u64 instance, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
-
-        const HIRType* getType(const Span&, const HIRGenericRef& generic) const override;
-
-        const HIRType* monomorphType(const Span& sp, const HIRType* ty, bool allowInfer = true) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
-    };
-
     struct InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
         const std::vector<std::pair<RcString, RcString>>& goalNames;
@@ -276,15 +257,6 @@ namespace {
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
     };
-
-    const HIRType* InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
-        if (goalCanonicalizer) {
-            if (const auto original = goalCanonicalizer->originalSolverGeneric(generic)) {
-                return types.generic(*original);
-            }
-        }
-        return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
-    }
 
     bool typeListEqual(const HMTypeInferrence& context, const Vector<const HIRType*>& l, const Vector<const HIRType*>& r) {
         if (l.length() != r.length()) {
@@ -9815,67 +9787,6 @@ auto CanonicalizeTraitGoal::canonicalTypeSlot(size_t slot) const -> const HIRTyp
 auto CanonicalizeTraitGoal::canonicalValueSlot(size_t slot) const -> HIRConstGeneric {
     ASSERT_BUG(Span(), slot < valueIvarIndexes_.length(), StringView("canonical value slot out of range"));
     return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(slot)});
-}
-
-auto InstantiateCanonicalTraitResponse::instantiatePlaceholderName(const RcString& canonical) const -> RcString {
-    if (goalCanonicalizer) {
-        if (const auto* original = goalCanonicalizer->originalPlaceholderName(canonical)) {
-            return *original;
-        }
-    } else {
-        for (const auto& entry : goalNames) {
-            if (entry.second == canonical) {
-                return entry.first;
-            }
-        }
-    }
-    for (const auto& entry : freshNames) {
-        if (entry.first == canonical) {
-            return entry.second;
-        }
-    }
-    auto fresh = RcString(FMT(StringView("solver_response_") << instance << StringView("_") << freshNames.size()));
-    freshNames.push_back({canonical, fresh});
-    return fresh;
-}
-
-InstantiateCanonicalTraitResponse::InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const std::vector<std::pair<RcString, RcString>>& goalNames, u64 instance, const CanonicalizeTraitGoal* goalCanonicalizer)
-    : Monomorphiser(types)
-    , goalNames(goalNames)
-    , goalCanonicalizer(goalCanonicalizer)
-    , instance(instance)
-{
-}
-
-auto InstantiateCanonicalTraitResponse::monomorphType(const Span& sp, const HIRType* ty, bool allowInfer) const -> const HIRType* {
-    if (goalCanonicalizer) {
-        if (const auto* infer = ty->opt_Infer()) {
-            if (const auto* original = goalCanonicalizer->originalIvar(infer->index)) {
-                return original;
-            }
-        }
-    }
-    return Monomorphiser::monomorphType(sp, ty, allowInfer);
-}
-
-auto InstantiateCanonicalTraitResponse::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const -> HIRConstGeneric {
-    if (goalCanonicalizer) {
-        if (const auto* infer = val.opt_Infer()) {
-            if (const auto* original = goalCanonicalizer->originalValueIvar(infer->index)) {
-                return HIRConstGeneric::make_Infer({*original});
-            }
-        }
-    }
-    return Monomorphiser::monomorphConstgeneric(sp, val, allowInfer);
-}
-
-auto InstantiateCanonicalTraitResponse::getValue(const Span&, const HIRGenericRef& generic) const -> HIRConstGeneric {
-    if (goalCanonicalizer) {
-        if (const auto original = goalCanonicalizer->originalSolverGeneric(generic)) {
-            return HIRConstGeneric(*original);
-        }
-    }
-    return HIRConstGeneric(generic.isPlaceholder() && !generic.isSolverExistential() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
 }
 
 auto InstantiateTraitResponseForCaller::isGoalPlaceholder(const HIRGenericRef& generic) const -> bool {

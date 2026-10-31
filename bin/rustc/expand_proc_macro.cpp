@@ -182,8 +182,6 @@ namespace {
 
         void sendIdent(const char* val, bool raw = false);
 
-        void sendIdent(const Ident::Hygiene& h, const char* val);
-
         void sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw = false);
 
         void sendIdent(const Ident& val);
@@ -191,8 +189,6 @@ namespace {
         void sendDollarCrate(const Ident::Hygiene& h, const Span& sp, const RcString& crateName);
 
         void sendLifetime(const char* val, bool raw = false);
-
-        void sendLifetime(const Ident::Hygiene& h, const char* val);
 
         void sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw = false);
 
@@ -234,7 +230,6 @@ namespace {
         void sendBytes(const void* val, size_t size);
         void sendBytesRaw(const void* val, size_t size);
         void sendV128u(u64 val);
-        void sendV128u(U128 val);
 
         u8 recvU8();
         std::string recvBytes();
@@ -667,14 +662,6 @@ void ProcMacroInv::sendV128u(u64 val) {
     this->sendU8(static_cast<u8>(val & 0x7F));
 }
 
-void ProcMacroInv::sendV128u(U128 val) {
-    while (val >= U128(128)) {
-        this->sendU8(static_cast<u8>(val.truncateU64() & 0x7F) | 0x80);
-        val >>= 7;
-    }
-    this->sendU8(static_cast<u8>(val.truncateU64() & 0x7F));
-}
-
 u8 ProcMacroInv::recvU8() {
     u8 v;
     this->recvBytesRaw(&v, 1);
@@ -988,11 +975,6 @@ auto ProcMacroInv::sendIdent(const char* val, bool raw) -> void {
     this->sendIdent_(val, raw);
 }
 
-auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const char* val) -> void {
-    this->sendSpan(h);
-    this->sendIdent_(val, false);
-}
-
 auto ProcMacroInv::sendIdent(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw) -> void {
     this->sendSpan(h, sp);
     this->sendIdent_(val, raw);
@@ -1028,11 +1010,6 @@ auto ProcMacroInv::sendDollarCrate(const Ident::Hygiene& h, const Span& sp, cons
 auto ProcMacroInv::sendLifetime(const char* val, bool raw) -> void {
     this->sendSpan(Ident::Hygiene());
     this->sendLifetime_(val, raw);
-}
-
-auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const char* val) -> void {
-    this->sendSpan(h);
-    this->sendLifetime_(val, false);
 }
 
 auto ProcMacroInv::sendLifetime(const Ident::Hygiene& h, const Span& sp, const char* val, bool raw) -> void {

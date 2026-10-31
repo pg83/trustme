@@ -586,7 +586,6 @@ public:
     std::vector<MIRAsmParam> cloneAsmParams(const std::vector<MIRAsmParam>& params) const;
     std::vector<std::pair<std::string, MIRLValue>> cloneNameLvalVec(const std::vector<std::pair<std::string, MIRLValue>>& src) const;
     std::vector<MIRParam> cloneParamVec(const std::vector<MIRParam>& src) const;
-    std::vector<MIRLValue> cloneLvalVec(const std::vector<MIRLValue>& src) const;
 
     const HIRType* monomorph(const HIRType* x) const;
     HIRGenericPath monomorph(const HIRGenericPath& x) const;

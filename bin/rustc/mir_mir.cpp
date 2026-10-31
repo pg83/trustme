@@ -1010,15 +1010,6 @@ std::vector<std::pair<std::string, MIRLValue>> MIRCloner::cloneNameLvalVec(const
     return rv;
 }
 
-std::vector<MIRLValue> MIRCloner::cloneLvalVec(const std::vector<MIRLValue>& src) const {
-    std::vector<MIRLValue> rv;
-    rv.reserve(src.size());
-    for (const auto& lv : src) {
-        rv.push_back(this->cloneLval(lv));
-    }
-    return rv;
-}
-
 std::vector<MIRParam> MIRCloner::cloneParamVec(const std::vector<MIRParam>& src) const {
     std::vector<MIRParam> rv;
     rv.reserve(src.size());

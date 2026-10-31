@@ -40,7 +40,6 @@ struct HIRSerialiseWriter {
     virtual size_t reserveCount() = 0;
     virtual void finishCount(size_t at) = 0;
     virtual CloseOnDrop openObject(const char* name) = 0;
-    virtual CloseOnDrop openAnonObject() = 0;
 
     void writeU8(u8 v);
     void writeI64(i64 v);
@@ -135,7 +134,6 @@ struct HIRSerialiseReader {
     FloatValue readFloatValue();
     std::string readString();
     CloseOnDrop openObject(const char* name);
-    CloseOnDrop openAnonObject();
     i64 readI64();
     S128 readI128();
 
