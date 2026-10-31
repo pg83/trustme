@@ -1435,6 +1435,14 @@ namespace {
 
         std::vector<const ASTNamed<ASTItem>*> macroRecursionStack;
 
+        const auto filterNestedCfg = [&](auto& entries) {
+            auto end = std::remove_if(entries.begin(), entries.end(), [&](auto& entry) {
+                CfgExpandAttrs(es.wb, entry.attrs);
+                return !checkCfgAttrs(*es.wb.settings, entry.attrs);
+            });
+            entries.erase(end, entries.end());
+        };
+
         DEBUG(StringView("Items"));
         for (unsigned int idx = firstItem; idx < mod.items.size(); idx++) {
             auto& i = *mod.items[idx];
@@ -1695,9 +1703,8 @@ namespace {
                         }
                         case ASTStructData::TAG_Struct: {
                             auto& sd = e.data.as_Struct();
-                            for (auto it = sd.ents.begin(); it != sd.ents.end();) {
-                                auto& si = *it;
-                                CfgExpandAttrs(es.wb, si.attrs);
+                            filterNestedCfg(sd.ents);
+                            for (auto& si : sd.ents) {
                                 ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 }));
@@ -1706,20 +1713,13 @@ namespace {
                                 ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 }));
-
-                                if (si.name == "") {
-                                    it = sd.ents.erase(it);
-                                } else {
-                                    ++it;
-                                }
                             }
                             break;
                         }
                         case ASTStructData::TAG_Tuple: {
                             auto& sd = e.data.as_Tuple();
-                            for (auto it = sd.ents.begin(); it != sd.ents.end();) {
-                                auto& si = *it;
-                                CfgExpandAttrs(es.wb, si.attrs);
+                            filterNestedCfg(sd.ents);
+                            for (auto& si : sd.ents) {
                                 ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 }));
@@ -1727,12 +1727,6 @@ namespace {
                                 ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 }));
-
-                                if (!si.type->isValid()) {
-                                    it = sd.ents.erase(it);
-                                } else {
-                                    ++it;
-                                }
                             }
                             break;
                         }
@@ -1742,8 +1736,8 @@ namespace {
                 case ASTItem::TAG_Enum: {
                     auto& e = dat.as_Enum();
                     ExpandGenericParams(es, mod, e.params());
+                    filterNestedCfg(e.variants());
                     for (auto& var : e.variants()) {
-                        CfgExpandAttrs(es.wb, var.attrs);
                         ExpandAttrs(es, var.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                             d.handle(sp, a, es.wb, es.crate, var);
                         }));
@@ -1753,29 +1747,22 @@ namespace {
                             }
                             case ASTEnumVariantData::TAG_Tuple: {
                                 auto& e = var.data.as_Tuple();
-                                for (auto it = e.items.begin(); it != e.items.end();) {
-                                    auto& si = *it;
-                                    CfgExpandAttrs(es.wb, si.attrs);
+                                filterNestedCfg(e.items);
+                                for (auto& si : e.items) {
                                     ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                         d.handle(sp, a, es.wb, es.crate, si);
                                     }));
                                     ExpandType(es, mod, si.type);
-                                    ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                                    ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                         d.handle(sp, a, es.wb, es.crate, si);
                                     }));
-                                    if (!si.type->isValid()) {
-                                        it = e.items.erase(it);
-                                    } else {
-                                        ++it;
-                                    }
                                 }
                                 break;
                             }
                             case ASTEnumVariantData::TAG_Struct: {
                                 auto& e = var.data.as_Struct();
-                                for (auto it = e.fields.begin(); it != e.fields.end();) {
-                                    auto& si = *it;
-                                    CfgExpandAttrs(es.wb, si.attrs);
+                                filterNestedCfg(e.fields);
+                                for (auto& si : e.fields) {
                                     ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                         d.handle(sp, a, es.wb, es.crate, si);
                                     }));
@@ -1785,11 +1772,6 @@ namespace {
                                         d.handle(sp, a, es.wb, es.crate, si);
                                     }));
 
-                                    if (si.name == "") {
-                                        it = e.fields.erase(it);
-                                    } else {
-                                        ++it;
-                                    }
                                 }
                                 break;
                             }
@@ -1799,21 +1781,13 @@ namespace {
                             d.handle(sp, a, es.wb, es.crate, var);
                         }));
                     }
-                    for (auto it = e.variants().begin(); it != e.variants().end();) {
-                        if (it->name == "") {
-                            it = e.variants().erase(it);
-                        } else {
-                            ++it;
-                        }
-                    }
                     break;
                 }
                 case ASTItem::TAG_Union: {
                     auto& e = dat.as_Union();
                     ExpandGenericParams(es, mod, e.params_);
-                    for (auto it = e.variants.begin(); it != e.variants.end();) {
-                        auto& si = *it;
-                        CfgExpandAttrs(es.wb, si.attrs);
+                    filterNestedCfg(e.variants);
+                    for (auto& si : e.variants) {
                         ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                             d.handle(sp, a, es.wb, es.crate, si);
                         }));
@@ -1822,12 +1796,6 @@ namespace {
                         ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                             d.handle(sp, a, es.wb, es.crate, si);
                         }));
-
-                        if (si.name == "") {
-                            it = e.variants.erase(it);
-                        } else {
-                            ++it;
-                        }
                     }
                     break;
                 }

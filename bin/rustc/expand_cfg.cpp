@@ -575,23 +575,17 @@ auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
     DEBUG(StringView("#[cfg] struct item - ") << mi);
-    if (!checkCfg(*wb.settings, sp, mi)) {
-        si.name = RcString();
-    }
+    ASSERT_BUG(sp, checkCfg(*wb.settings, sp, mi), StringView("Unfiltered cfg on named field"));
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const -> void {
     DEBUG(StringView("#[cfg] tuple item - ") << mi);
-    if (!checkCfg(*wb.settings, sp, mi)) {
-        i.type = ::mkType(*crate.pool, sp);
-    }
+    ASSERT_BUG(sp, checkCfg(*wb.settings, sp, mi), StringView("Unfiltered cfg on tuple field"));
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const -> void {
     DEBUG(StringView("#[cfg] enum variant - ") << mi);
-    if (!checkCfg(*wb.settings, sp, mi)) {
-        i.name = RcString();
-    }
+    ASSERT_BUG(sp, checkCfg(*wb.settings, sp, mi), StringView("Unfiltered cfg on enum variant"));
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const -> void {

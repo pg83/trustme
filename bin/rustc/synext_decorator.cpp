@@ -535,6 +535,18 @@ namespace {
 
         bool wantsAllAttrs() const override;
 
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&, ASTStructItem&) const override {
+            ERROR(sp, E0000, StringView("#[derive] can only be applied to structs, enums and unions"));
+        }
+
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&, ASTTupleItem&) const override {
+            ERROR(sp, E0000, StringView("#[derive] can only be applied to structs, enums and unions"));
+        }
+
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&, ASTEnumVariant&) const override {
+            ERROR(sp, E0000, StringView("#[derive] can only be applied to structs, enums and unions"));
+        }
+
         void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 

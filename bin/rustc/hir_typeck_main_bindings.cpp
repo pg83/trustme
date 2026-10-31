@@ -104,8 +104,7 @@ namespace {
                         return item.as_Constant()->params;
                     }
                     case HIRValueItem::TAG_Static: {
-                        // TODO: Return an empty set?
-                        BUG(sp, StringView("Attepted to get parameters for static ") << path);
+                        return emptyParams;
                     }
                     case HIRValueItem::TAG_StructConstructor: {
                         auto& e = item.as_StructConstructor();
