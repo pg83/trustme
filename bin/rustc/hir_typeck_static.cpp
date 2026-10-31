@@ -203,6 +203,8 @@ struct StaticTraitResolve::NextSolverBridge {
 
     bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* type);
 
+    SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph);
+
     InherentImplSelection selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr);
 };
 
@@ -1077,6 +1079,14 @@ bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRType* type) const 
         return proven;
     });
     return proven;
+}
+
+auto StaticTraitResolve::evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph) const -> SolverCertainty {
+    if (!nextSolver) {
+        ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+    }
+    return nextSolver->evaluateGenericBounds(sp, implGenerics_, itemGenerics_, definition, parameters, monomorph);
 }
 
 bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) const {
@@ -2395,6 +2405,11 @@ auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGe
 auto StaticTraitResolve::NextSolverBridge::typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* type) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
     return resolve_.typeIsCopy(sp, type) == SolverCertainty::Proven;
+}
+
+auto StaticTraitResolve::NextSolverBridge::evaluateGenericBounds(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph) -> SolverCertainty {
+    resolve_.setGenericContext(implGenerics, itemGenerics);
+    return resolve_.evaluateGenericBounds(sp, definition, parameters, monomorph);
 }
 
 auto StaticTraitResolve::NextSolverBridge::selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams) -> InherentImplSelection {

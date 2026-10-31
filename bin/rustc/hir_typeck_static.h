@@ -221,6 +221,7 @@ public:
 
     bool typeIsCopy(const Span& sp, const HIRType* ty) const;
     bool typeIsSized(const Span& sp, const HIRType* ty) const;
+    SolverCertainty evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph) const;
     bool typeIsImpossible(const Span& sp, const HIRType* ty) const;
     bool canUnsize(const Span& sp, const HIRType* dst, const HIRType* src) const;
 

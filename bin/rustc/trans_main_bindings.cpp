@@ -580,6 +580,11 @@ static void TransEnumerateGenericBodyItems(EnumState& state, const Span& sp, con
                     MonomorphState implMs(state.crate.types);
                     deferBoundPath = state.resolve.getValue(sp, *path, implMs, false).is_NotYetKnown();
                 }
+                if (hasConditionalBounds && !deferBoundPath && v.is_Function()) {
+                    ASSERT_BUG(sp, unusedMs.ppMethod, StringView("Function path without method parameters: ") << *path);
+                    unusedMs.setConstevalState(state.resolve.board(), HIRItemPath(""));
+                    deferBoundPath = state.resolve.evaluateGenericBounds(sp, v.as_Function()->params, *unusedMs.ppMethod, unusedMs) != SolverCertainty::Proven;
+                }
                 if (v.is_StructConstructor() || v.is_EnumConstructor()) {
                 } else if (deferBoundPath) {
                     DEBUG(StringView("Defer conditionally available path ") << *path);
