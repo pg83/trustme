@@ -72,8 +72,9 @@ namespace {
     struct FmtGccAsm {
         const std::string& s;
         bool escapePercent;
+        bool escapeDollar;
 
-        FmtGccAsm(const std::string& s, bool escapePercent);
+        FmtGccAsm(const std::string& s, bool escapePercent, bool escapeDollar = false);
     };
 
     struct StringList {
@@ -615,9 +616,10 @@ FmtShell::FmtShell(const std::string& s) // escape: existing formatting interfac
     : s(s) {
 }
 
-FmtGccAsm::FmtGccAsm(const std::string& s, bool escapePercent) // escape: existing formatting interface exposed by declaration reordering
+FmtGccAsm::FmtGccAsm(const std::string& s, bool escapePercent, bool escapeDollar) // escape: existing formatting interface exposed by declaration reordering
     : s(s)
-    , escapePercent(escapePercent) {
+    , escapePercent(escapePercent)
+    , escapeDollar(escapeDollar) {
 }
 
 StringList::StringList() {
@@ -6121,11 +6123,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         Vector<size_t> explicitVector;
         explicitVector.zero(asmParams.size());
         const auto explicitVectorSize = [&](const MIRAsmParam::Data_Reg& reg) -> size_t {
-            const auto* regnameP = reg.spec.opt_Explicit();
-            if (!regnameP) {
-                return 0;
-            }
-            const StringView regname(regnameP->c_str());
+            const StringView regname(reg.spec.as_Explicit().c_str());
             if (!regname.startsWith(StringView("xmm")) && !regname.startsWith(StringView("ymm")) && !regname.startsWith(StringView("zmm"))) {
                 return 0;
             }
@@ -6139,6 +6137,19 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                 return 0;
             }
             return opSize;
+        };
+        const auto explicitConstraint = [](const std::string& name) {
+            const StringView regname(name.c_str());
+            if (regname.startsWith(StringView("zmm"))) {
+                return StringView("v");
+            }
+            if (regname.startsWith(StringView("xmm")) || regname.startsWith(StringView("ymm"))) {
+                return StringView("x");
+            }
+            if (regname.startsWith(StringView("k"))) {
+                return StringView("Yk");
+            }
+            return StringView("r");
         };
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
@@ -6165,9 +6176,11 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                         of << StringView(";\n");
                         continue;
                     }
-                    of << indent << StringView("register uintptr_t asm_") << *regnameP << StringView(" asm(\"") << *regnameP << StringView("\")");
+                    of << indent << StringView("register ");
+                    emitCtype(pe->input ? mirRes->getParamType(*pe->input) : mirRes->getLvalueType(*pe->output));
+                    of << StringView(" asm_") << *regnameP << StringView(" asm(\"") << *regnameP << StringView("\")");
                     if (pe->input) {
-                        of << StringView(" = (uintptr_t)");
+                        of << StringView(" = ");
                         emitParam(*pe->input);
                     }
                     of << StringView(";\n");
@@ -6182,7 +6195,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     return i;
                 }
             }
-            return asmParams.size();
+            MIR_BUG(localMirRes, StringView("Asm register is not in the operand list"));
         };
         for (size_t i = 0; i < asmParams.size(); i++) {
             const auto* pe = asmParams[i].opt_Reg();
@@ -6250,18 +6263,18 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                 }
             }
         }
-        Vector<const MIRAsmParam*> inputs;
+        Vector<const MIRAsmParam::Data_Reg*> inputs;
         for (size_t i = 0; i < asmParams.size(); i++) {
             if (const auto* pe = asmParams[i].opt_Reg()) {
                 if (pe->spec.opt_Explicit()) {
                     if (pe->input && !pe->output && !discardsOutput(*pe)) {
-                        inputs.pushBack(&asmParams[i]);
+                        inputs.pushBack(pe);
                     }
                 } else if (pe->input) {
                     if (!pe->output && !discardsOutput(*pe)) {
                         argMappings.mut(i) = outputs.length() + inputs.length();
                     }
-                    inputs.pushBack(&asmParams[i]);
+                    inputs.pushBack(pe);
                 }
             }
         }
@@ -6276,6 +6289,18 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         }
 
         const bool emitAttSyntax = usesIntelCompilerAsmDialect() && asmOptions.attSyntax;
+        bool escapeDollar = false;
+        if (usesIntelCompilerAsmDialect() && !asmOptions.naked) {
+            for (const auto& line : asmLines) {
+                escapeDollar |= line.trailing.find('$') != std::string::npos;
+                for (const auto& fragment : line.frags) {
+                    escapeDollar |= fragment.before.find('$') != std::string::npos;
+                }
+            }
+        }
+        if (escapeDollar) {
+            of << indent << StringView("extern __attribute__((visibility(\"hidden\"))) char trustme_asm_dollar asm(\"__trustme_asm_dollar$\");\n");
+        }
         if (asmOptions.naked) {
             of << indent << StringView("\"");
         } else {
@@ -6289,21 +6314,24 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         if (emitAttSyntax) {
             of << StringView(".att_syntax prefix; ");
         }
+        if (escapeDollar) {
+            of << StringView(".irpc trustme_dollar, %c[trustme_dollar];\\n.if '\\\\trustme_dollar' == 36;\\n");
+        }
         const bool escapePercent = !asmOptions.naked;
         for (const auto& l : asmLines) {
             for (const auto& f : l.frags) {
-                of << FmtGccAsm(f.before, escapePercent);
+                of << FmtGccAsm(f.before, escapePercent, escapeDollar);
                 const auto& param = asmParams.at(f.index);
                 if (const auto* constant = param.opt_Const()) {
                     MIR_ASSERT(localMirRes, f.modifier == '\0', StringView("Modifier on asm const operand"));
                     auto text = inlineAsmConstant(*constant);
-                    of << FmtGccAsm(text, escapePercent);
+                    of << FmtGccAsm(text, escapePercent, escapeDollar);
                     continue;
                 }
                 if (const auto* path = param.opt_Sym()) {
                     MIR_ASSERT(localMirRes, f.modifier == '\0', StringView("Modifier on asm sym operand"));
                     auto text = asmSymbol(localMirRes.sp, *path);
-                    of << FmtGccAsm(text, escapePercent);
+                    of << FmtGccAsm(text, escapePercent, escapeDollar);
                     continue;
                 }
                 if (param.is_Label()) {
@@ -6368,8 +6396,11 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                 }
                 of << argMappings[f.index];
             }
-            of << FmtGccAsm(l.trailing, escapePercent);
+            of << FmtGccAsm(l.trailing, escapePercent, escapeDollar);
             of << StringView(";\\n ");
+        }
+        if (escapeDollar) {
+            of << StringView(".endif; .endr; ");
         }
         if (emitAttSyntax) {
             of << StringView(".intel_syntax noprefix; ");
@@ -6440,19 +6471,14 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     break;
                 }
                 case AsmRegisterSpec::TAG_Explicit: {
-                    const auto explicitIdx = paramIndexOf(&p);
-                    if (explicitIdx == asmParams.size() || explicitVector[explicitIdx] == 0) {
-                        of << StringView("r");
-                    } else {
-                        of << (StringView(p.spec.as_Explicit().c_str()).startsWith(StringView("zmm")) ? StringView("v") : StringView("x"));
-                    }
+                    of << explicitConstraint(p.spec.as_Explicit());
                     break;
                 }
             }
             of << StringView("\" (");
             if (const auto* regnameP = p.spec.opt_Explicit()) {
                 of << StringView("asm_") << *regnameP;
-            } else if (const auto shimIdx = paramIndexOf(&p); shimIdx != asmParams.size() && vectorShim[shimIdx] != 0) {
+            } else if (const auto shimIdx = paramIndexOf(&p); vectorShim[shimIdx] != 0) {
                 of << StringView("asm_vec_") << shimIdx;
             } else if (!p.output) {
                 of << StringView("asm_anon_") << i;
@@ -6463,91 +6489,79 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         }
         of << StringView(" :");
         for (size_t i = 0; i < inputs.length(); i++) {
-            const auto& p = *inputs[i];
+            const auto& r = *inputs[i];
             if (i != 0) {
                 of << StringView(",");
             }
             of << StringView(" ");
-            switch (p.tag()) {
-                case MIRAsmParam::TAG_Reg: {
-                    auto& r = p.as_Reg();
-                    of << StringView("\"");
-                    if ((r.output || discardsOutput(r)) && !r.spec.is_Explicit()) {
-                        const auto it = std::find(outputs.begin(), outputs.end(), &r);
-                        MIR_ASSERT(localMirRes, it != outputs.end(), StringView("Missing asm output"));
-                        of << (it - outputs.begin());
-                    } else {
-                        switch (r.spec.tag()) {
-                            case AsmRegisterSpec::TAG_Class: {
-                                auto& c = r.spec.as_Class();
-                                switch (c) {
-                                    case AsmRegisterClass::x86Reg:
-                                        of << StringView("r");
-                                        break;
-                                    case AsmRegisterClass::x86RegAbcd:
-                                        of << StringView("Q");
-                                        break;
-                                    case AsmRegisterClass::x86RegByte:
-                                        of << StringView("q");
-                                        break;
-                                    case AsmRegisterClass::x86Xmm:
-                                        of << StringView("x");
-                                        break;
-                                    case AsmRegisterClass::x86Ymm:
-                                        of << StringView("x");
-                                        break;
-                                    case AsmRegisterClass::x86Zmm:
-                                        of << StringView("v");
-                                        break;
-                                    case AsmRegisterClass::x86Kreg:
-                                        of << StringView("Yk");
-                                        break;
-                                    case AsmRegisterClass::riscvReg:
-                                        of << StringView("r");
-                                        break;
-                                    case AsmRegisterClass::riscvFreg:
-                                        of << StringView("f");
-                                        break;
-                                }
+            of << StringView("\"");
+            if ((r.output || discardsOutput(r)) && !r.spec.is_Explicit()) {
+                const auto it = std::find(outputs.begin(), outputs.end(), &r);
+                MIR_ASSERT(localMirRes, it != outputs.end(), StringView("Missing asm output"));
+                of << (it - outputs.begin());
+            } else {
+                switch (r.spec.tag()) {
+                    case AsmRegisterSpec::TAG_Class: {
+                        auto& c = r.spec.as_Class();
+                        switch (c) {
+                            case AsmRegisterClass::x86Reg:
+                                of << StringView("r");
                                 break;
-                            }
-                            case AsmRegisterSpec::TAG_Explicit: {
-                                const auto explicitIdx = paramIndexOf(&r);
-                                if (explicitIdx == asmParams.size() || explicitVector[explicitIdx] == 0) {
-                                    of << StringView("r");
-                                } else {
-                                    of << (StringView(r.spec.as_Explicit().c_str()).startsWith(StringView("zmm")) ? StringView("v") : StringView("x"));
-                                }
+                            case AsmRegisterClass::x86RegAbcd:
+                                of << StringView("Q");
                                 break;
-                            }
+                            case AsmRegisterClass::x86RegByte:
+                                of << StringView("q");
+                                break;
+                            case AsmRegisterClass::x86Xmm:
+                                of << StringView("x");
+                                break;
+                            case AsmRegisterClass::x86Ymm:
+                                of << StringView("x");
+                                break;
+                            case AsmRegisterClass::x86Zmm:
+                                of << StringView("v");
+                                break;
+                            case AsmRegisterClass::x86Kreg:
+                                of << StringView("Yk");
+                                break;
+                            case AsmRegisterClass::riscvReg:
+                                of << StringView("r");
+                                break;
+                            case AsmRegisterClass::riscvFreg:
+                                of << StringView("f");
+                                break;
                         }
+                        break;
                     }
-                    BUG_ASSERT(r.input);
-                    of << StringView("\" (");
-                    const auto shimIdx = paramIndexOf(&r);
-                    if (const auto* regnameP = p.as_Reg().spec.opt_Explicit()) {
-                        of << StringView("asm_") << *regnameP;
-                    } else if (shimIdx != asmParams.size() && vectorShim[shimIdx] != 0) {
-                        of << StringView("asm_vec_") << shimIdx;
-                    } else {
-                        emitParam(*r.input);
+                    case AsmRegisterSpec::TAG_Explicit: {
+                        of << explicitConstraint(r.spec.as_Explicit());
+                        break;
                     }
-                    of << StringView(")");
-                    break;
-                }
-                case MIRAsmParam::TAG_Const: {
-                    MIR_TODO(localMirRes, StringView("Asm2 GCC - Const"));
-                    break;
-                }
-                case MIRAsmParam::TAG_Sym: {
-                    MIR_TODO(localMirRes, StringView("Asm2 GCC - Sym"));
-                    break;
-                }
-                case MIRAsmParam::TAG_Label: {
-                    MIR_BUG(localMirRes, StringView("Asm label listed as an input"));
-                    break;
                 }
             }
+            BUG_ASSERT(r.input);
+            of << StringView("\" (");
+            const auto shimIdx = paramIndexOf(&r);
+            if (const auto* regnameP = r.spec.opt_Explicit()) {
+                of << StringView("asm_") << *regnameP;
+            } else if (vectorShim[shimIdx] != 0) {
+                of << StringView("asm_vec_") << shimIdx;
+            } else {
+                if (r.input->is_Constant()) {
+                    of << StringView("(");
+                    emitCtype(mirRes->getParamType(*r.input));
+                    of << StringView(")");
+                }
+                emitParam(*r.input);
+            }
+            of << StringView(")");
+        }
+        if (escapeDollar) {
+            if (!inputs.empty()) {
+                of << StringView(",");
+            }
+            of << StringView(" [trustme_dollar] \"i\" (&trustme_asm_dollar)");
         }
         of << StringView(" :");
         for (size_t i = 0; i < clobbers.length(); i++) {
@@ -10958,6 +10972,13 @@ void stl::output<ZeroCopyOutput, FmtGccAsm>(ZeroCopyOutput& os, FmtGccAsm x) {
                     os << StringView("%%");
                 } else {
                     os << StringView("%");
+                }
+                break;
+            case '$':
+                if (x.escapeDollar) {
+                    os << StringView("\\\\trustme_dollar\\\\()");
+                } else {
+                    os << ch;
                 }
                 break;
             case '{':

@@ -3438,7 +3438,6 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     break;
                 case HIRCoreType::Str:
                     BUG(sp, StringView("Hit match over `str` - must be `&str`"));
-                    break;
             }
             break;
         }

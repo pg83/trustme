@@ -10982,7 +10982,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsm& node) -> void {
 
 auto ExprVisitorEnum::visit(HIRExprNodeAsm2& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" asm! ..."));
-    bool hasLabel = false;
+    bool labelsDiverge = true;
     this->pushInnerCoerce(false);
     for (auto& v : node.params) {
         switch (v.tag()) {
@@ -10998,9 +10998,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsm2& node) -> void {
             }
             case HIRAsmParam::TAG_Label: {
                 auto& e = v.as_Label();
-                hasLabel = true;
                 e.code->resType = this->context.addIvars(e.code->resType);
                 visitNodePtr(e.code);
+                labelsDiverge = labelsDiverge && this->nodeDiverges(*e.code);
                 this->context.equateTypes(e.code->span(), e.code->resType, this->context.crate.types.unit());
                 break;
             }
@@ -11029,7 +11029,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeAsm2& node) -> void {
     }
     this->popInnerCoerce();
     // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
-    if ((node.options.noreturn || node.options.naked) && !hasLabel) {
+    if ((node.options.noreturn || node.options.naked) && labelsDiverge) {
         node.diverges = true;
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
     } else {
