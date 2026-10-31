@@ -1816,6 +1816,9 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                     case ASTPatternData::TAG_ValueLeftInc: {
                         auto& range = pat.data().as_ValueLeftInc();
                         HIRTypePatternRange out{!range.start.is_Invalid(), {}, !range.end.is_Invalid(), {}, false};
+                        if (!out.hasStart && !out.hasEnd) {
+                            ERROR(pat.span(), E0000, StringView("pattern not supported in pattern types"));
+                        }
                         if (out.hasStart) {
                             out.start = lowerValue(range.start, pat.span());
                         }

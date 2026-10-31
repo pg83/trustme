@@ -4073,15 +4073,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, StringView("Encounterd unbound path - ") << e.path);
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    switch (pat.data.tag()) {
-                        case HIRPattern::Data::TAG_Any: {
-                            this->pushRule(PatternRule::make_Any({}));
-                            break;
-                        }
-                        default: {
-                            BUG(sp, StringView("Matching opaque type with invalid pattern - ") << pat);
-                        }
-                    }
+                    ASSERT_BUG(sp, pat.data.is_Any(), StringView("Matching opaque type with invalid pattern - ") << pat);
+                    this->pushRule(PatternRule::make_Any({}));
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
@@ -4112,20 +4105,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     }
                     switch (strData.tag()) {
                         case HIRStructData::TAG_Unit: {
-                            switch (pat.data.tag()) {
-                                default:
-                                    BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                                case HIRPatternData::TAG_Any: {
-                                    break;
-                                }
-                                case HIRPatternData::TAG_PathValue: {
-                                    break;
-                                }
-                                case HIRPatternData::TAG_PathNamed: {
-                                    auto& pe = pat.data.as_PathNamed();
-                                    ASSERT_BUG(sp, pe.subPatterns.size() == 0, StringView("Matching unit-like struct with sub-patterns - ") << pat);
-                                    break;
-                                }
+                            if (const auto* pe = pat.data.opt_PathNamed()) {
+                                ASSERT_BUG(sp, pe->subPatterns.size() == 0, StringView("Matching unit-like struct with sub-patterns - ") << pat);
+                            } else {
+                                ASSERT_BUG(sp, pat.data.is_Any() || pat.data.is_PathValue(), StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
                             }
                             break;
                         }
@@ -4225,14 +4208,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    switch (pat.data.tag()) {
-                        default:
-                            BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                        case HIRPatternData::TAG_Any: {
-                            this->pushRule(PatternRule::make_Any({}));
-                            break;
-                        }
-                    }
+                    ASSERT_BUG(sp, pat.data.is_Any(), StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
+                    this->pushRule(PatternRule::make_Any({}));
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
@@ -4313,31 +4290,20 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             }
             break;
         }
-        case HIRType::TAG_Generic: {
-            switch (pat.data.tag()) {
-                case HIRPattern::Data::TAG_Any: {
-                    this->pushRule(PatternRule::make_Any({}));
-                    break;
-                }
-                default: {
-                    BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                }
-            }
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_Pointer: {
+            ASSERT_BUG(sp, pat.data.is_Any(), StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
+            this->pushRule(PatternRule::make_Any({}));
             break;
         }
-        case HIRType::TAG_TraitObject: {
-            if (pat.data.is_Any()) {
-            } else {
-                ERROR(sp, E0000, StringView("Attempting to match over a trait object"));
-            }
+        case HIRType::TAG_TraitObject:
+        case HIRType::TAG_NamedFunction:
+        case HIRType::TAG_Function: {
+            ASSERT_BUG(sp, pat.data.is_Any(), StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
             break;
         }
         case HIRType::TAG_ErasedType: {
-            if (pat.data.is_Any()) {
-            } else {
-                ERROR(sp, E0000, StringView("Attempting to match over an erased type"));
-            }
-            break;
+            BUG(sp, StringView("Opaque type was not revealed for pattern ") << pat << StringView(" - ") << ty);
         }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
@@ -4534,28 +4500,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
             }
             fieldPath.pop_back();
-            break;
-        }
-        case HIRType::TAG_Pointer: {
-            if (pat.data.is_Any()) {
-                this->pushRule(PatternRule::make_Any({}));
-            } else {
-                ERROR(sp, E0000, StringView("Attempting to match over a pointer"));
-            }
-            break;
-        }
-        case HIRType::TAG_NamedFunction: {
-            if (pat.data.is_Any()) {
-            } else {
-                ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-            }
-            break;
-        }
-        case HIRType::TAG_Function: {
-            if (pat.data.is_Any()) {
-            } else {
-                ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-            }
             break;
         }
         case HIRType::TAG_NodeType: {
