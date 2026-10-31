@@ -26,6 +26,8 @@ class MIRParam;
 
 typedef unsigned int MIRBasicBlockId;
 
+bool MIRGetFloatAlgebraicBinOp(const RcString& name, MIRBinOp& op);
+
 struct CheckFailure: public std::exception {};
 
 struct MIRPathCallback {

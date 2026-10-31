@@ -54,8 +54,6 @@ public:
 #endif
     }
 
-    void toBeBytes(u8* dst, size_t maxLen);
-
     void fromLeBytes(const u8* src, size_t maxLen) {
         maxLen = maxLen > 16 ? 16 : maxLen;
         *this = U128();
@@ -67,8 +65,6 @@ public:
         }
 #endif
     }
-
-    void fromBeBytes(const u8* src, size_t maxLen);
 
     U128 operator~() const {
         return U128(~lo, ~hi);
@@ -274,8 +270,6 @@ private:
 
 public:
     void fromLeBytes(const u8* src, size_t maxLen);
-
-    void fromBeBytes(const u8* src, size_t maxLen);
 
     S128 operator~() const {
         return S128(~inner);

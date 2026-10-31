@@ -183,7 +183,6 @@ struct Context {
     void registerSolverObligation(const Span& sp, const HIRType* type, HIRTraitPath trait);
     void markDivergingIvar(const HIRType* destination);
     const HIRType* expandAssociatedTypes(const Span& sp, const HIRType* input);
-    void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params);
     void compactIvars(const Span& sp);
 
     void equateTypesCoerce(const Span& sp, const HIRType* l, HIRExprNodeP& nodePtr, bool argumentSite = false, bool callArgument = false);

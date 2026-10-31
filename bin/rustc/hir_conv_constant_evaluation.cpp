@@ -2403,7 +2403,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto vtable = MIREvalValueRef(vtablePtr.second, vtablePtr.first - EncodedLiteral::PTR_BASE);
                     return vtable.slice(field * ptrSize, ptrSize).readUsize(state);
                 };
-                if (te->name == "size_of") {
+                MIRBinOp algebraicOp;
+                if (MIRGetFloatAlgebraicBinOp(te->name, algebraicOp)) {
+                    const auto* ty = localState.monomorphExpand(te->params.types.at(0));
+                    if (const auto* primitive = ty->opt_Primitive(); !primitive || !isFloat(*primitive)) {
+                        Span callSpan(state.sp, e.source.filename, e.source.line, e.source.column, e.source.line, e.source.column);
+                        ERROR(callSpan, E0000, StringView("Intrinsic `") << te->name << StringView("` requires a floating-point type, got ") << ty);
+                    }
+                    this->runStatement(localState, MIRStatement::make_Assign({e.retVal.clone(), MIRRValue::make_BinOp({e.args.at(0).clone(), algebraicOp, e.args.at(1).clone()})}));
+                } else if (te->name == "size_of") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t sizeVal;
                     if (TargetGetSizeOf(state.sp, this->resolve, ty, sizeVal)) {

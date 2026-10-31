@@ -42,7 +42,6 @@ namespace {
         i64 offset = 0;
         i64 blankSpace = 0;
         char preBreak = 0;
-        bool visual = false;
         Breaks breaks = Breaks::Inconsistent;
 
         bool isHardbreak() const;
@@ -65,7 +64,6 @@ namespace {
         void rbox(i64 indent, Breaks breaks);
         void ibox(i64 indent);
         void cbox(i64 indent);
-        void visualAlign();
         void breakOffset(i64 n, i64 off);
         void end();
         void eof();
@@ -590,11 +588,7 @@ PrintFrame Printer::getTop() const {
 void Printer::printBegin(const PpToken& token, i64 size) {
     if (size > space_) {
         printStack_.pushBack(PrintFrame{false, indent_, token.breaks});
-        if (token.visual) {
-            indent_ = MARGIN - space_;
-        } else {
-            indent_ = indent_ + token.offset;
-        }
+        indent_ = indent_ + token.offset;
     } else {
         printStack_.pushBack(PrintFrame{true, 0, Breaks::Inconsistent});
     }
@@ -654,14 +648,6 @@ void Printer::ibox(i64 indent) {
 
 void Printer::cbox(i64 indent) {
     this->rbox(indent, Breaks::Consistent);
-}
-
-void Printer::visualAlign() {
-    PpToken token;
-    token.kind = PpTokenKind::Begin;
-    token.visual = true;
-    token.breaks = Breaks::Consistent;
-    this->scanBegin(token);
 }
 
 void Printer::breakOffset(i64 n, i64 off) {

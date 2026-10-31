@@ -148,8 +148,6 @@ public:
 
     std::string parseEqualsString(const WireBoard& wb, const ASTCrate& crate, ASTModule& mod) const;
 
-    std::string parseParenString() const;
-
     /* The string of `key = "value"` in a parenthesised `name = value` list
        (`#[unstable(feature = "iter_intersperse", issue = "79524")]`); empty when
        absent. */

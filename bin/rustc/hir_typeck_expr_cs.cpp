@@ -6151,14 +6151,6 @@ const HIRType* Context::expandAssociatedTypes(const Span& sp, const HIRType* inp
     return resolve.expandAssociatedTypes(sp, std::move(input), &effects);
 }
 
-void Context::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) {
-    auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        applySolverResponse(sp, response);
-        return false;
-    });
-    resolve.expandAssociatedTypesParams(sp, params, &effects);
-}
-
 void Context::compactIvars(const Span& sp) {
     auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
         applySolverResponse(sp, response);

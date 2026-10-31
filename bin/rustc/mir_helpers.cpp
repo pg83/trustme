@@ -14,6 +14,23 @@
 
 using namespace stl;
 
+bool MIRGetFloatAlgebraicBinOp(const RcString& name, MIRBinOp& op) {
+    if (name == "fadd_algebraic") {
+        op = MIRBinOp::ADD;
+    } else if (name == "fsub_algebraic") {
+        op = MIRBinOp::SUB;
+    } else if (name == "fmul_algebraic") {
+        op = MIRBinOp::MUL;
+    } else if (name == "fdiv_algebraic") {
+        op = MIRBinOp::DIV;
+    } else if (name == "frem_algebraic") {
+        op = MIRBinOp::MOD;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 namespace {
     struct LValueCbVisitor: public MIRVisitor {
         const MIRLvalueCallback& cb;

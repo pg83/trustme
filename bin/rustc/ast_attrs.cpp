@@ -103,14 +103,6 @@ std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate&
     return result;
 }
 
-std::string ASTAttribute::parseParenString() const {
-    TTStream lex(span_, ParseState(), data());
-    lex.getTokenCheck(TOK_PAREN_OPEN);
-    auto result = lex.getTokenCheck(TOK_STRING).str();
-    lex.getTokenCheck(TOK_PAREN_CLOSE);
-    return result;
-}
-
 RcString ASTAttribute::parseParenKeyString(const char* key) const {
     TTStream lex(span_, ParseState(), data());
     RcString result;

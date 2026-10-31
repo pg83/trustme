@@ -7134,6 +7134,21 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
         if (auto* ep = block.terminator.opt_Call()) {
             auto& e = *ep;
+            MIRBinOp algebraicOp;
+            if (const auto* intrinsic = e.fcn.opt_Intrinsic(); intrinsic && MIRGetFloatAlgebraicBinOp(intrinsic->name, algebraicOp)) {
+                const auto* ty = resolve.expandAssociatedTypes(sp, intrinsic->params.types.at(0));
+                if (!monomorphiseTypeNeeded(ty)) {
+                    if (const auto* primitive = ty->opt_Primitive(); !primitive || !isFloat(*primitive)) {
+                        Span callSpan(sp, e.source.filename, e.source.line, e.source.column, e.source.line, e.source.column);
+                        ERROR(callSpan, E0000, StringView("Intrinsic `") << intrinsic->name << StringView("` requires a floating-point type, got ") << ty);
+                    }
+                    auto target = e.retBlock;
+                    block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_BinOp({std::move(e.args.at(0)), algebraicOp, std::move(e.args.at(1))})}));
+                    block.terminator = MIRTerminator::make_Goto(target);
+                    mutator.flushBlock();
+                    continue;
+                }
+            }
             if (auto* pathP = e.fcn.opt_Path()) {
                 auto& path = *pathP;
                 resolve.lowerAsyncCallable(path);

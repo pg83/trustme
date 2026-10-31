@@ -10799,13 +10799,14 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
         const auto& gpath = node.path.data.as_Generic();
         const auto& fcn = builder.crate().getFunctionByPath(node.span(), gpath.path);
         const auto& name = gpath.path.components().back();
+        MIRBinOp algebraicOp;
         if (gpath.path.crateName() == "#intrinsics") {
             if (name == "offset_of") {
                 builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({name, gpath.params.clone()}), mv$(values)}));
             } else {
                 ERROR(node.span(), E0000, StringView("Unknown builtin - ") << gpath.path);
             }
-        } else if (fcn.abi == "rust-intrinsic" || (fcn.markings.isRustcIntrinsic && (name == "vtable_size" || name == "vtable_align"))) {
+        } else if (fcn.abi == "rust-intrinsic" || (fcn.markings.isRustcIntrinsic && (name == "vtable_size" || name == "vtable_align" || MIRGetFloatAlgebraicBinOp(name, algebraicOp)))) {
             if (name == "ptr_metadata") {
                 auto& v = values.front();
                 builder.pushStmtAssign(node.span(), res.clone(), MIRRValue::make_DstMeta({std::move(v.as_LValue())}));
@@ -10871,26 +10872,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
                 return;
             }
 
-            if (name == "fadd_algebraic") {
-                builder.setResult(node.span(), MIRRValue::make_BinOp({std::move(values[0]), MIRBinOp::ADD, std::move(values[1])}));
-                return;
-            }
-            if (name == "fsub_algebraic") {
-                builder.setResult(node.span(), MIRRValue::make_BinOp({std::move(values[0]), MIRBinOp::SUB, std::move(values[1])}));
-                return;
-            }
-            if (name == "fmul_algebraic") {
-                builder.setResult(node.span(), MIRRValue::make_BinOp({std::move(values[0]), MIRBinOp::MUL, std::move(values[1])}));
-                return;
-            }
-            if (name == "fdiv_algebraic") {
-                builder.setResult(node.span(), MIRRValue::make_BinOp({std::move(values[0]), MIRBinOp::DIV, std::move(values[1])}));
-                return;
-            }
-            if (name == "frem_algebraic") {
-                builder.setResult(node.span(), MIRRValue::make_BinOp({std::move(values[0]), MIRBinOp::MOD, std::move(values[1])}));
-                return;
-            }
             if (name == "box_new") {
                 const auto& dataTy = gpath.params.types.at(0);
                 MIRRValue val;
@@ -10915,7 +10896,7 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
                 boxNew(node, dataTy, std::move(val));
                 return;
             }
-            builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({name, gpath.params.clone()}), mv$(values)}));
+            builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({name, gpath.params.clone()}), mv$(values), SourceLocation(node.span())}));
         } else if (fcn.abi == "platform-intrinsic") {
             builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({RcString(FMT(StringView("platform:") << gpath.path.components().back())), gpath.params.clone()}), mv$(values)}));
         }

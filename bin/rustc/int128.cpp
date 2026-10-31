@@ -52,21 +52,6 @@ float U128::toFloat() const {
     return rv;
 }
 
-void U128::toBeBytes(u8* dst, size_t maxLen) {
-    maxLen = maxLen > 16 ? 16 : maxLen;
-    for (size_t i = 0; i < maxLen; i++) {
-        dst[maxLen - 1 - i] = static_cast<u8>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
-    }
-}
-
-void U128::fromBeBytes(const u8* src, size_t maxLen) {
-    maxLen = maxLen > 16 ? 16 : maxLen;
-    *this = U128();
-    for (size_t i = 0; i < maxLen; i++) {
-        *this |= U128(src[maxLen - 1 - i]) << static_cast<unsigned>(i * 8);
-    }
-}
-
 U128 U128::operator+(U128 x) const {
     U128 rv(0);
     add128O(*this, x, &rv);
@@ -332,11 +317,6 @@ void S128::signExtend(size_t nBytes) {
 
 void S128::fromLeBytes(const u8* src, size_t maxLen) {
     inner.fromLeBytes(src, maxLen);
-    signExtend(maxLen);
-}
-
-void S128::fromBeBytes(const u8* src, size_t maxLen) {
-    inner.fromBeBytes(src, maxLen);
     signExtend(maxLen);
 }
 

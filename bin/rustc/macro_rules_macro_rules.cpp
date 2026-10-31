@@ -134,8 +134,6 @@ namespace {
 
         unsigned int loopLengthAt(unsigned int depth) const;
 
-        unsigned int topPos() const;
-
         const MacroExpansionEnt& getCurLayerEnt() const;
         const std::vector<MacroExpansionEnt>* getCurLayer() const;
     };
@@ -3902,13 +3900,6 @@ auto MacroExpandState::loopLengthAt(unsigned int depth) const -> unsigned int {
         return ~0u;
     }
     return offsets[offsets.length() - 1 - depth].maxIndex;
-}
-
-auto MacroExpandState::topPos() const -> unsigned int {
-    if (offsets.empty()) {
-        return 0;
-    }
-    return offsets[0].readPos;
 }
 
 MacroExpander::MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition, const Ident::ModPath* localInnerMacrosRoot)
