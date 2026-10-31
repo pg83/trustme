@@ -3098,7 +3098,9 @@ auto TreeVisitor::visit(HIRExprNodeGeneratorWrapper& node) -> void {
     os << StringView("/*gen body*/");
     os << StringView("|");
     os << StringView("| -> ") << node.returnType << StringView(" ");
-    this->visitNodePtr(node.code);
+    auto* body = node.coroutineBody();
+    ASSERT_BUG(node.span(), body, StringView("Coroutine lost its body"));
+    body->visit(*this);
 }
 
 auto TreeVisitor::visit(HIRExprNodeAsyncBlock& node) -> void {

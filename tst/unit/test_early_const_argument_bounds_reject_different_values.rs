@@ -1,4 +1,4 @@
-//@ compile-fail: Family for u8 with Input =
+//@ compile-fail: Value mismatch between
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
 trait Width { const N: usize; const OTHER: usize; }

@@ -1957,6 +1957,35 @@ const HIRType* StaticTraitResolve::getFieldType(const Span& sp, const HIRType* t
     BUG(sp, StringView("Reached end of `get_field_type` - ") << ty);
 }
 
+bool StaticTraitResolve::lowerAsyncCallable(HIRPath& path) const {
+    auto* call = path.data.opt_UfcsKnown();
+    if (!call) {
+        return false;
+    }
+    const auto* closure = call->type->opt_Path();
+    if (!(call->type->is_Function() || call->type->is_NamedFunction() || (closure && closure->isClosure() && !closure->isAsyncClosure()))) {
+        return false;
+    }
+    const char* trait = nullptr;
+    const char* method = nullptr;
+    if (call->trait.path == crate.getLangItemPathOpt("async_fn_once") && call->item == "async_call_once") {
+        trait = "fn_once";
+        method = "call_once";
+    } else if (call->trait.path == crate.getLangItemPathOpt("async_fn_mut") && call->item == "async_call_mut") {
+        trait = "fn_mut";
+        method = "call_mut";
+    } else if (call->trait.path == crate.getLangItemPathOpt("async_fn") && call->item == "async_call") {
+        trait = "fn";
+        method = "call";
+    }
+    if (!trait) {
+        return false;
+    }
+    call->trait.path = crate.getLangItemPathOpt(trait);
+    call->item = RcString::newInterned(method);
+    return true;
+}
+
 StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly /*=false*/, const HIRGenericParams** outImplParamsDef /*=nullptr*/, ResolvedTraitImplPath* outTraitImplPath /*=nullptr*/) const {
     TRACE_FUNCTION_F(p << StringView(", signature_only=") << signatureOnly);
     outParams = MonomorphState{crate.types};
@@ -2018,6 +2047,12 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& pe = p.data.as_UfcsKnown();
+            if (pe.trait.path == crate.getLangItemPathOpt("async_fn_once") || pe.trait.path == crate.getLangItemPathOpt("async_fn_mut") || pe.trait.path == crate.getLangItemPathOpt("async_fn")) {
+                auto ordinary = p.clone();
+                if (lowerAsyncCallable(ordinary)) {
+                    return getValue(sp, ordinary, outParams, signatureOnly, outImplParamsDef, outTraitImplPath);
+                }
+            }
             if (pe.trait.path == HIRSimplePath() && pe.item == "vtable#") {
                 DEBUG(StringView("Empty trait VTable, return NotYetKnown"));
                 return ValuePtr::make_NotYetKnown({});

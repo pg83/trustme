@@ -47,6 +47,7 @@ namespace {
             Vector<unsigned> definedStack;
             Vector<unsigned> lastUsedStack;
             HIRValueUsage usage;
+            bool borrowedDirectly = false;
         };
 
         std::map<unsigned, Var> usedVariables;
@@ -196,7 +197,7 @@ namespace {
 
         void markUsedVariable(const Span& sp, unsigned int slot, Vector<RcString> fields, HIRValueUsage usage);
 
-        void applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables);
+        void applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables, bool isAsyncClosureBody = false);
     };
 
     struct AnnotateOuterVisitor: public HIRVisitor {
@@ -472,6 +473,8 @@ namespace {
         Monomorph createParams(const Span& sp, const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParamsBuilder& constructorPathParams) const;
 
         void visit(HIRExprNodeClosure& node) override;
+
+        void makeAsyncOnce(HIRExprNodeClosure& node, HIRGenericParams params, HIRPathParams traitParams, const HIRType* closureType, const HIRType* argsType, const HIRType* outputType, HIRExprPtr onceBody, HIRPattern oncePattern);
 
         struct ExprVisitorGeneratorRewrite: public HIRExprVisitorDef {
             const Monomorph& monomorph;
@@ -2022,6 +2025,17 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeDeref& node) -> void {
     const auto* referenceType = viewed(node.value->resType)->opt_Borrow();
     auto* variable = cast<HIRExprNodeVariable>(node.value.get());
     const auto* innermostClosure = closureStack.empty() ? nullptr : closureStack.back().opt_Closure();
+    const auto* coroutine = closureStack.empty() ? nullptr : closureStack.back().opt_Coroutine();
+    if (coroutine && coroutine->node.is_Async() && coroutine->node.as_Async()->isClosureBody && !ignoreVariableCapture && variable && referenceType && referenceType->type == HIRBorrowType::Shared) {
+        Vector<RcString> fields;
+        fields.pushBack(RcString());
+        markUsedVariable(node.span(), variable->slot, mv$(fields), this->getUsage());
+        const bool savedIgnoreVariableCapture = ignoreVariableCapture;
+        ignoreVariableCapture = true;
+        this->visitNodePtr(node.value);
+        ignoreVariableCapture = savedIgnoreVariableCapture;
+        return;
+    }
     if (resolve_.hirCrate().edition >= ASTEdition::Rust2021 && innermostClosure && !ignoreVariableCapture && variable && referenceType
         && referenceType->type == HIRBorrowType::Unique && this->getUsage() != HIRValueUsage::Move) {
         Vector<RcString> fields;
@@ -2392,6 +2406,16 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
 
     node.avuCache.capturedVars = std::move(scope.capturedVars);
     node.avuCache.localVars = std::move(scope.localVars);
+    if (node.asyncOnceFuture) {
+        node.asyncCallClass = node.cls;
+        const auto& captures = node.asyncOnceFuture->closureSource->avuCache.capturedVars;
+        node.asyncLending = std::any_of(captures.begin(), captures.end(), [&](const auto& capture) {
+            if (capture.second == HIRValueUsage::Mutate) { return true; }
+            return capture.second == HIRValueUsage::Borrow && std::any_of(node.avuCache.capturedVars.begin(), node.avuCache.capturedVars.end(), [&](const auto& owner) {
+                return owner.rootSlot == capture.first && owner.usage == HIRValueUsage::Move;
+            });
+        });
+    }
 
     node.typeckCaptureTypes.clear();
     for (const auto& capture : node.avuCache.capturedVars) {
@@ -2461,7 +2485,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeAsyncBlock& node) -> void {
     auto scope = std::move(closureStack.back().as_Coroutine());
     closureStack.pop_back();
 
-    applyCoroutine(node.span(), node.isMove || node.isUse, false, node.avuCache, scope.usedVariables);
+    applyCoroutine(node.span(), node.isMove || node.isUse, false, node.avuCache, scope.usedVariables, node.isClosureBody);
 }
 
 auto AnnotateExprVisitorMark::addVarDefClosure(const Span& sp, ClosureScope& e, unsigned int slot) -> void {
@@ -2933,6 +2957,7 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
 auto AnnotateExprVisitorMark::markUsedVariableGenerator(const Span& sp, CoroutineScope& scope, unsigned int slot, Vector<RcString> fields, HIRValueUsage usage) -> void {
     auto& e = scope.usedVariables[slot];
     e.lastUsedStack = scope.yieldStack;
+    e.borrowedDirectly |= fields.empty();
     e.usage = std::max(e.usage, getRealUsage(sp, slot, fields, usage));
     DEBUG(StringView("Used #") << slot << StringView(" :: stack=[") << e.lastUsedStack << StringView("]"));
 }
@@ -2957,12 +2982,17 @@ auto AnnotateExprVisitorMark::markUsedVariable(const Span& sp, unsigned int slot
     }
 }
 
-auto AnnotateExprVisitorMark::applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables) -> void {
+auto AnnotateExprVisitorMark::applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables, bool isAsyncClosureBody) -> void {
     if (isMove) {
         auto* parentClosure = !closureStack.empty() ? closureStack.back().opt_Closure() : nullptr;
         for (auto& cap : usedVariables) {
-            if (cap.second.definedStack.empty() && (!isCoroutineClosureBody || !parentClosure || parentClosure->node.isMove || parentClosure->node.isUse || std::binary_search(parentClosure->localVars.begin(), parentClosure->localVars.end(), cap.first))) {
+            if (cap.second.definedStack.empty() && ((!isCoroutineClosureBody && !isAsyncClosureBody) || !parentClosure || (!isAsyncClosureBody && (parentClosure->node.isMove || parentClosure->node.isUse)) || std::binary_search(parentClosure->localVars.begin(), parentClosure->localVars.end(), cap.first))) {
                 cap.second.usage = HIRValueUsage::Move;
+            } else if (isAsyncClosureBody && !cap.second.borrowedDirectly && cap.second.usage == HIRValueUsage::Borrow) {
+                const auto* reference = viewed(variableTypes[cap.first])->opt_Borrow();
+                if (reference && reference->type == HIRBorrowType::Shared) {
+                    cap.second.usage = HIRValueUsage::Move;
+                }
             }
         }
     } else {
@@ -3502,6 +3532,10 @@ auto ClosureExprVisitorFixup::visit(HIRExprNodeCallValue& node) -> void {
                 node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
                 break;
         }
+        if (nodePp->asyncOnceFuture) {
+            node.traitUsed = nodePp->cls == HIRExprNodeClosure::Class::Once ? HIRExprNodeCallValue::TraitUsed::AsyncFnOnce
+                : nodePp->cls == HIRExprNodeClosure::Class::Mut ? HIRExprNodeCallValue::TraitUsed::AsyncFnMut : HIRExprNodeCallValue::TraitUsed::AsyncFn;
+        }
     }
 
     HIRExprVisitorDef::visit(node);
@@ -3601,6 +3635,12 @@ auto ClosureExprVisitorExtract::isActive(const void* node) const -> bool {
 
 template <typename Node>
 auto ClosureExprVisitorExtract::extractReferencedNode(const Span& sp, const Node* constNode) -> void {
+    if constexpr (std::is_same_v<Node, HIRExprNodeAsyncBlock>) {
+        if (constNode->closureOwner && constNode->objPathBase == HIRGenericPath()) {
+            extractReferencedNode(sp, constNode->closureOwner);
+            return;
+        }
+    }
     if (constNode->objPathBase != HIRGenericPath()) {
         ASSERT_BUG(sp, constNode->objPtr, StringView("Extracted anonymous type has no type item"));
         return;
@@ -3833,7 +3873,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     str.markings.isCopy = node.isCopy;
     HIRSimplePath closureStructPath;
     HIRTypeItem* closureStructPtr;
-    std::tie(closureStructPath, closureStructPtr) = out.newType->create(CLOSURE_PATH_PREFIX, newTypeSuffix, mv$(str));
+    std::tie(closureStructPath, closureStructPtr) = out.newType->create(node.asyncOnceFuture ? "closure#async#" : CLOSURE_PATH_PREFIX, newTypeSuffix, mv$(str));
     auto& closureStructRef = closureStructPtr->as_Struct();
 
     node.objPtr = &closureStructRef;
@@ -3865,6 +3905,18 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     }
 
     HIRPathParams traitParams(argsTy);
+    auto asyncParams = node.asyncOnceFuture ? params.clone() : HIRGenericParams();
+    auto asyncTraitParams = node.asyncOnceFuture ? traitParams.clone() : HIRPathParams();
+    const auto* asyncClosureType = closureType;
+    const auto* asyncArgsType = argsTy;
+    const auto* asyncRefFutureType = retType;
+    const auto* asyncOutputType = node.asyncOnceFuture ? monomorphCb.monomorphType(sp, node.asyncOnceFuture->closureSource->returnType) : nullptr;
+    HIRExprPtr asyncOnceBody;
+    HIRPattern asyncOncePattern;
+    if (node.asyncOnceFuture) {
+        asyncOnceBody.bindings.append(bodyCode.bindings.begin(), bodyCode.bindings.end());
+        asyncOncePattern = argsPat.clone();
+    }
     switch (node.cls) {
         case HIRExprNodeClosure::Class::Unknown:
             node.cls = HIRExprNodeClosure::Class::NoCapture;
@@ -3909,7 +3961,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 }
             };
 
-            if (!resolve_.hirCrate().getLangItemPathOpt("fn_once").components().empty()) {
+            if (!node.asyncOnceFuture && !resolve_.hirCrate().getLangItemPathOpt("fn_once").components().empty()) {
                 out.implsClosure.push_back(H2::makeDispatch(resolve_.hirCrate().types, pool, sp, HIRExprNodeClosure::Class::Once, params.clone(), traitParams.clone(), closureType, argsTy, retType));
             }
             if (!resolve_.hirCrate().getLangItemPathOpt("fn_mut").components().empty()) {
@@ -3931,7 +3983,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             const auto& langFn = resolve_.hirCrate().getLangItemPath(node.span(), "fn");
             const auto methodSelfTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Shared, closureType);
 
-            {
+            if (!node.asyncOnceFuture) {
                 auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), RcString("call"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Variable, sp, RcString("self"), 0)), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                 auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
                 dispatchCall->cache.argTypes.clear();
@@ -3960,7 +4012,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             const auto& langFnMut = resolve_.hirCrate().getLangItemPath(node.span(), "fn_mut");
             const auto methodSelfTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, closureType);
 
-            {
+            if (!node.asyncOnceFuture) {
                 auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFnMut, traitParams.clone()), RcString("call_mut"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Unique, NEWNODE(closureType, Variable, sp, RcString("self"), 0)), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                 auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
                 dispatchCall->cache.argTypes.clear();
@@ -3975,18 +4027,55 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         } break;
         case HIRExprNodeClosure::Class::Once:
             DEBUG(StringView("class=Once"));
-            out.implsClosure.push_back(std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(mv$(params), mv$(traitParams), mv$(closureType), std::make_pair(mv$(argsPat), mv$(argsTy)), mv$(retType), mv$(bodyCode))));
+            if (!node.asyncOnceFuture) {
+                out.implsClosure.push_back(std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(mv$(params), mv$(traitParams), mv$(closureType), std::make_pair(mv$(argsPat), mv$(argsTy)), mv$(retType), mv$(bodyCode))));
+            }
             break;
+    }
+
+    if (node.asyncOnceFuture) {
+        struct AsyncCalls final: HIRExprVisitorDef {
+            const HIRCrate& crate;
+            const HIRType* closureType;
+            AsyncCalls(const HIRCrate& crate, const HIRType* closureType)
+                : HIRExprVisitorDef(crate.types), crate(crate), closureType(closureType) {}
+            void visitPath(HIRVisitor::PathContext pc, HIRPath& path) override {
+                if (auto* call = path.data.opt_UfcsKnown(); call && call->type == closureType) {
+                    if (call->trait.path == crate.getLangItemPathOpt("fn") && call->item == "call") {
+                        call->trait.path = crate.getLangItemPathOpt("async_fn");
+                        call->item = RcString::newInterned("async_call");
+                    }
+                }
+                HIRExprVisitorDef::visitPath(pc, path);
+            }
+        } rewrite(resolve_.hirCrate(), asyncClosureType);
+        for (size_t i = implCounts.closure; i < out.implsClosure.size(); i++) {
+            auto& entry = out.implsClosure[i];
+            const bool shared = entry.first == HIRExprNodeClosure::Class::Shared;
+            auto method = entry.second.methods.extract(shared ? "call" : "call_mut");
+            method.key() = RcString::newInterned(shared ? "async_call" : "async_call_mut");
+            auto& function = method.mapped().data;
+            function.code->visit(rewrite);
+            function.code.state = exprPtr.state.clone(pool);
+            function.markings.trackCaller = node.trackCaller;
+            function.markings.inlineType = node.inlineType;
+            entry.second.methods.insert(mv$(method));
+            if (!shared) {
+                entry.second.types.insert(std::make_pair(RcString::newInterned("CallRefFuture"), HIRTraitImpl::ImplEnt<const HIRType*>{false, asyncRefFutureType}));
+            }
+            out.traitImpls.push_back(std::make_pair(shared ? "async_fn" : "async_fn_mut", mv$(entry.second)));
+        }
+        out.implsClosure.resize(implCounts.closure);
+        makeAsyncOnce(node, mv$(asyncParams), mv$(asyncTraitParams), asyncClosureType, asyncArgsType, asyncOutputType, mv$(asyncOnceBody), mv$(asyncOncePattern));
     }
 
     /* `#[inline]` and `#[track_caller]` were written on the closure expression;
        the closure's body now lives in these `call`/`call_mut`/`call_once`
        methods, so that is where the markings belong. Upstream reaches the same
        place through `codegen_fn_attrs` of the closure's own def. */
-    for (size_t i = implCounts.closure; i < out.implsClosure.size(); i++) {
-        auto& ti = out.implsClosure[i];
-        ti.second.isConst = node.isConst;
-        for (auto& m : ti.second.methods) {
+    const auto markMethods = [&](HIRTraitImpl& impl) {
+        impl.isConst = node.isConst;
+        for (auto& m : impl.methods) {
             m.second.data.isConst = node.isConst;
             m.second.data.markings.trackCaller = node.trackCaller;
             m.second.data.markings.inlineType = node.inlineType;
@@ -3998,6 +4087,15 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             if (!m.second.data.code.state) {
                 m.second.data.code.state = exprPtr.state.clone(pool);
             }
+        }
+    };
+    for (size_t i = implCounts.closure; i < out.implsClosure.size(); i++) {
+        markMethods(out.implsClosure[i].second);
+    }
+    for (size_t i = implCounts.traits; i < out.traitImpls.size(); i++) {
+        auto& entry = out.traitImpls[i];
+        if (entry.second.type == asyncClosureType && (entry.first == "async_fn" || entry.first == "async_fn_mut" || entry.first == "async_fn_once")) {
+            markMethods(entry.second);
         }
     }
     for (size_t i = implCounts.type; i < out.implsType.size(); i++) {
@@ -4020,6 +4118,123 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
 }
 
 #undef NEWNODE
+
+auto ClosureExprVisitorExtract::makeAsyncOnce(HIRExprNodeClosure& node, HIRGenericParams params, HIRPathParams traitParams, const HIRType* closureType, const HIRType* argsType, const HIRType* outputType, HIRExprPtr onceBody, HIRPattern oncePattern) -> void {
+    const auto& sp = node.span();
+    auto& types = resolve_.hirCrate().types;
+    auto* future = node.asyncOnceFuture;
+    future->returnType = outputType;
+    const auto& source = *future->closureSource;
+    for (const auto& entry : out.traitImpls) {
+        if (entry.first == "future_trait" && entry.second.type->is_Path() && entry.second.type->as_Path().binding.is_Struct() && entry.second.type->as_Path().binding.as_Struct() == source.objPtr) {
+            future->bodySource = &entry.second.methods.at("poll").data;
+            break;
+        }
+    }
+    ASSERT_BUG(sp, future->bodySource, StringView("Async closure lost its coroutine body"));
+    const auto cloneCapture = [&](this auto&& clone, const HIRExprNode& value) -> HIRExprNodeP {
+        HIRExprNodeP result;
+        if (const auto* var = cast<const HIRExprNodeVariable>(&value)) {
+            result.reset(pool->make<HIRExprNodeVariable>(value.span(), var->name, var->slot));
+            result->resType = var->slot ? value.resType : closureType;
+            return result;
+        }
+        if (const auto* deref = cast<const HIRExprNodeDeref>(&value)) {
+            if (const auto* var = cast<const HIRExprNodeVariable>(deref->value.get()); var && !var->slot) {
+                return clone(*var);
+            }
+            result.reset(pool->make<HIRExprNodeDeref>(value.span(), clone(*deref->value)));
+        } else if (const auto* borrow = cast<const HIRExprNodeBorrow>(&value)) {
+            result.reset(pool->make<HIRExprNodeBorrow>(value.span(), borrow->type, clone(*borrow->value)));
+        } else if (const auto* field = cast<const HIRExprNodeField>(&value)) {
+            result.reset(pool->make<HIRExprNodeField>(value.span(), clone(*field->value), field->field));
+        } else {
+            BUG(value.span(), StringView("Unexpected async closure capture expression ") << value.typeName());
+        }
+        result->resType = value.resType;
+        result->usage = value.usage;
+        return result;
+    };
+    for (size_t i = 0; i < source.captures.size(); i++) {
+        auto usage = source.avuCache.capturedVars[i].second;
+        const auto root = source.avuCache.capturedVars[i].first;
+        auto capture = cloneCapture(*source.captures[i]);
+        const auto owner = std::find_if(node.avuCache.capturedVars.begin(), node.avuCache.capturedVars.end(), [&](const auto& value) { return value.rootSlot == root; });
+        if (usage != HIRValueUsage::Move && owner != node.avuCache.capturedVars.end()) {
+            auto* borrow = cast<HIRExprNodeBorrow>(capture.get());
+            ASSERT_BUG(sp, borrow, StringView("Borrowing async capture lost its borrow"));
+            capture = mv$(borrow->value);
+            if (owner->usage == HIRValueUsage::Move) {
+                usage = HIRValueUsage::Move;
+            } else {
+                auto* deref = cast<HIRExprNodeDeref>(capture.get());
+                ASSERT_BUG(sp, deref, StringView("Borrowed closure capture lost its dereference"));
+                capture = mv$(deref->value);
+            }
+        }
+        future->avuCache.capturedVars.pushBack({static_cast<unsigned>(i), usage});
+        future->captures.push_back(mv$(capture));
+    }
+    onceBody.reset(future);
+    onceBody.state = exprPtr.state.clone(pool);
+    auto body = mv$(onceBody);
+    StaticTraitResolve localResolve(resolve_.board());
+    localResolve.setImplGenericsRaw(MetadataType::None, params);
+    out.mutableNodes.pushBack({future, future});
+    ClosureExprVisitorExtract extract(localResolve, nullptr, body.bindings, body, out, newTypeSuffix);
+    extract.visitRoot(*future);
+    MonomorphiserNop nop(types);
+    ClosureExprVisitorFixup fixup(resolve_.board(), &params, nop, &out, true);
+    fixup.visitRoot(body);
+    const auto* futureType = body->resType;
+    body.bindings.mut(0) = types.infer();
+    auto argument = std::make_pair(mv$(oncePattern), argsType);
+    auto impl = H::makeFnonce(params.clone(), traitParams.clone(), closureType, mv$(argument), futureType, mv$(body));
+    auto methodEntry = impl.methods.extract("call_once");
+    methodEntry.key() = RcString::newInterned("async_call_once");
+    methodEntry.mapped().data.markings.trackCaller = node.trackCaller;
+    methodEntry.mapped().data.markings.inlineType = node.inlineType;
+    impl.methods.insert(mv$(methodEntry));
+    impl.types.at("Output").data = outputType;
+    impl.types.insert(std::make_pair(RcString::newInterned("CallOnceFuture"), HIRTraitImpl::ImplEnt<const HIRType*>{false, futureType}));
+    out.traitImpls.push_back(std::make_pair("async_fn_once", mv$(impl)));
+    const auto dispatch = [&](HIRExprNodeClosure::Class kind) {
+        const auto* selfType = kind == HIRExprNodeClosure::Class::Once ? closureType : types.borrow(kind == HIRExprNodeClosure::Class::Shared ? HIRBorrowType::Shared : HIRBorrowType::Unique, closureType);
+        HIRExprNodeP value(pool->make<HIRExprNodeVariable>(sp, "self", 0));
+        value->resType = selfType;
+        if (kind != HIRExprNodeClosure::Class::Once) {
+            value.reset(pool->make<HIRExprNodeDeref>(sp, mv$(value)));
+            value->resType = closureType;
+        }
+        auto* args = pool->make<HIRExprNodeVariable>(sp, "args", 1);
+        args->resType = argsType;
+        auto* call = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(resolve_.hirCrate().getLangItemPath(sp, "async_fn_once"), traitParams.clone()), RcString::newInterned("async_call_once"), {}), makeVec2(mv$(value), HIRExprNodeP(args)));
+        call->resType = futureType;
+        call->cache.argTypes.pushBack(closureType);
+        call->cache.argTypes.pushBack(argsType);
+        call->cache.argTypes.pushBack(futureType);
+        HIRExprPtr code{HIRExprNodeP(call)};
+        code.state = exprPtr.state.clone(pool);
+        auto arguments = std::make_pair(HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString("args"), 1}, {}}, argsType);
+        HIRTraitImpl forwarding;
+        if (kind == HIRExprNodeClosure::Class::Once) {
+            forwarding = H::makeFnonce(params.clone(), traitParams.clone(), closureType, mv$(arguments), futureType, mv$(code));
+        } else if (kind == HIRExprNodeClosure::Class::Mut) {
+            forwarding = H::makeFnmut(types, params.clone(), traitParams.clone(), closureType, mv$(arguments), futureType, mv$(code));
+        } else {
+            forwarding = H::makeFn(types, params.clone(), traitParams.clone(), closureType, mv$(arguments), futureType, mv$(code));
+        }
+        out.implsClosure.push_back(std::make_pair(kind, mv$(forwarding)));
+    };
+    dispatch(HIRExprNodeClosure::Class::Once);
+    if (!node.asyncLending && node.cls != HIRExprNodeClosure::Class::Once) {
+        ASSERT_BUG(sp, node.isCopy, StringView("Non-lending reusable async closure is not Copy"));
+        dispatch(HIRExprNodeClosure::Class::Mut);
+        if (node.cls != HIRExprNodeClosure::Class::Mut) {
+            dispatch(HIRExprNodeClosure::Class::Shared);
+        }
+    }
+}
 
 auto ClosureExprVisitorExtract::setStateType(const Span& sp, CrVars& vars, const HIRType* stateType) const -> void {
     const auto& langMaybeUninit = resolve_.hirCrate().getLangItemPath(sp, "maybe_uninit");
@@ -4323,7 +4538,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
 }
 
 auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
-    if (!node.code) {
+    if (!node.code && (!node.bodySource || node.objPtr)) {
         DEBUG(StringView("Already expanded (via consteval?)"));
         return;
     }
@@ -4344,8 +4559,10 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     for (const auto slot : node.avuCache.localVars) {
         extractReferencedNodeTypes(sp, variableTypes[slot]);
     }
-    for (const auto& capture : node.avuCache.capturedVars) {
-        extractReferencedNodeTypes(sp, variableTypes[capture.first]);
+    if (!node.bodySource) {
+        for (const auto& capture : node.avuCache.capturedVars) {
+            extractReferencedNodeTypes(sp, variableTypes[capture.first]);
+        }
     }
     const auto implCounts = out.saveCounts();
 
@@ -4356,17 +4573,31 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
     auto itemTy = node.isAsyncGen ? monomorphCb.monomorphType(sp, node.yieldTy) : nullptr;
 
-    auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb, node.isUse);
-    fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
-
-    {
+    CrVars crVars;
+    crVars.nArgs = 2;
+    auto* sourceBody = node.bodySource ? cast<HIRExprNodeGeneratorWrapper>(node.bodySource->code.get()) : nullptr;
+    unsigned suspensionCount;
+    if (sourceBody) {
+        for (size_t i = 2; i < node.bodySource->code.bindings.length(); i++) {
+            crVars.newLocals.pushBack(node.bodySource->code.bindings[i]);
+        }
+        for (const auto& capture : node.avuCache.capturedVars) {
+            crVars.captureUsages.pushBack(capture.second);
+        }
+        for (const auto& capture : node.captures) {
+            crVars.structEnts.push_back(HIRVisEnt<const HIRType*>{HIRPublicity::newNone(), capture->resType});
+        }
+        crVars.captureNodes = mv$(node.captures);
+        suspensionCount = countCoroutineSuspensions(sourceBody->code, false, true);
+    } else {
+        crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb, node.isUse);
         ExprVisitorGeneratorRewrite visitorRewrite(monomorphCb, crVars.variableRewrites);
         visitorRewrite.visitNodePtr(node.code);
+        suspensionCount = countCoroutineSuspensions(node.code, node.isAsyncGen, true);
     }
-
+    fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
     monomorphCb.addBounds(sp, resolve_);
 
-    auto suspensionCount = countCoroutineSuspensions(node.code, node.isAsyncGen, true);
     auto stateIdxType = out.newType->create("async_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
     auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
@@ -4408,7 +4639,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     crVars.setArguments(sp, mv$(arguments));
 
     auto bodyNode = std::move(node.code);
-    {
+    if (bodyNode) {
         DEBUG(StringView("-- Fixing types in body code"));
         ClosureExprVisitorFixup fixup{resolve_.board(), &params, monomorphCb, &out, true};
         fixup.visitNodePtr(bodyNode);
@@ -4448,6 +4679,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     }
     fcnResume.returnType = resolve_.hirCrate().types.path(HIRGenericPath(langPoll, std::move(retParams)), &resolve_.hirCrate().getEnumByPath(sp, langPoll));
     auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, node.isAsyncGen ? itemTy : resolve_.hirCrate().types.unit(), std::move(bodyNode), true);
+    v->bodySource = node.bodySource;
     v->isAsyncGen = node.isAsyncGen;
     v->captureUsages = std::move(crVars.captureUsages);
     v->resType = fcnResume.returnType;
@@ -6601,16 +6833,16 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
         case HIRExprNodeCallValue::TraitUsed::AsyncFn:
             selfArgType = crate.types.borrow(HIRBorrowType::Shared, tyVal);
             node.value = NEWNODE(selfArgType, Borrow, sp, HIRBorrowType::Shared, mv$(node.value));
-            methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn"), mv$(traitArgs)), RcString::newInterned("call"), HIRPathParams());
+            methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "async_fn"), mv$(traitArgs)), RcString::newInterned("async_call"), HIRPathParams());
             break;
         case HIRExprNodeCallValue::TraitUsed::AsyncFnMut:
             selfArgType = crate.types.borrow(HIRBorrowType::Unique, tyVal);
             node.value = NEWNODE(selfArgType, Borrow, sp, HIRBorrowType::Unique, mv$(node.value));
-            methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_mut"), mv$(traitArgs)), RcString::newInterned("call_mut"), HIRPathParams());
+            methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "async_fn_mut"), mv$(traitArgs)), RcString::newInterned("async_call_mut"), HIRPathParams());
             break;
         case HIRExprNodeCallValue::TraitUsed::AsyncFnOnce:
             selfArgType = tyVal;
-            methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_once"), mv$(traitArgs)), RcString::newInterned("call_once"));
+            methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "async_fn_once"), mv$(traitArgs)), RcString::newInterned("async_call_once"));
             break;
 
         default:

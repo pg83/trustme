@@ -809,7 +809,7 @@ namespace {
             code = ParseExpr0(lex);
         }
         if (isAsync) {
-            code = NEWNODE(ASTExprNodeAsyncBlock, std::move(code), /*isMove=*/true, isUse);
+            code = NEWNODE(ASTExprNodeAsyncBlock, std::move(code), /*isMove=*/true, isUse, true);
         }
 
         if (isAsync) {

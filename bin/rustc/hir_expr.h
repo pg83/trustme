@@ -647,12 +647,16 @@ struct HIRExprNodeArraySized: public HIRExprNode {
     void visit(HIRExprVisitor& nv) override;
 };
 
+struct HIRExprNodeAsyncBlock;
+
 struct HIRExprNodeClosure: public HIRExprNode {
     typedef std::vector<std::pair<HIRPattern, const HIRType*>> argsT;
 
     argsT args;
     const HIRType* returnType;
     HIRExprNodeP code;
+    HIRExprNodeAsyncBlock* asyncOnceFuture = nullptr;
+    bool asyncLending = false;
     bool isConst = false;
     bool isMove = false;
     bool isUse = false;
@@ -668,6 +672,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
         Mut,
         Once,
     } cls = Class::Unknown;
+    Class asyncCallClass = Class::Unknown;
     bool isCopy = true;
 
     struct AvuCache {
@@ -736,6 +741,7 @@ struct HIRExprNodeGenerator: public HIRExprNode {
 };
 
 struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
+    const HIRFunction* bodySource = nullptr;
     bool isFuture;
 
     bool isAsyncGen = false;
@@ -755,6 +761,8 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
 
     HIRExprNodeGeneratorWrapper(Span sp, const HIRType* rv, const HIRType* yieldTy, HIRExprNodeP code, bool isFuture);
 
+    HIRExprNode* coroutineBody() const;
+
     static constexpr unsigned int kind = 38;
     unsigned int nodeKind() const override;
     void visit(HIRExprVisitor& nv) override;
@@ -765,6 +773,10 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     HIRExprNodeP code;
     bool isMove;
     bool isUse;
+    bool isClosureBody = false;
+    HIRExprNodeClosure* closureOwner = nullptr;
+    const HIRExprNodeAsyncBlock* closureSource = nullptr;
+    const HIRFunction* bodySource = nullptr;
 
     bool isAsyncGen = false;
     const HIRType* yieldTy = nullptr;

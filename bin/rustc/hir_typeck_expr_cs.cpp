@@ -2645,7 +2645,8 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     const auto* closure = node ? node->opt_Closure() : nullptr;
                     return closure && !closure->typeckCapturesKnown;
                 });
-                if (awaitsClosureCaptures && context.crate.getTraitByPath(sp, v.trait).isMarker) {
+                if (awaitsClosureCaptures && (context.crate.getTraitByPath(sp, v.trait).isMarker || v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut()
+                    || v.trait == context.resolve.langAsyncFn() || v.trait == context.resolve.langAsyncFnMut() || v.trait == context.resolve.langAsyncFnOnce())) {
                     return AssociatedCheckResult::Stalled;
                 }
                 if (!response.obligations.empty()) {
@@ -3707,7 +3708,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
     }
 
     void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRType* realType, const HIRTraitPath& traitPath) {
-        if (traitPath.typeBounds.size() == 0) {
+        if (std::none_of(traitPath.typeBounds.begin(), traitPath.typeBounds.end(), [&](const auto& associated) { return associated.second.sourceTrait == traitPath.path; })) {
             context.addTraitBound(sp, realType, traitPath.path.path, traitPath.path.params.clone());
         }
 
@@ -6543,7 +6544,7 @@ namespace {
         return context.resolve.typeIsCopy(sp, type) == SolverCertainty::Proven;
     }
 
-    void analyseClosureCaptures(Context& context, const HIRExprState& state, HIRExprNode& root) {
+    void analyseClosureCaptures(Context& context, const HIRExprState& state, HIRExprNode& root, bool directAsyncOnly = false) {
         Vector<const HIRExprNodeClosure*> awaited;
         const auto collect = [&](const HIRType* type) {
             visitTyWith(context.getType(type), [&](const HIRType* inner) {
@@ -6555,10 +6556,22 @@ namespace {
                 return false;
             });
         };
-        for (const auto& rule : context.linkAssoc) {
-            collect(rule.implTy);
-            for (const auto* type : rule.params.types) {
-                collect(type);
+        if (!directAsyncOnly) {
+            for (const auto& rule : context.linkAssoc) {
+                collect(rule.implTy);
+                for (const auto* type : rule.params.types) {
+                    collect(type);
+                }
+            }
+        }
+        for (const auto* node : context.toVisit) {
+            if (const auto* call = cast<const HIRExprNodeCallValue>(node)) {
+                const auto* type = context.getType(call->value->resType);
+                const auto* data = type->opt_NodeType();
+                const auto* closure = data ? data->opt_Closure() : nullptr;
+                if (closure && closure->asyncOnceFuture && !closure->typeckCapturesKnown) {
+                    collect(type);
+                }
             }
         }
         if (awaited.empty()) {
@@ -6566,22 +6579,38 @@ namespace {
         }
         struct Outermost: public HIRExprVisitorDef {
             const Vector<const HIRExprNodeClosure*>& awaited;
+            Context& context;
+            bool directAsyncOnly;
             Vector<HIRExprNode*> found;
 
-            Outermost(HIRTypeInterner& types, const Vector<const HIRExprNodeClosure*>& awaited)
-                : HIRExprVisitorDef(types)
+            Outermost(Context& context, const Vector<const HIRExprNodeClosure*>& awaited, bool directAsyncOnly)
+                : HIRExprVisitorDef(context.crate.types)
                 , awaited(awaited)
+                , context(context)
+                , directAsyncOnly(directAsyncOnly)
             {
             }
 
             void visit(HIRExprNodeClosure& node) override {
                 if (std::find(awaited.begin(), awaited.end(), &node) != awaited.end()) {
+                    if (directAsyncOnly) {
+                        struct Ready final: HIRExprVisitorDef {
+                            Context& context;
+                            bool ready = true;
+                            explicit Ready(Context& context): HIRExprVisitorDef(context.crate.types), context(context) {}
+                            void visit(HIRExprNodeVariable& node) override {
+                                ready &= node.slot < context.bindings.size() && !context.ivars.expandIvars(context.bindings[node.slot].ty)->hasTypeInfer();
+                            }
+                        } check(context);
+                        node.code->visit(check);
+                        if (!check.ready) { return; }
+                    }
                     found.pushBack(&node);
                     return;
                 }
                 HIRExprVisitorDef::visit(node);
             }
-        } outermost(context.crate.types, awaited);
+        } outermost(context, awaited, directAsyncOnly);
         root.visit(outermost);
         if (outermost.found.empty()) {
             return;
@@ -6995,6 +7024,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             finaliseSweep(true, true, true);
         }
 
+        if (!context.ivars.peekChanged() && expr.state) {
+            analyseClosureCaptures(context, *expr.state, *rootPtr, true);
+        }
         if (!context.ivars.peekChanged()) {
             DEBUG(StringView("--- Node revisits (fallback)"));
             for (size_t i = 0; i < context.toVisit.length();) {
@@ -8568,6 +8600,21 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
         DEBUG(StringView("- ty = ") << ty);
         if (ty->is_NodeType() && ty->as_NodeType().is_Closure()) {
             const auto* nodeP = ty->as_NodeType().as_Closure();
+            if (nodeP->asyncOnceFuture) {
+                if (!nodeP->typeckCapturesKnown) {
+                    if (nodeP->args.size() == node.argIvars.length()) {
+                        for (size_t i = 0; i < nodeP->args.size(); i++) {
+                            context.equateTypes(node.span(), nodeP->args[i].second, node.argIvars[i]);
+                        }
+                    }
+                    return;
+                }
+                const auto result = callAsyncCallable(node, ty, traitPp);
+                if (result != AsyncCallResult::Proven) {
+                    return;
+                }
+                break;
+            }
             for (const auto& arg : nodeP->args) {
                 node.argTypes.pushBack(arg.second);
             }

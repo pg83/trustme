@@ -889,9 +889,11 @@ namespace {
                     }
                 }
 
-                genNode->code->visit(ev);
+                auto* body = genNode->coroutineBody();
+                ASSERT_BUG(sp, body, StringView("Coroutine lost its body"));
+                body->visit(ev);
                 if (builder.blockActive() && builder.hasResult()) {
-                    ev.coroutineReturn(sp, genNode->code->resType);
+                    ev.coroutineReturn(sp, body->resType);
                 }
                 builder.finalCleanup();
 
@@ -11416,8 +11418,7 @@ auto ExprVisitorConv::visit(HIRExprNodeArraySized& node) -> void {
     }
     auto value = builder.getResultInParam(node.span(), node.val->resType);
 
-    builder.setResult(node.span(), MIRRValue::make_SizedArray({mv$(value), std::move(node.size)}));
-    node.size = HIRArraySize();
+    builder.setResult(node.span(), MIRRValue::make_SizedArray({mv$(value), node.size.clone()}));
 }
 
 auto ExprVisitorConv::visit(HIRExprNodeClosure& node) -> void {

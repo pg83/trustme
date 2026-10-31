@@ -1155,6 +1155,15 @@ HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, const HIRType*
 {
 }
 
+HIRExprNode* HIRExprNodeGeneratorWrapper::coroutineBody() const {
+    if (bodySource) {
+        auto* source = cast<HIRExprNodeGeneratorWrapper>(bodySource->code.get());
+        BUG_ASSERT(source);
+        return source->code.get();
+    }
+    return code.get();
+}
+
 HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, const HIRType* returnType, HIRExprNodeP code, bool isMove, bool isUse)
     : HIRExprNode(mv$(sp))
     , returnType(returnType)

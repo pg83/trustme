@@ -3675,7 +3675,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
 bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, AssembledImplCallback& callback) const {
     type = this->ivars.getType(type);
     const bool isAsyncCallableTrait = trait == langAsyncFn() || trait == langAsyncFnMut() || trait == langAsyncFnOnce();
-    auto findAsyncCallable = [&](const Vector<const HIRType*>& inputTypes, const HIRType* futureType, bool supportsShared, bool supportsMutable) {
+    auto findAsyncCallable = [&](const Vector<const HIRType*>& inputTypes, const HIRType* futureType, bool supportsShared, bool supportsMutable, const HIRType* onceFutureType = nullptr, bool capturesKnown = true) {
         if (!isAsyncCallableTrait || (trait == langAsyncFn() && !supportsShared) || (trait == langAsyncFnMut() && !supportsMutable)) {
             return false;
         }
@@ -3713,9 +3713,9 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
         HIRGenericPath oncePath(langAsyncFnOnce(), actualParams);
         HIRTraitPath::assocListT assoc;
         assoc.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
-        assoc.insert(std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
+        assoc.insert(std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, onceFutureType ? onceFutureType : futureType}));
         assoc.insert(std::make_pair("CallRefFuture", HIRTraitPath::AtyEqual{HIRGenericPath(langAsyncFnMut(), actualParams.clone()), {}, futureType}));
-        return callback.visit(SolverImpl(type, mv$(actualParams), mv$(assoc)), futureCertainty);
+        return callback.visit(SolverImpl(type, mv$(actualParams), mv$(assoc)), capturesKnown ? futureCertainty : SolverCertainty::Ambiguous);
     };
 
     switch ((*type).tag()) {
@@ -3729,10 +3729,11 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     if (isAsyncCallableTrait) {
                         bool supportsShared = true;
                         bool supportsMutable = true;
-                        if (nodeP->cls == HIRExprNodeClosure::Class::Once) {
+                        const auto callableClass = nodeP->asyncOnceFuture && nodeP->typeckCapturesKnown ? nodeP->asyncCallClass : nodeP->cls;
+                        if (callableClass == HIRExprNodeClosure::Class::Once) {
                             supportsShared = false;
                             supportsMutable = false;
-                        } else if (nodeP->cls == HIRExprNodeClosure::Class::Mut) {
+                        } else if (callableClass == HIRExprNodeClosure::Class::Mut) {
                             supportsShared = false;
                         }
                         Vector<const HIRType*> inputs;
@@ -3740,10 +3741,13 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         for (const auto& arg : nodeP->args) {
                             inputs.pushBack(arg.second);
                         }
-                        return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
+                        return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable, nodeP->asyncOnceFuture ? nodeP->asyncOnceFuture->resType : nullptr, !nodeP->asyncOnceFuture || nodeP->typeckCapturesKnown);
                     }
                     DEBUG(StringView("Closure, ") << trait << StringView(" ?= Fn*"));
                     if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
+                        if (nodeP->asyncOnceFuture && nodeP->typeckCapturesKnown && nodeP->asyncLending && trait != langFnOnce()) {
+                            return false;
+                        }
                         const HIRType* wanted = params.types.size() == 1 && params.types[0]->is_Tuple() ? params.types[0] : nullptr;
                         Vector<const HIRType*> args;
                         if (wanted && wanted->as_Tuple().length() != nodeP->args.size()) {
@@ -3755,8 +3759,9 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         }
                         const HIRPathParams pp(crate.types.tuple(mv$(args)));
                         HIRTraitPath::assocListT types;
-                        types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, nodeP->returnType}));
-                        return callback.visit(SolverImpl(type, mv$(pp), mv$(types)));
+                        types.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, nodeP->asyncOnceFuture ? nodeP->asyncOnceFuture->resType : nodeP->returnType}));
+                        const auto certainty = nodeP->asyncOnceFuture && trait != langFnOnce() && !nodeP->typeckCapturesKnown ? SolverCertainty::Ambiguous : SolverCertainty::Proven;
+                        return callback.visit(SolverImpl(type, mv$(pp), mv$(types)), certainty);
                     }
                     break;
                 }
@@ -3784,7 +3789,8 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                     } else if (trait == langFuture()) {
                         const RcString rcstringOutput = RcString::newInterned("Output");
                         HIRTraitPath::assocListT assoc;
-                        assoc.insert(std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
+                        const auto* output = nodeP->closureSource ? nodeP->closureSource->returnType : nodeP->returnType;
+                        assoc.insert(std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, output}));
                         return callback.visit(SolverImpl(type, {}, mv$(assoc)));
                     }
                     break;
@@ -3793,6 +3799,9 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
             break;
         }
         case HIRType::TAG_Path: {
+            if (isAsyncCallableTrait && type->as_Path().isAsyncClosure()) {
+                break;
+            }
             if (isAsyncCallableTrait && type->as_Path().isClosure() && params.types.size() == 1 && params.types.front()->is_Tuple()) {
                 const auto& fnTrait = trait == langAsyncFn() ? langFn() : (trait == langAsyncFnMut() ? langFnMut() : langFnOnce());
                 const HIRType* futureType;
@@ -5939,7 +5948,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
                     associated.insert(std::make_pair("Output", HIRTraitPath::AtyEqual{future.clone(), {}, expectedOutput}));
                     result.effects.obligations.push_back(SolverObligation{closure->returnType, HIRTraitPath(std::move(future), std::move(associated), {})});
                 } else {
-                    result.effects.equalities.push_back(SolverTypeEquality{closure->returnType, expectedOutput});
+                    result.effects.equalities.push_back(SolverTypeEquality{closure->asyncOnceFuture ? closure->asyncOnceFuture->resType : closure->returnType, expectedOutput});
                 }
             }
         }
@@ -5953,7 +5962,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
             }
         }
         if (expectedOutput) {
-            const auto* closureOutput = closure->returnType;
+            const auto* closureOutput = closure->asyncOnceFuture ? closure->asyncOnceFuture->resType : closure->returnType;
             size_t kept = 0;
             for (size_t i = 0; i < result.effects.equalities.size(); i++) {
                 auto& equality = result.effects.equalities[i];
@@ -12070,6 +12079,13 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
 }
 
 auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, bool includeMagicCandidates, bool includeTraitImplCandidates) -> void {
+    const auto* node = type->opt_NodeType();
+    const auto* closure = node ? node->opt_Closure() : nullptr;
+    if (closure && closure->asyncOnceFuture && !closure->typeckCapturesKnown
+        && (trait == resolve_.langFn() || trait == resolve_.langFnMut() || trait == resolve_.langFnOnce()
+            || trait == resolve_.langAsyncFn() || trait == resolve_.langAsyncFnMut() || trait == resolve_.langAsyncFnOnce())) {
+        captureWaits_++;
+    }
     const auto* selfPath = resolve_.resolveType(type)->opt_Path();
     const bool selfIsRigidProjection = selfPath && selfPath->binding.is_Opaque();
     auto collect = [&](CandidateSource source) {

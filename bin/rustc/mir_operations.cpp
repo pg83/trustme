@@ -7136,6 +7136,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             auto& e = *ep;
             if (auto* pathP = e.fcn.opt_Path()) {
                 auto& path = *pathP;
+                resolve.lowerAsyncCallable(path);
                 if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& te = pe.type->as_TraitObject();

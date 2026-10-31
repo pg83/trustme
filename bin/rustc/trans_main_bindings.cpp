@@ -1266,6 +1266,7 @@ static const HIRFunction* traitOwnBody(const Span& sp, const HIRCrate& crate, co
 static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRPath& path, TransParams& params) {
     TRACE_FUNCTION_F(path);
     StaticTraitResolve resolve{wb, OpaqueReveal::All};
+    resolve.lowerAsyncCallable(path);
 
     if (path.data.is_UfcsInherent() && path.data.as_UfcsInherent().item == "#type_id") {
         return EntPtr::make_AutoGenerate({});

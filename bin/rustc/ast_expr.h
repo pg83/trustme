@@ -117,8 +117,9 @@ struct ASTExprNodeAsyncBlock: public ASTExprNode {
     ASTExprNode* inner = nullptr;
     bool isMove;
     bool isUse;
+    bool isClosureBody;
 
-    ASTExprNodeAsyncBlock(ASTExprNode* inner, bool isMove, bool isUse);
+    ASTExprNodeAsyncBlock(ASTExprNode* inner, bool isMove, bool isUse, bool isClosureBody = false);
 
     static constexpr unsigned int kind = 2;
     unsigned int nodeKind() const override;

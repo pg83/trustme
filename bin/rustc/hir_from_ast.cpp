@@ -4478,7 +4478,9 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeBlock& v) -> void {
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeAsyncBlock& v) -> void {
-    rv.reset(ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), ctx.crate->types.infer(), lowerIsolated(v.inner), v.isMove, v.isUse));
+    auto* node = ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), ctx.crate->types.infer(), lowerIsolated(v.inner), v.isMove, v.isUse);
+    node->isClosureBody = v.isClosureBody;
+    rv.reset(node);
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeGeneratorBlock& v) -> void {
@@ -5184,6 +5186,13 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeClosure& v) -> void {
         closure->isConst = v.isConst;
         closure->trackCaller = v.trackCaller;
         closure->inlineType = LowerHIRInlineMarking(v.inlineType);
+        if (const auto* body = cast<const HIRExprNodeAsyncBlock>(closure->code.get()); body && body->isClosureBody) {
+            auto* future = ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), body->returnType, HIRExprNodeP(), true, false);
+            future->closureOwner = closure;
+            future->closureSource = body;
+            future->resType = ctx.crate->types.asyncBlock(future);
+            closure->asyncOnceFuture = future;
+        }
         rv.reset(closure);
     }
 }

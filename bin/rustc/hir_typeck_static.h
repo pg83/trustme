@@ -249,4 +249,5 @@ public:
     };
 
     ValuePtr getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly = false, const HIRGenericParams** outImplParamsDef = nullptr, ResolvedTraitImplPath* outTraitImplPath = nullptr) const;
+    bool lowerAsyncCallable(HIRPath& path) const;
 };

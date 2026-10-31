@@ -79,6 +79,10 @@ struct HIRTypeDataPath {
         return path.data.is_Generic() && path.data.as_Generic().path.components().back().size() > 8 && path.data.as_Generic().path.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
     }
 
+    bool isAsyncClosure() const {
+        return isClosure() && path.data.as_Generic().path.components().back().compare(0, strlen("closure#async#"), "closure#async#") == 0;
+    }
+
     bool isGenerator() const {
         return path.data.is_Generic() && path.data.as_Generic().path.components().back().size() > 8 && path.data.as_Generic().path.components().back().compare(0, strlen(GENERATOR_PATH_PREFIX), GENERATOR_PATH_PREFIX) == 0;
     }
