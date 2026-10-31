@@ -3620,11 +3620,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     revealedTopTy = resolve.revealOpaqueTypes(sp, revealedTopTy);
     topTy = revealedTopTy;
 
-    if (topTy->is_Diverge()) {
-        this->pushRule(PatternRule::make_Any({}));
-        return;
-    }
-
     const bool trackWildcard = pat.data.is_Any();
     WildcardType wildcardType{topTy, wildcardTypes};
     if (trackWildcard) {
@@ -3886,7 +3881,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             BUG(sp, StringView("Ivar for in match type"));
         }
         case HIRType::TAG_Diverge: {
-            // TODO: Marking as impossible (and not emitting) leads to exhuaustiveness failure.
+            this->pushRule(PatternRule::make_Any({}));
             break;
         }
         case HIRType::TAG_Primitive: {

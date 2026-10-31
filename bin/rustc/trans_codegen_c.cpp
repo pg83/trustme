@@ -35,6 +35,13 @@
 using namespace stl;
 
 namespace {
+    const HIRType* physicalEnumTagType(const HIRType* type) {
+        while (const auto* pattern = type->opt_Pattern()) {
+            type = pattern->inner;
+        }
+        return type;
+    }
+
     StringView clangTargetFeature(StringView feature) {
         if (feature == StringView("pclmulqdq")) {
             return StringView("pclmul");
@@ -1976,16 +1983,17 @@ auto CodeGeneratorC::emitEnumPath(const TypeRepr* repr, const TypeRepr::FieldPat
 
         ty = &repr->fields[fld].ty;
     }
-    if (const auto* te = (*ty)->opt_Borrow()) {
+    const auto* tagTy = physicalEnumTagType(*ty);
+    if (const auto* te = tagTy->opt_Borrow()) {
         if (isDst(te->inner)) {
             of << StringView(".PTR");
         }
-    } else if (const auto* te = (*ty)->opt_Pointer()) {
+    } else if (const auto* te = tagTy->opt_Pointer()) {
         if (isDst(te->inner)) {
             of << StringView(".PTR");
         }
     }
-    return *ty;
+    return tagTy;
 }
 
 auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) -> void {
@@ -5250,7 +5258,7 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
         }
         case TypeReprVariantMode::TAG_Linear: {
             auto& e = repr->variants.as_Linear();
-            const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, e.field.index, e.field.subFields);
+            const auto* tagTy = physicalEnumTagType(TargetGetInnerType(sp, resolve_, *repr, e.field.index, e.field.subFields));
             const bool pointerTag = tagTy->is_Pointer() || tagTy->is_Borrow() || tagTy->is_Function();
             if (!pointerTag) {
                 switch (tagTy->as_Primitive()) {
@@ -5344,7 +5352,8 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
         }
         case TypeReprVariantMode::TAG_Values: {
             auto& e = repr->variants.as_Values();
-            const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, e.field.index, e.field.subFields);
+            const auto* tagTy = physicalEnumTagType(TargetGetInnerType(sp, resolve_, *repr, e.field.index, e.field.subFields));
+            MIR_ASSERT(localMirRes, tagTy->is_Primitive() && isInteger(tagTy->as_Primitive()), StringView("Non-integer enum tag type: ") << tagTy);
             bool is_signed = false;
             switch (tagTy->as_Primitive()) {
                 case HIRCoreType::I8:
@@ -5355,24 +5364,8 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
                 case HIRCoreType::I128:
                     is_signed = true;
                     break;
-                case HIRCoreType::Bool:
-                case HIRCoreType::U8:
-                case HIRCoreType::U16:
-                case HIRCoreType::U32:
-                case HIRCoreType::U64:
-                case HIRCoreType::Usize:
-                case HIRCoreType::Char:
-                case HIRCoreType::U128:
-                    is_signed = false;
+                default:
                     break;
-                case HIRCoreType::F16:
-                case HIRCoreType::F32:
-                case HIRCoreType::F64:
-                case HIRCoreType::F128:
-                    MIR_TODO(localMirRes, StringView("Floating point enum tag."));
-                    break;
-                case HIRCoreType::Str:
-                    MIR_BUG(localMirRes, StringView("Unsized tag?!"));
             }
 
             const bool is128 = tagTy == HIRCoreType::I128 || tagTy == HIRCoreType::U128;
@@ -5440,10 +5433,7 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
             break;
         }
         case TypeReprVariantMode::TAG_None: {
-            of << indent;
-            cb.emit(0);
-            of << StringView("\n");
-            break;
+            MIR_BUG(localMirRes, StringView("Enum switch without multiple variants"));
         }
         case TypeReprVariantMode::TAG_Single: {
             of << indent;
@@ -7654,7 +7644,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 } break;
                 case TypeReprVariantMode::TAG_Linear: {
                     auto& ve = repr->variants.as_Linear();
-                    const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, ve.field.index, ve.field.subFields);
+                    const auto* tagTy = physicalEnumTagType(TargetGetInnerType(sp, resolve_, *repr, ve.field.index, ve.field.subFields));
                     const bool pointerTag = tagTy->is_Pointer() || tagTy->is_Borrow() || tagTy->is_Function();
                     auto emitTag = [&]() {
                         if (pointerTag) {
