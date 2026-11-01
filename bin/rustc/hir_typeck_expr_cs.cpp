@@ -5115,7 +5115,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             const auto& inner = path.params.types.at(0);
                             rv = this->revisitInner(context, *pe.sub, inner, bindingMode);
                         } else {
-                            TODO(sp, StringView("Match ergonomics - box pattern - Non Box<T> type: ") << ty);
+                            ERROR(sp, E0000, StringView("Box pattern cannot match ") << ty);
                         }
                         break;
                     }
@@ -5150,9 +5150,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     case HIRPatternData::TAG_Tuple: {
                         auto& e = pattern.data.as_Tuple();
-                        if (!ty->is_Tuple()) {
-                            ERROR(sp, E0000, StringView("Matching a non-tuple with a tuple pattern - ") << ty);
-                        }
                         const auto& te = ty->as_Tuple();
                         if (e.subPatterns.size() != te.length()) {
                             ERROR(sp, E0000, StringView("Tuple pattern with an incorrect number of fields, expected ") << e.subPatterns.size() << StringView("-tuple, got ") << ty);
@@ -5166,9 +5163,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     case HIRPatternData::TAG_SplitTuple: {
                         auto& pe = pattern.data.as_SplitTuple();
-                        if (!ty->is_Tuple()) {
-                            ERROR(sp, E0000, StringView("Matching a non-tuple with a tuple pattern - ") << ty);
-                        }
                         const auto& te = ty->as_Tuple();
                         if (pe.leading.size() + pe.trailing.size() > te.length()) {
                             ERROR(sp, E0000, StringView("Split-tuple pattern with an incorrect number of fields, expected at most ") << (pe.leading.size() + pe.trailing.size()) << StringView("-tuple, got ") << te.length());
@@ -5188,11 +5182,9 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         const HIRType* sliceInner;
                         if (const auto* te = ty->opt_Slice()) {
                             sliceInner = te->inner;
-                        } else if (const auto* te = ty->opt_Array()) {
-                            sliceInner = te->inner;
-                            context.equateTypes(sp, ty, context.crate.types.array(sliceInner, e.subPatterns.size()));
                         } else {
-                            ERROR(sp, E0000, StringView("Matching a non-array/slice with a slice pattern - ") << ty);
+                            sliceInner = ty->as_Array().inner;
+                            context.equateTypes(sp, ty, context.crate.types.array(sliceInner, e.subPatterns.size()));
                         }
                         rv = true;
                         for (auto& sub : e.subPatterns) {
@@ -5205,10 +5197,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         const HIRType* sliceInner;
                         if (const auto* te = ty->opt_Slice()) {
                             sliceInner = te->inner;
-                        } else if (const auto* te = ty->opt_Array()) {
-                            sliceInner = te->inner;
                         } else {
-                            ERROR(sp, E0000, StringView("Matching a non-array/slice with a slice pattern - ") << ty);
+                            sliceInner = ty->as_Array().inner;
                         }
                         rv = true;
                         for (auto& sub : pe.leading) {
