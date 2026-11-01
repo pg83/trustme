@@ -2427,9 +2427,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         }
                         if (const auto* slice = type->opt_Slice(); slice || type == HIRCoreType::Str) {
                             size_t itemSize = 1;
-                            if (slice && !TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
-                                deferUnloweredLayout(slice->inner);
-                                BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << slice->inner);
+                            if (slice) {
+                                itemSize = localState.sizeOfOrBug(slice->inner);
                             }
                             auto arg = localState.getLval(e.args.at(0).as_LValue());
                             const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
