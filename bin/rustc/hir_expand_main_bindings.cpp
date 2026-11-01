@@ -628,8 +628,6 @@ namespace {
 
         void visit(HIRExprNodeCallValue& node) override;
 
-        void visit(HIRExprNodeCallMethod& node) override;
-
         void visit(HIRExprNodeMatch& node) override;
 
         void visit(HIRExprNodeArrayList& node) override;
@@ -5434,13 +5432,6 @@ auto ReborrowExprVisitorMutate::visit(HIRExprNodeCallPath& node) -> void {
 }
 
 auto ReborrowExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
-    HIRExprVisitorDef::visit(node);
-    for (auto& arg : node.args) {
-        arg = doReborrow(mv$(arg));
-    }
-}
-
-auto ReborrowExprVisitorMutate::visit(HIRExprNodeCallMethod& node) -> void {
     HIRExprVisitorDef::visit(node);
     for (auto& arg : node.args) {
         arg = doReborrow(mv$(arg));
