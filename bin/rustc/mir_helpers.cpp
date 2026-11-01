@@ -800,7 +800,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
             } else {
                 MIR_BUG(*this, StringView("get_const_type - Not a constant ") << *e.p);
             }
-            break;
         }
         case MIRConstant::TAG_Generic: {
             auto& e = c.as_Generic();
@@ -813,10 +812,8 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
             switch (v.tag()) {
                 default:
                     MIR_BUG(*this, StringView("get_const_type - Function points to bad type: ") << v.tagStr() << StringView(" - ") << c);
-                    break;
                 case TypeckValuePtr::TAG_NotFound: {
                     MIR_BUG(*this, StringView("get_const_type - ItemAddr points to unknown value - ") << c);
-                    break;
                 }
                 case TypeckValuePtr::TAG_Function: {
                     auto& ve = v.as_Function();
@@ -831,7 +828,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                     return crate.types.intern(HIRType::make_NamedFunction({e.p->clone(), ve.s}));
                 }
             }
-            break;
         }
         case MIRConstant::TAG_ItemAddr: {
             auto& e = c.as_ItemAddr();
@@ -842,7 +838,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                 case TypeckValuePtr::TAG_Constant:
                 case TypeckValuePtr::TAG_NotFound: {
                     MIR_BUG(*this, StringView("get_const_type - ItemAddr does not name an addressable item - ") << c);
-                    break;
                 }
                 case TypeckValuePtr::TAG_NotYetKnown: {
                     if (e->data.is_UfcsKnown()) {
@@ -856,7 +851,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                         }
                     }
                     MIR_BUG(*this, StringView("get_const_type - get_value returned NotYetKnown with signature_only=true"));
-                    break;
                 }
                 case TypeckValuePtr::TAG_Static: {
                     auto& ve = v.as_Static();
@@ -878,7 +872,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                 }
                 case TypeckValuePtr::TAG_EnumValue: {
                     MIR_BUG(*this, StringView("get_const_type - ItemAddr points to an enum value - ") << c);
-                    break;
                 }
                 case TypeckValuePtr::TAG_EnumConstructor: {
                     auto& ve = v.as_EnumConstructor();
@@ -888,7 +881,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                 }
                 case TypeckValuePtr::TAG_StructConstant: {
                     MIR_BUG(*this, c << StringView(" pointing to a struct constant"));
-                    break;
                 }
                 case TypeckValuePtr::TAG_StructConstructor: {
                     auto& ve = v.as_StructConstructor();
@@ -897,7 +889,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                     return rv;
                 }
             }
-            break;
         }
     }
     UNREACHABLE();

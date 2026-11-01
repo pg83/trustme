@@ -9532,12 +9532,8 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRType* ty
     }
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     switch ((*ty).tag()) {
-        case HIRType::TAG_Diverge: {
-            break;
-        }
-        case HIRType::TAG_Infer: {
-            break;
-        }
+        default:
+            UNREACHABLE();
         case HIRType::TAG_ErasedType: {
             break;
         }
@@ -9545,18 +9541,6 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRType* ty
             break;
         }
         case HIRType::TAG_Generic: {
-            break;
-        }
-        case HIRType::TAG_Primitive: {
-            break;
-        }
-        case HIRType::TAG_Pointer: {
-            break;
-        }
-        case HIRType::TAG_NamedFunction: {
-            break;
-        }
-        case HIRType::TAG_Function: {
             break;
         }
         case HIRType::TAG_Borrow: {

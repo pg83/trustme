@@ -1621,13 +1621,8 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
             };
             bool needsDropGlue = false;
             switch (e.binding.tag()) {
-                case HIRTypePathBinding::TAG_Unbound: {
+                default:
                     BUG(sp, StringView("Unbound path"));
-                }
-                case HIRTypePathBinding::TAG_Opaque: {
-                    // Technically a bug, checked above
-                    return true;
-                }
                 case HIRTypePathBinding::TAG_Struct: {
                     const auto pbe = e.binding.as_Struct();
                     switch (pbe->data.tag()) {
@@ -2064,7 +2059,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             if (!tr.values.count(pe.item)) {
                 DEBUG(StringView("Value ") << pe.item << StringView(" not found in trait ") << pe.trait.path);
                 return ValuePtr();
-                DEBUG(StringView("Pre-existing imp params = ") << *outParams.ppImpl);
             }
 
             if (outImplParamsDef) {
