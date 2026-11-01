@@ -1606,26 +1606,6 @@ static void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRCons
     }
 }
 
-static void TransEnumerateFillFromMIRParam(MIREnumCache& state, const MIRParam& p) {
-    switch (p.tag()) {
-        case MIRParam::TAG_LValue: {
-            auto& e = p.as_LValue();
-            TransEnumerateFillFromMIRLValue(state, e);
-            break;
-        }
-        case MIRParam::TAG_Borrow: {
-            auto& e = p.as_Borrow();
-            TransEnumerateFillFromMIRLValue(state, e.val);
-            break;
-        }
-        case MIRParam::TAG_Constant: {
-            auto& e = p.as_Constant();
-            TransEnumerateFillFromMIRConstant(state, e);
-            break;
-        }
-    }
-}
-
 static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
     TRACE_FUNCTION_F(StringView(""));
     for (const auto& ty : code.locals) {
@@ -1636,266 +1616,80 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
             return false;
         });
     }
-    for (const auto& bb : code.blocks) {
-        for (const auto& stmt : bb.statements) {
-            switch (stmt.tag()) {
-                case MIRStatement::TAG_Assign: {
-                    auto& se = stmt.as_Assign();
-                    DEBUG(StringView("- ") << se.dst << StringView(" = ") << se.src);
-                    TransEnumerateFillFromMIRLValue(state, se.dst);
-                    switch (se.src.tag()) {
-                        case MIRRValue::TAG_Use: {
-                            auto& e = se.src.as_Use();
-                            TransEnumerateFillFromMIRLValue(state, e);
-                            break;
-                        }
-                        case MIRRValue::TAG_Constant: {
-                            auto& e = se.src.as_Constant();
-                            TransEnumerateFillFromMIRConstant(state, e);
-                            break;
-                        }
-                        case MIRRValue::TAG_SizedArray: {
-                            auto& e = se.src.as_SizedArray();
-                            TransEnumerateFillFromMIRParam(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_Borrow: {
-                            auto& e = se.src.as_Borrow();
-                            TransEnumerateFillFromMIRLValue(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_Cast: {
-                            auto& e = se.src.as_Cast();
-                            TransEnumerateFillFromMIRLValue(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_BinOp: {
-                            auto& e = se.src.as_BinOp();
-                            TransEnumerateFillFromMIRParam(state, e.valL);
-                            TransEnumerateFillFromMIRParam(state, e.valR);
-                            break;
-                        }
-                        case MIRRValue::TAG_UniOp: {
-                            auto& e = se.src.as_UniOp();
-                            TransEnumerateFillFromMIRLValue(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_DstMeta: {
-                            auto& e = se.src.as_DstMeta();
-                            TransEnumerateFillFromMIRLValue(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_DstPtr: {
-                            auto& e = se.src.as_DstPtr();
-                            TransEnumerateFillFromMIRLValue(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_MakeDst: {
-                            auto& e = se.src.as_MakeDst();
-                            TransEnumerateFillFromMIRParam(state, e.ptrVal);
-                            TransEnumerateFillFromMIRParam(state, e.metaVal);
-                            break;
-                        }
-                        case MIRRValue::TAG_Tuple: {
-                            auto& e = se.src.as_Tuple();
-                            for (const auto& val : e.vals) {
-                                TransEnumerateFillFromMIRParam(state, val);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_Array: {
-                            auto& e = se.src.as_Array();
-                            for (const auto& val : e.vals) {
-                                TransEnumerateFillFromMIRParam(state, val);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_UnionVariant: {
-                            auto& e = se.src.as_UnionVariant();
-                            TransEnumerateFillFromMIRParam(state, e.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_EnumVariant: {
-                            auto& e = se.src.as_EnumVariant();
-                            for (const auto& val : e.vals) {
-                                TransEnumerateFillFromMIRParam(state, val);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_Struct: {
-                            auto& e = se.src.as_Struct();
-                            for (const auto& val : e.vals) {
-                                TransEnumerateFillFromMIRParam(state, val);
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                }
-                case MIRStatement::TAG_Asm2: {
-                    auto& e = stmt.as_Asm2();
-                    for (auto& p : e.params) {
-                        switch (p.tag()) {
-                            case MIRAsmParam::TAG_Const: {
-                                auto& v = p.as_Const();
-                                TransEnumerateFillFromMIRConstant(state, v);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Sym: {
-                                auto& v = p.as_Sym();
-                                state.insertPath(v);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Reg: {
-                                auto& v = p.as_Reg();
-                                if (v.input) {
-                                    TransEnumerateFillFromMIRParam(state, *v.input);
-                                }
-                                if (v.output) {
-                                    TransEnumerateFillFromMIRLValue(state, *v.output);
-                                }
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Label: {
-                                break;
-                            }
-                        }
-                    }
-                    break;
-                }
-                case MIRStatement::TAG_Asm: {
-                    auto& se = stmt.as_Asm();
-                    DEBUG(StringView("- llvm_asm! ..."));
-                    for (const auto& v : se.inputs) {
-                        TransEnumerateFillFromMIRLValue(state, v.second);
-                    }
-                    for (const auto& v : se.outputs) {
-                        TransEnumerateFillFromMIRLValue(state, v.second);
-                    }
-                    break;
-                }
-                case MIRStatement::TAG_SetDropFlag: {
-                    break;
-                }
-                case MIRStatement::TAG_SaveDropFlag: {
-                    auto& se = stmt.as_SaveDropFlag();
-                    TransEnumerateFillFromMIRLValue(state, se.slot);
-                    break;
-                }
-                case MIRStatement::TAG_LoadDropFlag: {
-                    auto& se = stmt.as_LoadDropFlag();
-                    TransEnumerateFillFromMIRLValue(state, se.slot);
-                    break;
-                }
-            }
+    struct DependencyVisitor: MIRVisitor {
+        MIREnumCache& state;
+
+        explicit DependencyVisitor(MIREnumCache& state_)
+            : state(state_)
+        {
         }
-        DEBUG(StringView("> ") << bb.terminator);
-        switch (bb.terminator.tag()) {
-            case MIRTerminator::TAG_Incomplete: {
-                break;
+
+        bool visitLvalue(const MIRLValue& value, MIRValUsage) override {
+            TransEnumerateFillFromMIRLValue(state, value);
+            return false;
+        }
+
+        bool visitConst(const MIRConstant& value) override {
+            TransEnumerateFillFromMIRConstant(state, value);
+            return false;
+        }
+
+        void visitPath(const HIRPath& path) override {
+            state.insertPath(path);
+        }
+
+        void visitGenericpath(const HIRGenericPath&) override {
+        }
+
+        bool visitStmt(const MIRStatement& stmt) override {
+            if (const auto* assign = stmt.opt_Assign()) {
+                DEBUG(StringView("- ") << assign->dst << StringView(" = ") << assign->src);
+                visitLvalue(assign->dst, MIRValUsage::Write);
+                visitRvalue(assign->src);
+                return false;
             }
-            case MIRTerminator::TAG_Return: {
-                break;
+            if (stmt.is_Asm()) {
+                DEBUG(StringView("- llvm_asm! ..."));
             }
-            case MIRTerminator::TAG_UnwindResume: {
-                break;
-            }
-            case MIRTerminator::TAG_UnwindTerminate: {
-                break;
-            }
-            case MIRTerminator::TAG_Unreachable: {
-                break;
-            }
-            case MIRTerminator::TAG_Goto: {
-                break;
-            }
-            case MIRTerminator::TAG_If: {
-                auto& e = bb.terminator.as_If();
-                TransEnumerateFillFromMIRLValue(state, e.cond);
-                break;
-            }
-            case MIRTerminator::TAG_Switch: {
-                auto& e = bb.terminator.as_Switch();
-                TransEnumerateFillFromMIRLValue(state, e.val);
-                break;
-            }
-            case MIRTerminator::TAG_SwitchValue: {
-                auto& e = bb.terminator.as_SwitchValue();
-                TransEnumerateFillFromMIRLValue(state, e.val);
-                break;
-            }
-            case MIRTerminator::TAG_Drop: {
-                auto& e = bb.terminator.as_Drop();
-                TransEnumerateFillFromMIRLValue(state, e.slot);
-                break;
-            }
-            case MIRTerminator::TAG_Call: {
-                auto& e = bb.terminator.as_Call();
-                TransEnumerateFillFromMIRLValue(state, e.retVal);
-                switch (e.fcn.tag()) {
+            return MIRVisitor::visitStmt(stmt);
+        }
+
+        bool visitTerminator(const MIRTerminator& term) override {
+            if (const auto* call = term.opt_Call()) {
+                visitLvalue(call->retVal, MIRValUsage::Write);
+                switch (call->fcn.tag()) {
                     case MIRCallTarget::TAG_Value: {
-                        auto& e2 = e.fcn.as_Value();
-                        TransEnumerateFillFromMIRLValue(state, e2);
+                        visitLvalue(call->fcn.as_Value(), MIRValUsage::Read);
                         break;
                     }
                     case MIRCallTarget::TAG_Path: {
-                        auto& e2 = e.fcn.as_Path();
-                        state.insertPath(e2);
+                        visitPath(call->fcn.as_Path());
                         break;
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
-                        auto& e2 = e.fcn.as_Intrinsic();
-                        if (e2.name == "type_id") {
-                            state.insertTypeid(e2.params.types.at(0));
-                        } else if (e2.name == "drop_in_place") {
-                            state.insertDestructorType(e2.params.types.at(0));
+                        const auto& intrinsic = call->fcn.as_Intrinsic();
+                        if (intrinsic.name == "type_id") {
+                            state.insertTypeid(intrinsic.params.types.at(0));
+                        } else if (intrinsic.name == "drop_in_place") {
+                            state.insertDestructorType(intrinsic.params.types.at(0));
                         }
                         break;
                     }
                 }
-                for (const auto& arg : e.args) {
-                    TransEnumerateFillFromMIRParam(state, arg);
+                for (const auto& arg : call->args) {
+                    visitParam(arg, MIRValUsage::Read);
                 }
-                break;
+                return false;
             }
-            case MIRTerminator::TAG_TailCall: {
-                auto& e = bb.terminator.as_TailCall();
-                switch (e.fcn.tag()) {
-                    case MIRTailCallTarget::TAG_Value: {
-                        auto& e2 = e.fcn.as_Value();
-                        TransEnumerateFillFromMIRLValue(state, e2);
-                        break;
-                    }
-                    case MIRTailCallTarget::TAG_Path: {
-                        auto& e2 = e.fcn.as_Path();
-                        state.insertPath(e2);
-                        break;
-                    }
-                }
-                for (const auto& arg : e.args) {
-                    TransEnumerateFillFromMIRParam(state, arg);
-                }
-                break;
-            }
-            case MIRTerminator::TAG_Asm2: {
-                auto& e = bb.terminator.as_Asm2();
-                for (const auto& p : e.params) {
-                    if (const auto* c = p.opt_Const()) {
-                        TransEnumerateFillFromMIRConstant(state, *c);
-                    } else if (const auto* s = p.opt_Sym()) {
-                        state.insertPath(*s);
-                    } else if (const auto* r = p.opt_Reg()) {
-                        if (r->input) {
-                            TransEnumerateFillFromMIRParam(state, *r->input);
-                        }
-                        if (r->output) {
-                            TransEnumerateFillFromMIRLValue(state, *r->output);
-                        }
-                    }
-                }
-                break;
-            }
+            return MIRVisitor::visitTerminator(term);
         }
+    } visitor{state};
+    for (const auto& bb : code.blocks) {
+        for (const auto& stmt : bb.statements) {
+            visitor.visitStmt(stmt);
+        }
+        DEBUG(StringView("> ") << bb.terminator);
+        visitor.visitTerminator(bb.terminator);
     }
 }
 
