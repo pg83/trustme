@@ -489,18 +489,6 @@ static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
 
 bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
-bool operator==(const MIRTerminator& a, const MIRTerminator& b);
-
-static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
-    return !(a == b);
-}
-
-bool operator==(const MIRStatement& a, const MIRStatement& b);
-
-static inline bool operator!=(const MIRStatement& a, const MIRStatement& b) {
-    return !(a == b);
-}
-
 struct MIRBasicBlock {
     std::vector<MIRStatement> statements;
     MIRTerminator terminator;

@@ -2177,6 +2177,12 @@ namespace {
                     if (block.terminator.is_TailCall()) {
                         return false;
                     }
+                    if (const auto* call = block.terminator.opt_Call()) {
+                        const auto* intrinsic = call->fcn.opt_Intrinsic();
+                        if (call->tracksCaller || (intrinsic && intrinsic->name == "caller_location")) {
+                            return false;
+                        }
+                    }
                 }
 
                 // TODO: Allow functions that are just a switch on an input.
@@ -2601,6 +2607,11 @@ namespace {
     bool checkInvalidatesLvalue(const MIRTerminator& term, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
         CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
         return optVisitMirLvalues(term, cb);
+    }
+
+    bool isErasedStatement(const MIRStatement& statement) {
+        const auto* assembly = statement.opt_Asm();
+        return assembly && assembly->tpl.empty() && assembly->outputs.empty() && assembly->inputs.empty() && assembly->clobbers.empty() && assembly->flags.empty();
     }
 
     bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& fcn) {
@@ -3644,6 +3655,190 @@ namespace {
                 return rv;
             }
 
+            static bool terminatorsEqual(const MIRTerminator& a, const MIRTerminator& b) {
+                if (a.tag() != b.tag()) {
+                    return false;
+                }
+                auto unwindEqual = [](const MIRUnwindAction& lhs, const MIRUnwindAction& rhs) {
+                    if (lhs.tag() != rhs.tag()) {
+                        return false;
+                    }
+                    if (const auto* cleanup = lhs.opt_Cleanup()) {
+                        return *cleanup == rhs.as_Cleanup();
+                    }
+                    return true;
+                };
+                switch (a.tag()) {
+                    case MIRTerminator::TAG_Incomplete: {
+                        break;
+                    }
+                    case MIRTerminator::TAG_Return: {
+                        break;
+                    }
+                    case MIRTerminator::TAG_UnwindResume: {
+                        break;
+                    }
+                    case MIRTerminator::TAG_UnwindTerminate: {
+                        break;
+                    }
+                    case MIRTerminator::TAG_Unreachable: {
+                        break;
+                    }
+                    case MIRTerminator::TAG_Goto: {
+                        break;
+                    }
+                    case MIRTerminator::TAG_If: {
+                        auto& ae = a.as_If();
+                        auto& be = b.as_If();
+                        if (ae.cond != be.cond) {
+                            return false;
+                        }
+                        if (ae.bbTrue != be.bbTrue) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_Switch: {
+                        auto& ae = a.as_Switch();
+                        auto& be = b.as_Switch();
+                        if (ae.val != be.val) {
+                            return false;
+                        }
+                        if (::ord(ae.targets, be.targets) != OrdEqual) {
+                            return false;
+                        }
+                        if (ae.validFlag != be.validFlag) {
+                            return false;
+                        }
+                        if (ae.invalidTarget != be.invalidTarget) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_SwitchValue: {
+                        auto& ae = a.as_SwitchValue();
+                        auto& be = b.as_SwitchValue();
+                        if (ae.val != be.val) {
+                            return false;
+                        }
+                        if (::ord(ae.targets, be.targets) != OrdEqual) {
+                            return false;
+                        }
+                        if (ae.values != be.values) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_Drop: {
+                        auto& ae = a.as_Drop();
+                        auto& be = b.as_Drop();
+                        if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwindEqual(ae.unwind, be.unwind)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_Call: {
+                        auto& ae = a.as_Call();
+                        auto& be = b.as_Call();
+                        if (ae.retVal != be.retVal) {
+                            return false;
+                        }
+                        if (ae.fcn.tag() != be.fcn.tag()) {
+                            return false;
+                        }
+                        switch (ae.fcn.tag()) {
+                            case MIRCallTarget::TAG_Value: {
+                                auto& afe = ae.fcn.as_Value();
+                                auto& bfe = be.fcn.as_Value();
+                                if (afe != bfe) {
+                                    return false;
+                                }
+                                break;
+                            }
+                            case MIRCallTarget::TAG_Path: {
+                                auto& afe = ae.fcn.as_Path();
+                                auto& bfe = be.fcn.as_Path();
+                                if (afe != bfe) {
+                                    return false;
+                                }
+                                break;
+                            }
+                            case MIRCallTarget::TAG_Intrinsic: {
+                                auto& afe = ae.fcn.as_Intrinsic();
+                                auto& bfe = be.fcn.as_Intrinsic();
+                                if (afe.name != bfe.name) {
+                                    return false;
+                                }
+                                if (afe.params != bfe.params) {
+                                    return false;
+                                }
+                                break;
+                            }
+                        }
+                        if (ae.args != be.args) {
+                            return false;
+                        }
+                        if (ae.retBlock != be.retBlock) {
+                            return false;
+                        }
+                        if (!unwindEqual(ae.unwind, be.unwind)) {
+                            return false;
+                        }
+                        if (ae.source != be.source) {
+                            return false;
+                        }
+                        if (ae.tracksCaller != be.tracksCaller) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_TailCall: {
+                        auto& ae = a.as_TailCall();
+                        auto& be = b.as_TailCall();
+                        if (ae.fcn.tag() != be.fcn.tag()) {
+                            return false;
+                        }
+                        switch (ae.fcn.tag()) {
+                            case MIRTailCallTarget::TAG_Value: {
+                                auto& afe = ae.fcn.as_Value();
+                                auto& bfe = be.fcn.as_Value();
+                                if (afe != bfe) {
+                                    return false;
+                                }
+                                break;
+                            }
+                            case MIRTailCallTarget::TAG_Path: {
+                                auto& afe = ae.fcn.as_Path();
+                                auto& bfe = be.fcn.as_Path();
+                                if (afe != bfe) {
+                                    return false;
+                                }
+                                break;
+                            }
+                        }
+                        if (ae.args != be.args) {
+                            return false;
+                        }
+                        if (ae.source != be.source) {
+                            return false;
+                        }
+                        if (ae.tracksCaller != be.tracksCaller) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_Asm2: {
+                        auto& ae = a.as_Asm2();
+                        auto& be = b.as_Asm2();
+                        if (ae.options != be.options || ae.lines != be.lines || ae.params != be.params || ae.retBlock != be.retBlock) {
+                            return false;
+                        }
+                        break;
+                    }
+                }
+                return true;
+            }
+
             static bool blocksEqual(const MIRBasicBlock& a, const MIRBasicBlock& b) {
                 if (a.isCleanup != b.isCleanup) {
                     return false;
@@ -3749,7 +3944,7 @@ namespace {
                         }
                     }
                 }
-                return a.terminator == b.terminator;
+                return terminatorsEqual(a.terminator, b.terminator);
             }
         };
 
@@ -6088,7 +6283,7 @@ namespace {
             for (auto it = bb.statements.begin(); it != bb.statements.end();) {
                 state.setCurStmt(&bb - fcn.blocks.data(), it - bb.statements.begin());
 
-                if (*it == MIRStatement::make_Asm({})) {
+                if (isErasedStatement(*it)) {
                     DEBUG(state << StringView("Empty ASM placeholder, remove - ") << *it);
                     it = bb.statements.erase(it);
                     changed = true;
@@ -6484,7 +6679,7 @@ namespace {
                     auto stmtIdx = &stmt - &it->statements.front();
                     state.setCurStmt(i, stmtIdx);
 
-                    if (stmt == MIRStatement()) {
+                    if (isErasedStatement(stmt)) {
                         DEBUG(state << StringView("Remove ") << stmt << StringView(" - Pure default"));
                         toRemoveStatements.mut(stmtIdx) = true;
                         continue;
