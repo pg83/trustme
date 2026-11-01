@@ -9396,10 +9396,11 @@ auto ExprVisitorConv::panicIf(const Span& sp, MIRLValue condition, bool whenTrue
 
     builder.setCurBlock(panicBlock);
     const auto& panicPath = builder.crate().getLangItemPathOpt(langItem);
+    MIRCallTarget panicTarget;
     if (panicPath.components().empty()) {
-        builder.endBlock(MIRTerminator::make_UnwindTerminate({}));
-        builder.setCurBlock(continueBlock);
-        return;
+        panicTarget = MIRCallTarget::make_Intrinsic({RcString::newInterned(FMT(StringView("missing_lang_item#") << langItem)), {}});
+    } else {
+        panicTarget = MIRCallTarget::make_Path(HIRPath(panicPath));
     }
     auto panicResult = builder.newTemporary(builder.resolve().crate.types.diverge());
     auto panicReturn = builder.newBbUnlinked();
@@ -9409,8 +9410,9 @@ auto ExprVisitorConv::panicIf(const Span& sp, MIRLValue condition, bool whenTrue
             panicReturn,
             MIRUnwindAction::make_Cleanup(panicUnwind),
             mv$(panicResult),
-            HIRPath(panicPath),
+            mv$(panicTarget),
             {},
+            SourceLocation(sp),
         })
     );
 

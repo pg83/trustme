@@ -1668,6 +1668,10 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
                     }
                     case MIRCallTarget::TAG_Intrinsic: {
                         const auto& intrinsic = call->fcn.as_Intrinsic();
+                        if (intrinsic.name.compare(0, sizeof("missing_lang_item#") - 1, "missing_lang_item#") == 0) {
+                            Span callSpan(Span(), call->source.filename, call->source.line, call->source.column, call->source.line, call->source.column);
+                            ERROR(callSpan, E0000, StringView("requires `") << StringView(intrinsic.name.c_str() + sizeof("missing_lang_item#") - 1) << StringView("` lang_item"));
+                        }
                         if (intrinsic.name == "type_id") {
                             state.insertTypeid(intrinsic.params.types.at(0));
                         } else if (intrinsic.name == "drop_in_place") {

@@ -2390,7 +2390,9 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     return field == 1 ? size : align;
                 };
                 MIRBinOp algebraicOp;
-                if (MIRGetFloatAlgebraicBinOp(te->name, algebraicOp)) {
+                if (te->name.compare(0, sizeof("missing_lang_item#") - 1, "missing_lang_item#") == 0) {
+                    ERROR(state.sp, E0000, StringView("constant evaluation panicked: requires `") << StringView(te->name.c_str() + sizeof("missing_lang_item#") - 1) << StringView("` lang_item"));
+                } else if (MIRGetFloatAlgebraicBinOp(te->name, algebraicOp)) {
                     const auto* ty = localState.monomorphExpand(te->params.types.at(0));
                     if (const auto* primitive = ty->opt_Primitive(); !primitive || !isFloat(*primitive)) {
                         Span callSpan(state.sp, e.source.filename, e.source.line, e.source.column, e.source.line, e.source.column);

@@ -46,8 +46,6 @@ namespace {
 
             const StaticTraitResolve* resolve() const override;
 
-            MIRStatement cloneStmt(const MIRStatement& src) const override;
-
             MIRLValue cloneLval(const MIRLValue& src) const override;
         };
 
@@ -143,19 +141,7 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
         TRACE_FUNCTION_F(StringView("bb") << output.blocks.size());
         statements.reserve(block.statements.size());
         for (const auto& stmt : block.statements) {
-            switch (stmt.tag()) {
-                case MIRStatement::TAG_SaveDropFlag: {
-                    auto& e = stmt.as_SaveDropFlag();
-                    statements.push_back(MIRStatement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
-                } break;
-                case MIRStatement::TAG_LoadDropFlag: {
-                    auto& e = stmt.as_LoadDropFlag();
-                    statements.push_back(MIRStatement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
-                } break;
-                default:
-                    statements.push_back(c.cloneStmt(stmt));
-                    break;
-            }
+            statements.push_back(c.cloneStmt(stmt));
         }
 
         MIRTerminator terminator = c.cloneTerm(block.terminator);
@@ -808,16 +794,6 @@ auto AsyncDropPollBuilder::CoroutineDropCloner::monomorphiser() const -> const M
 
 auto AsyncDropPollBuilder::CoroutineDropCloner::resolve() const -> const StaticTraitResolve* {
     return &owner.resolve;
-}
-
-auto AsyncDropPollBuilder::CoroutineDropCloner::cloneStmt(const MIRStatement& src) const -> MIRStatement {
-    if (const auto* save = src.opt_SaveDropFlag()) {
-        return MIRStatement::make_SaveDropFlag({cloneLval(save->slot), save->bitIndex, mapDropFlag(save->idx)});
-    }
-    if (const auto* load = src.opt_LoadDropFlag()) {
-        return MIRStatement::make_LoadDropFlag({mapDropFlag(load->idx), cloneLval(load->slot), load->bitIndex});
-    }
-    return MIRCloner::cloneStmt(src);
 }
 
 auto AsyncDropPollBuilder::CoroutineDropCloner::cloneLval(const MIRLValue& src) const -> MIRLValue {

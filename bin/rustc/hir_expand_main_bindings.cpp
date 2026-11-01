@@ -676,7 +676,7 @@ namespace {
 
         void visit(HIRExprNodeCallMethod& node) override;
 
-        bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRType* tyL, const HIRType* tyR) const;
+        bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRType* tyL, const HIRType* tyR, const char* outputName) const;
 
         bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRType* ty) const;
 
@@ -6862,7 +6862,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallMethod& node) -> void {
     replacement->cache = mv$(node.cache);
 }
 
-auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRType* tyL, const HIRType* tyR) const -> bool {
+auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRType* tyL, const HIRType* tyR, const char* outputName) const -> bool {
     if (!primitiveOperatorHasBuiltin(op, tyL, tyR)) {
         return false;
     }
@@ -6876,9 +6876,11 @@ auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOpe
     if (traitPath.components().empty()) {
         return true;
     }
+    const SolverOperatorGoal operatorGoal{.operation = op, .outputName = outputName, .currentImpl = currentTraitImpl};
     return !resolve_.probeImplMayApply(sp, traitPath, traitParams, tyL, [&](SolverMayApply probe) {
-        return !probe.candidate || !(currentTraitImpl && probe.candidate->traitImpl == currentTraitImpl);
-    });
+        const auto& summary = probe.effects.operatorSummary;
+        return summary.hasSemanticImpl || (summary.sawCurrentImpl && !summary.currentImplHasBuiltinSignature);
+    }, {.operatorGoal = &operatorGoal, .ambiguity = SolverAmbiguityPolicy::Report});
 }
 
 auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRType* ty) const -> bool {
@@ -6894,9 +6896,11 @@ auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOpe
     if (traitPath.components().empty()) {
         return true;
     }
+    const SolverOperatorGoal operatorGoal{.operation = op, .outputName = "Output", .currentImpl = currentTraitImpl};
     return !resolve_.probeImplMayApply(sp, traitPath, HIRPathParams(), ty, [&](SolverMayApply probe) {
-        return !probe.candidate || !(currentTraitImpl && probe.candidate->traitImpl == currentTraitImpl);
-    });
+        const auto& summary = probe.effects.operatorSummary;
+        return summary.hasSemanticImpl || (summary.sawCurrentImpl && !summary.currentImplHasBuiltinSignature);
+    }, {.operatorGoal = &operatorGoal, .ambiguity = SolverAmbiguityPolicy::Report});
 }
 
 #ifdef NEWNODE
@@ -6934,7 +6938,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeAssign& node) -> void {
                 operatorKind = TypeckPrimitiveOperator::ShlAssign;
             }
         }
-        if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
+        if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal, nullptr)) {
             return;
         }
         break;
@@ -6961,7 +6965,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeAssign& node) -> void {
                 operatorKind = TypeckPrimitiveOperator::BitXorAssign;
             }
         }
-        if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
+        if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal, nullptr)) {
             return;
         }
         break;
@@ -7004,7 +7008,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeAssign& node) -> void {
                 operatorKind = TypeckPrimitiveOperator::RemAssign;
             }
         }
-        if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
+        if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal, nullptr)) {
             return;
         }
         break;
@@ -7141,7 +7145,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
             return;
     }
 
-    if (isBuiltinOperator(sp, operatorKind, langitem, tyL, tyR)) {
+    if (isBuiltinOperator(sp, operatorKind, langitem, tyL, tyR, isComparison ? nullptr : "Output")) {
         return;
     }
 

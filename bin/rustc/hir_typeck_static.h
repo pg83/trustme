@@ -142,11 +142,11 @@ public:
         TraitResolveCommon::prepIndexes(sp);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, SolverResponseCallback& foundCb) const {
-        return this->findImplCb(sp, traitPath, &traitParams, type, foundCb);
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, SolverResponseCallback& foundCb, const TraitGoalQuery& query = {.ambiguity = SolverAmbiguityPolicy::Report}) const {
+        return this->findImplCb(sp, traitPath, &traitParams, type, foundCb, query);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, SolverResponseCallback& foundCb) const;
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, SolverResponseCallback& foundCb, const TraitGoalQuery& query = {.ambiguity = SolverAmbiguityPolicy::Report}) const;
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, F f) const {
@@ -161,9 +161,9 @@ public:
     }
 
     template <typename F>
-    bool probeImplMayApply(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, F f) const {
+    bool probeImplMayApply(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRType* type, F f, const TraitGoalQuery& query = {.ambiguity = SolverAmbiguityPolicy::Report}) const {
         SolverMayApplyCb<F> cb(f);
-        return findImplCb(sp, traitPath, traitParams, type, cb);
+        return findImplCb(sp, traitPath, traitParams, type, cb, query);
     }
 
     template <typename F>

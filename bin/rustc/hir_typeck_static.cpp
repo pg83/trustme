@@ -195,7 +195,7 @@ struct StaticTraitResolve::NextSolverBridge {
 
     NextSolverBridge(const WireBoard& wb, OpaqueReveal reveal);
 
-    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback);
+    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback, const TraitGoalQuery& query);
 
     bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const char* valueName, SolverResponseCallback& callback);
 
@@ -208,7 +208,7 @@ struct StaticTraitResolve::NextSolverBridge {
     InherentImplSelection selectInherentImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRType* receiver, const RcString& item, InherentItemKind kind, const HIRPathParams* initialParams = nullptr);
 };
 
-bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, SolverResponseCallback& foundCb) const {
+bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRType* type, SolverResponseCallback& foundCb, const TraitGoalQuery& query) const {
     if (traitPath.components().empty()) {
         return false;
     }
@@ -216,7 +216,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         const HIRType* normalizedType = type;
         normalizedType = this->expandAssociatedTypes(sp, normalizedType);
         if (normalizedType != type) {
-            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb);
+            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, query);
         }
     }
 
@@ -224,7 +224,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         ASSERT_BUG(sp, crate.pool, StringView("next-solver requires the crate object pool"));
         nextSolver = crate.pool->make<NextSolverBridge>(this->wb, reveal_);
     }
-    return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
+    return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb, query);
 }
 
 const HIRType* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, const HIRItemPath& path, const HIRType* tpl) const {
@@ -2170,7 +2170,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 if (!selectedImpl && closureCallTrait) {
                     hasAmbiguousImpl = false;
                     hasBoundedImpl = false;
-                    nextSolver->findImpl(sp, implGenerics_, itemGenerics_, pe.trait.path, nullptr, pe.type, callback);
+                    nextSolver->findImpl(sp, implGenerics_, itemGenerics_, pe.trait.path, nullptr, pe.type, callback, {.ambiguity = SolverAmbiguityPolicy::Report});
                 }
                 if (!selectedImpl) {
                     if (hasBoundedImpl || hasAmbiguousImpl) {
@@ -2388,7 +2388,7 @@ StaticTraitResolve::NextSolverBridge::NextSolverBridge(const WireBoard& wb, Opaq
 {
 }
 
-auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback) -> bool {
+auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRType* type, SolverResponseCallback& callback, const TraitGoalQuery& query) -> bool {
     resolve_.setGenericContext(implGenerics, itemGenerics);
 
     HIRPathParams inferredParams;
@@ -2411,7 +2411,7 @@ auto StaticTraitResolve::NextSolverBridge::findImpl(const Span& sp, const HIRGen
         probedParams = params->mapTypes([&](const HIRType* param) { return resolve_.unknownExistentials(sp, param); });
         params = &probedParams;
     }
-    return resolve_.solveTraitGoalCb(sp, trait, *params, probedType, callback, {.ambiguity = SolverAmbiguityPolicy::Report});
+    return resolve_.solveTraitGoalCb(sp, trait, *params, probedType, callback, query);
 }
 
 auto StaticTraitResolve::NextSolverBridge::findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type, const char* valueName, SolverResponseCallback& callback) -> bool {

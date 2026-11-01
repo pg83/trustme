@@ -852,16 +852,31 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
             return MIRStatement::make_SetDropFlag({mapDropFlag(se.idx), se.newVal, se.other == ~0u ? ~0u : mapDropFlag(se.other)});
         }
         case MIRStatement::TAG_SaveDropFlag: {
-            TODO(Span(), StringView("clone_bb SaveDropFlag"));
+            auto& se = src.as_SaveDropFlag();
+            return MIRStatement::make_SaveDropFlag({cloneLval(se.slot), se.bitIndex, mapDropFlag(se.idx)});
         }
         case MIRStatement::TAG_LoadDropFlag: {
-            TODO(Span(), StringView("clone_bb LoadDropFlag"));
+            auto& se = src.as_LoadDropFlag();
+            return MIRStatement::make_LoadDropFlag({mapDropFlag(se.idx), cloneLval(se.slot), se.bitIndex});
         }
     }
     UNREACHABLE();
 }
 
 MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
+    auto cloneUnwind = [this](const MIRUnwindAction& action) {
+        switch (action.tag()) {
+            case MIRUnwindAction::TAG_Continue:
+                return MIRUnwindAction::make_Continue({});
+            case MIRUnwindAction::TAG_Cleanup:
+                return MIRUnwindAction::make_Cleanup(mapBbIdx(action.as_Cleanup()));
+            case MIRUnwindAction::TAG_Terminate:
+                return MIRUnwindAction::make_Terminate({});
+            case MIRUnwindAction::TAG_Unreachable:
+                return MIRUnwindAction::make_Unreachable({});
+        }
+        UNREACHABLE();
+    };
     switch (src.tag()) {
         case MIRTerminator::TAG_Incomplete: {
             return MIRTerminator::make_Incomplete({});
@@ -906,26 +921,7 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
         }
         case MIRTerminator::TAG_Drop: {
             auto& se = src.as_Drop();
-            MIRUnwindAction unwind;
-            switch (se.unwind.tag()) {
-                case MIRUnwindAction::TAG_Continue: {
-                    unwind = MIRUnwindAction::make_Continue({});
-                    break;
-                }
-                case MIRUnwindAction::TAG_Cleanup: {
-                    auto& ue = se.unwind.as_Cleanup();
-                    unwind = MIRUnwindAction::make_Cleanup(mapBbIdx(ue));
-                    break;
-                }
-                case MIRUnwindAction::TAG_Terminate: {
-                    unwind = MIRUnwindAction::make_Terminate({});
-                    break;
-                }
-                case MIRUnwindAction::TAG_Unreachable: {
-                    unwind = MIRUnwindAction::make_Unreachable({});
-                    break;
-                }
-            }
+            auto unwind = cloneUnwind(se.unwind);
             return MIRTerminator::make_Drop({se.kind, this->cloneLval(se.slot), se.flagIdx == ~0u ? ~0u : mapDropFlag(se.flagIdx), mapBbIdx(se.target), mv$(unwind)});
         }
         case MIRTerminator::TAG_Call: {
@@ -948,26 +944,7 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
                     break;
                 }
             }
-            MIRUnwindAction unwind;
-            switch (se.unwind.tag()) {
-                case MIRUnwindAction::TAG_Continue: {
-                    unwind = MIRUnwindAction::make_Continue({});
-                    break;
-                }
-                case MIRUnwindAction::TAG_Cleanup: {
-                    auto& ue = se.unwind.as_Cleanup();
-                    unwind = MIRUnwindAction::make_Cleanup(mapBbIdx(ue));
-                    break;
-                }
-                case MIRUnwindAction::TAG_Terminate: {
-                    unwind = MIRUnwindAction::make_Terminate({});
-                    break;
-                }
-                case MIRUnwindAction::TAG_Unreachable: {
-                    unwind = MIRUnwindAction::make_Unreachable({});
-                    break;
-                }
-            }
+            auto unwind = cloneUnwind(se.unwind);
             return MIRTerminator::make_Call({mapBbIdx(se.retBlock), mv$(unwind), this->cloneLval(se.retVal), mv$(tgt), this->cloneParamVec(se.args), se.source, se.tracksCaller});
         }
         case MIRTerminator::TAG_TailCall: {

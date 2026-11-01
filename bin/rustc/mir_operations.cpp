@@ -4122,6 +4122,50 @@ namespace {
                 }
                 bb.terminator = MIRTerminator::make_Goto(te.retBlock);
                 changed = true;
+            } else if (tef.name == "add_with_overflow" || tef.name == "sub_with_overflow" || tef.name == "mul_with_overflow") {
+                const auto* left = te.args.at(0).opt_Constant();
+                const auto* right = te.args.at(1).opt_Constant();
+                if (left && right && (left->is_Int() || left->is_Uint())) {
+                    const auto* type = tef.params.types.at(0);
+                    MIR_ASSERT(state, left->tag() == right->tag() && state.getConstType(*left) == type && state.getConstType(*right) == type, StringView("Invalid checked arithmetic constants"));
+                    size_t size;
+                    MIR_ASSERT(state, TargetGetSizeOf(state.sp, state.resolve, type, size), StringView("Checked integer size is unknown"));
+                    const auto bits = static_cast<unsigned>(size * 8);
+                    const auto mask = ~U128() >> (128 - bits);
+                    const auto signBit = U128(1) << (bits - 1);
+                    const bool isSigned = left->is_Int();
+                    const auto a = isSigned ? left->as_Int().v.getInner() : left->as_Uint().v;
+                    const auto b = isSigned ? right->as_Int().v.getInner() : right->as_Uint().v;
+                    U128 result;
+                    bool overflow;
+                    if (tef.name == "add_with_overflow") {
+                        result = (a + b) & mask;
+                        overflow = isSigned ? ((a ^ result) & (b ^ result) & signBit) != 0 : result < a;
+                    } else if (tef.name == "sub_with_overflow") {
+                        result = (a - b) & mask;
+                        overflow = isSigned ? ((a ^ b) & (a ^ result) & signBit) != 0 : a < b;
+                    } else {
+                        result = (a * b) & mask;
+                        const auto magnitudeA = isSigned ? left->as_Int().v.uAbs() : a;
+                        const auto magnitudeB = isSigned ? right->as_Int().v.uAbs() : b;
+                        const auto limit = isSigned ? signBit - (((a ^ b) & signBit) != 0 ? 0u : 1u) : mask;
+                        overflow = magnitudeB != 0 && magnitudeA > limit / magnitudeB;
+                    }
+                    auto value = isSigned
+                        ? MIRConstant::make_Int({S128(result) << (128 - bits) >> (128 - bits), type->as_Primitive()})
+                        : MIRConstant::make_Uint({result, type->as_Primitive()});
+                    const auto flag = MIRLValue::newField(te.retVal.clone(), 1);
+                    auto& continuation = fcn.blocks[te.retBlock];
+                    if (const auto* branch = continuation.terminator.opt_If(); branch && branch->cond == flag && std::all_of(continuation.statements.begin(), continuation.statements.end(), [&](const auto& statement) {
+                        const auto* assign = statement.opt_Assign();
+                        return assign && assign->dst.is_Local() && !checkInvalidatesLvalue(statement, flag, true);
+                    })) {
+                        continuation.terminator = MIRTerminator::make_Goto(overflow ? branch->bbTrue : branch->bbFalse);
+                    }
+                    bb.statements.push_back(MIRStatement::make_Assign({mv$(te.retVal), MIRRValue::make_Tuple({makeVec2<MIRParam>(mv$(value), MIRConstant::make_Bool({overflow}))})}));
+                    bb.terminator = MIRTerminator::make_Goto(te.retBlock);
+                    changed = true;
+                }
             } else if (tef.name == "trustme_slice_len") {
                 MIR_ASSERT(state, te.args.at(0).is_LValue(), StringView("Argument to `trustme_slice_len` must be a lvalue"));
                 auto& e = te.args.at(0).as_LValue();
