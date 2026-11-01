@@ -344,7 +344,6 @@ HIRPatternBinding::HIRPatternBinding()
     , type(Type::Move)
     , name("")
     , slot(0)
-    , implicitDerefCount(0)
 {
 }
 
@@ -353,7 +352,6 @@ HIRPatternBinding::HIRPatternBinding(bool mut, Type type, RcString name, unsigne
     , type(type)
     , name(mv$(name))
     , slot(slot)
-    , implicitDerefCount(0)
 {
 }
 

@@ -27,7 +27,6 @@ struct HIRPatternBinding {
     RcString name;
     unsigned int slot;
 
-    unsigned implicitDerefCount = 0;
     bool rust2024 = false;
 
     bool isValid() const {

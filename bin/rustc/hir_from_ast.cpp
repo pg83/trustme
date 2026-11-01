@@ -1706,7 +1706,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                 if (const auto* ptr = cast<const ASTExprNodeInteger>(sizeInner)) {
                     if (ptr->datatype == CORETYPE_UINT || ptr->datatype == CORETYPE_ANY) {
                         // TODO: Chage the HIR format to support very large arrays
-                        if (ptr->value >= U128(UINT64_MAX)) {
+                        if (ptr->value > U128(UINT64_MAX)) {
                             ERROR(ty->span(), E0000, StringView("Array size out of bounds - 0x") << formatHex(ptr->value) << StringView(" > 0x") << formatHex(UINT64_MAX) << StringView(" in ") << ty);
                         }
                         return crate->types.array(inner, ptr->value.truncateU64());

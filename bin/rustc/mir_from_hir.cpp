@@ -3365,9 +3365,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             break;
         }
         case HIRType::TAG_Pattern: {
-            auto& e = (*ty).as_Pattern();
-            this->appendFromLit(sp, lit, e.inner);
-            break;
+            ERROR(sp, E0000, StringView("constant of non-structural pattern type ") << ty);
         }
         case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
@@ -3750,9 +3748,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 
     for (const auto& pb : pat.bindings) {
         auto path = fieldPath;
-        for (size_t i = 0; i < pb.implicitDerefCount; i++) {
-            path.push_back(FIELD_DEREF);
-        }
 
         this->pushBinding(PatternBinding(std::move(path), pb));
     }
@@ -3772,9 +3767,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 
     if (collapseWildcards && pat.data.is_Any() && rulesets.size() == 1) {
         this->pushRule(PatternRule::make_Any({}));
-        for (size_t i = 0; i < pat.implicitDerefCount; i++) {
-            fieldPath.pop_back();
-        }
         return;
     }
 
@@ -3785,10 +3777,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             if (pve->binding) {
                 const EncodedLiteral* literal = patternConstantLiteral(sp, resolve, pe->val);
                 ASSERT_BUG(sp, literal, StringView("Match with an unresolved constant - ") << pve->path);
-                this->appendFromLit(sp, *literal, ty);
-                for (size_t i = 0; i < pat.implicitDerefCount; i++) {
-                    fieldPath.pop_back();
-                }
+                this->appendFromLit(sp, *literal, *tyP);
                 return;
             } else {
                 TODO(sp, StringView("Match with an unbound constant - ") << pve->path);
@@ -3825,9 +3814,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 
     if (const auto* pe = pat.data.opt_Ref(); pe && pe->isSkipped) {
         this->appendFrom(sp, *pe->sub, ty);
-        for (size_t i = 0; i < pat.implicitDerefCount; i++) {
-            fieldPath.pop_back();
-        }
         return;
     }
 
@@ -4283,7 +4269,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     }
 
                     if (pe.extraBind.isValid()) {
-                        ASSERT_BUG(sp, pe.extraBind.implicitDerefCount == 0, StringView(""));
                         PatternBinding pb(fieldPath, pe.extraBind);
                         pb.field.pop_back();
                         pb.splitSlice = std::make_pair(pe.leading.size(), pe.trailing.size());
@@ -4363,7 +4348,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     auto trailingRulesets = mv$(subBuilder.rulesets);
 
                     if (pe.extraBind.isValid()) {
-                        ASSERT_BUG(sp, pe.extraBind.implicitDerefCount == 0, StringView(""));
                         PatternBinding pb(fieldPath, pe.extraBind);
                         pb.splitSlice = std::make_pair(pe.leading.size(), pe.trailing.size());
                         this->pushBinding(mv$(pb));
