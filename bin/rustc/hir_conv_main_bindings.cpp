@@ -823,7 +823,15 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
     while (next.values.size() < paramsDef.values.size() && !paramsDef.values[next.values.size()].defaultValue.is_Infer()) {
         pp = HIRPathParams(next);
         auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
-        next.values.push_back(monomorph.monomorphConstgeneric(sp, paramsDef.values[next.values.size()].defaultValue, false));
+        auto value = paramsDef.values[next.values.size()].defaultValue.clone();
+        if (const auto* unevaluated = value.opt_Unevaluated()) {
+            auto rebound = (*unevaluated)->clone();
+            rebound.paramsImpl = pp;
+            value = HIRConstGeneric(internUnevaluated(mv$(rebound)));
+        } else {
+            value = monomorph.monomorphConstgeneric(sp, value, false);
+        }
+        next.values.push_back(mv$(value));
     }
     if (next.values.size() != paramsDef.values.size()) {
         ERROR(sp, E0000, StringView("Mismatched const-generic count in ") << path << StringView(", expected ") << paramsDef.values.size() << StringView(" got ") << next.values.size());
@@ -1121,8 +1129,17 @@ auto BindVisitor::visitConstgeneric(HIRConstGeneric& value) -> void {
 }
 
 auto BindVisitor::bindConstgeneric(HIRConstGeneric& value, bool repeatCount) -> void {
-    if (const auto* unevaluated = value.opt_Unevaluated(); unevaluated && !(*unevaluated)->expr->state) {
-        HIRVisitor::visitConstgeneric(value);
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
+        auto next = (*unevaluated)->clone();
+        if (next.selfType) {
+            next.selfType = visitType(next.selfType);
+        }
+        visitPathParams(next.paramsImpl);
+        visitPathParams(next.paramsItem);
+        if (!next.expr->state) {
+            visitExpr(*next.expr);
+        }
+        value = HIRConstGeneric(internUnevaluated(mv$(next)));
     }
     if (auto* unevaluated = value.opt_Unevaluated()) {
         typeUsesContext = true;

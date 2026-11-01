@@ -6706,12 +6706,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         case MIRRValue::TAG_DstPtr: {
                             auto& re = se.src.as_DstPtr();
-                            const auto& ty = state.getLvalueType(re.val);
-                            if (!state.resolve.typeIsSized(state.sp, ty)) {
-                                MIRCleanupLValue(state, mutator, re.val);
-                                break;
-                            }
-
                             re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();

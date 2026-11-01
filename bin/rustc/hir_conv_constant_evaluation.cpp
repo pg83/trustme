@@ -5880,8 +5880,22 @@ auto Expander::visitPathParams(HIRPathParams& p) -> void {
 auto Expander::visitConstgeneric(HIRConstGeneric& value) -> void {
     if (const auto* unevaluated = value.opt_Unevaluated()) {
         auto next = (*unevaluated)->clone();
-        visitPathParams(next.paramsImpl);
-        visitPathParams(next.paramsItem);
+        const auto visitCaptures = [&](HIRPathParams& params, const HIRGenericParams* definition) {
+            if (!definition) {
+                HIRVisitor::visitPathParams(params);
+                return;
+            }
+            auto* saved = getParams;
+            auto callback = makeCallable<GenericParamsCb>([&](const Span&) -> const HIRGenericParams& {
+                return *definition;
+            });
+            getParams = &callback;
+            visitPathParams(params);
+            getParams = saved;
+        };
+        const auto& state = *next.expr->state;
+        visitCaptures(next.paramsImpl, state.implGenerics);
+        visitCaptures(next.paramsItem, state.itemGenerics);
         visitExpr(*next.expr);
         value = HIRConstGeneric(internUnevaluated(mv$(next)));
     }
