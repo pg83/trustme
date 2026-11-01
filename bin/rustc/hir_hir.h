@@ -709,7 +709,8 @@ struct HIRMarkerImplCb final: HIRMarkerImplCallback {
     }
 
     bool visit(const HIRMarkerImpl& impl) override {
-        return f(impl);
+        f(impl);
+        return false;
     }
 };
 
@@ -934,7 +935,7 @@ public:
     HIRExprNode& findExprNodeMut(const Span& sp, const HIRExprNode& node);
 
     bool findTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const;
-    bool findAutoTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const;
+    void findAutoTraitImplsCb(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const;
     bool findTypeImplsCb(const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const;
 
     template <typename F>
@@ -944,9 +945,9 @@ public:
     }
 
     template <typename F>
-    bool findAutoTraitImpls(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, F f) const {
+    void findAutoTraitImpls(const HIRSimplePath& path, const HIRType* type, tCbResolveType tyRes, F f) const {
         HIRMarkerImplCb<F> cb(f);
-        return findAutoTraitImplsCb(path, type, tyRes, cb);
+        findAutoTraitImplsCb(path, type, tyRes, cb);
     }
 
     template <typename F>

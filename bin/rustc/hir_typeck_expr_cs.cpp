@@ -12838,10 +12838,6 @@ void stl::output<ZeroCopyOutput, std::vector<PossibleType>>(ZeroCopyOutput& out,
     outCont(out, values);
 }
 
-template <>
-void stl::output<ZeroCopyOutput, CoerceResult>(ZeroCopyOutput& out, CoerceResult value) {
-    out << static_cast<int>(value);
-}
 
 template <>
 void stl::output<ZeroCopyOutput, Context::Coercion>(ZeroCopyOutput& os, const Context::Coercion& v) {

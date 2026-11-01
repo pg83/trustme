@@ -41,7 +41,6 @@ public:
     const RecordedTokens* tokens = nullptr;
 
     InterpolatedFragment(InterpolatedFragment&&);
-    InterpolatedFragment& operator=(InterpolatedFragment&&);
 
     InterpolatedFragment(TokenTree);
     InterpolatedFragment(ASTPattern);

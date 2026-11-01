@@ -302,19 +302,12 @@ namespace {
         return false;
     }
 
-    bool findAutoTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) {
+    void findAutoTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
-            if (findImplsForType(it->second, type, tyRes, crate.implMatcherScratch, callback)) {
-                return true;
-            }
-
-            if (findImplsList(it->second.generic, type, tyRes, crate.implMatcherScratch, callback)) {
-                return true;
-            }
+            findImplsForType(it->second, type, tyRes, crate.implMatcherScratch, callback);
+            findImplsList(it->second.generic, type, tyRes, crate.implMatcherScratch, callback);
         }
-
-        return false;
     }
 
     bool findTypeImplsInt(const HIRCrate& crate, const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) {
@@ -1010,30 +1003,19 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type,
     return false;
 }
 
-bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const {
+void HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const {
     if (this->allMarkerImpls.size() > 0) {
         if (const auto* group = this->markerImplsForOpt(trait)) {
-            if (findImplsForType(*group, type, tyRes, implMatcherScratch, callback)) {
-                return true;
-            }
-
-            if (findImplsList(group->generic, type, tyRes, implMatcherScratch, callback)) {
-                return true;
-            }
+            findImplsForType(*group, type, tyRes, implMatcherScratch, callback);
+            findImplsList(group->generic, type, tyRes, implMatcherScratch, callback);
         }
-
-        return false;
+        return;
     }
 
-    if (findAutoTraitImplsInt(*this, trait, type, tyRes, callback)) {
-        return true;
-    }
+    findAutoTraitImplsInt(*this, trait, type, tyRes, callback);
     for (const auto& ec : this->extCrates) {
-        if (findAutoTraitImplsInt(*ec.second.data, trait, type, tyRes, callback)) {
-            return true;
-        }
+        findAutoTraitImplsInt(*ec.second.data, trait, type, tyRes, callback);
     }
-    return false;
 }
 
 bool HIRCrate::findTypeImplsCb(const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const {

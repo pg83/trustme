@@ -82,7 +82,6 @@ struct MIRLValue {
             return (val & 3) == 2;
         }
 
-        char as_Return() const;
 
         unsigned as_Argument() const;
 
@@ -158,7 +157,6 @@ struct MIRLValue {
             return (val & 3) == 3;
         }
 
-        char as_Deref() const;
 
         unsigned as_Field() const;
 
@@ -333,13 +331,11 @@ struct MIRLValue {
 
         unsigned as_Local() const;
 
-        char as_Return() const;
 
         unsigned as_Argument() const;
 
         const HIRPath& as_Static() const;
 
-        char as_Deref() const;
 
         unsigned as_Field() const;
 

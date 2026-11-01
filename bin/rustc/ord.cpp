@@ -4,10 +4,6 @@
 
 using namespace stl;
 
-template <>
-void stl::output<ZeroCopyOutput, Ordering>(ZeroCopyOutput& out, Ordering value) {
-    out << static_cast<int>(value);
-}
 
 Ordering ord(bool l, bool r) {
     if (l == r) {

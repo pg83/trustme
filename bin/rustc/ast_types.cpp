@@ -345,10 +345,6 @@ void stl::output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTT
     }
 }
 
-template <>
-void stl::output<ZeroCopyOutput, TypeData::Tag>(ZeroCopyOutput& out, TypeData::Tag value) {
-    out << static_cast<unsigned>(value);
-}
 
 template <>
 void stl::output<ZeroCopyOutput, ASTType>(ZeroCopyOutput& os, const ASTType& tr) {

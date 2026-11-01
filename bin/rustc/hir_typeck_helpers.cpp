@@ -12095,7 +12095,6 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
                 auto responseParams = monomorph.monomorphPathParams(span(), impl.traitArgs, false);
                 pushCandidate(frameIndex, SolverImpl(std::move(responseType), std::move(responseParams), HIRTraitPath::assocListT()), relation == Certainty::Proven, relation, &impl, std::move(implParams), false, CandidateSource::TraitImpl, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities));
             }
-            return false;
         });
 
         /* An auto trait holds of a type when it holds of the type's constituents.  A
@@ -17223,14 +17222,4 @@ template <>
 void stl::output<ZeroCopyOutput, HMTypeInferrence::FmtPP>(ZeroCopyOutput& os, HMTypeInferrence::FmtPP x) {
     x.ctxt.printPathparams(os, x.pps);
     return;
-}
-
-template <>
-void stl::output<ZeroCopyOutput, std::pair<TraitResolution::AutoderefBorrow, HIRPath>>(ZeroCopyOutput& out, const std::pair<TraitResolution::AutoderefBorrow, HIRPath>& value) {
-    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
-}
-
-template <>
-void stl::output<ZeroCopyOutput, std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>>>(ZeroCopyOutput& out, const std::vector<std::pair<TraitResolution::AutoderefBorrow, HIRPath>>& values) {
-    outCont(out, values);
 }

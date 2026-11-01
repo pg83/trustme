@@ -48,8 +48,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     MonomorphStatePtr(const MonomorphStatePtr& x);
 
-    MonomorphStatePtr& operator=(MonomorphStatePtr&& x);
-
     const HIRType* getSelfType() const override;
 
     const HIRPathParams* getImplParams() const override;

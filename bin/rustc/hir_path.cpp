@@ -1642,8 +1642,3 @@ template <>
 void stl::output<ZeroCopyOutput, std::vector<HIRTraitPath>>(ZeroCopyOutput& out, const std::vector<HIRTraitPath>& values) {
     outCont(out, values);
 }
-
-template <>
-void stl::output<ZeroCopyOutput, std::pair<const std::string, HIRSimplePath>>(ZeroCopyOutput& out, const std::pair<const std::string, HIRSimplePath>& value) {
-    out << StringView("(") << value.first << StringView(", ") << value.second << StringView(")");
-}

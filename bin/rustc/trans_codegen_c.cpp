@@ -10059,7 +10059,7 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
             const bool hasOffset = c.offset != U128(0);
             if (hasOffset) {
                 MIR_ASSERT(*mirRes, c.offset.isU64(), StringView("Item address offset is too large: ") << c.offset);
-                of << StringView("((void*)((u8*)");
+                of << StringView("((void*)((uintptr_t)");
             }
             if (c->data.is_UfcsInherent() && c->data.as_UfcsInherent().item == "#type_id") {
                 of << StringView("(void*)&__typeid_") << TransMangleTypeId(c->data.as_UfcsInherent().type);
@@ -10088,7 +10088,7 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
                 }
             }
             if (hasOffset) {
-                of << StringView(" + 0x") << formatHex(c.offset.truncateU64()) << StringView("))");
+                of << StringView(" + (uintptr_t)0x") << formatHex(c.offset.truncateU64()) << StringView("ull))");
             }
             break;
         }

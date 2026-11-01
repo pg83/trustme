@@ -3693,12 +3693,6 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
     return rv;
 }
 
-MacroPatEnt::MacroPatEnt()
-    : tok(TOK_NULL)
-    , type(PAT_TOKEN)
-{
-}
-
 MacroPatEnt::MacroPatEnt(Span sp, Token tok)
     : sp(mv$(sp))
     , tok(mv$(tok))
@@ -4097,10 +4091,6 @@ void stl::output<ZeroCopyOutput, std::vector<MacroExpansionConcatEnt>>(ZeroCopyO
     outCont(out, values);
 }
 
-template <>
-void stl::output<ZeroCopyOutput, ContentLoopVariableUse>(ZeroCopyOutput& out, const ContentLoopVariableUse& value) {
-    operator<<(out, value);
-}
 
 template <>
 void stl::output<ZeroCopyOutput, ExpTok>(ZeroCopyOutput& os, const ExpTok& t) {

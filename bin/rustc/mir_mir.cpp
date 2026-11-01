@@ -1295,11 +1295,6 @@ MIRLValue::Storage::Tag MIRLValue::Storage::tag() const {
     return static_cast<Tag>(val & 3);
 }
 
-char MIRLValue::Storage::as_Return() const {
-    BUG_ASSERT(is_Return());
-    return 0;
-}
-
 unsigned MIRLValue::Storage::as_Argument() const {
     BUG_ASSERT(is_Argument());
     return static_cast<unsigned>((val >> 2) - 1);
@@ -1330,11 +1325,6 @@ MIRLValue::Wrapper MIRLValue::Wrapper::newIndex(unsigned idx) {
         idx = Storage::MAX_ARG;
     }
     return Wrapper((idx << 2) | 3);
-}
-
-char MIRLValue::Wrapper::as_Deref() const {
-    BUG_ASSERT(is_Deref());
-    return 0;
 }
 
 unsigned MIRLValue::Wrapper::as_Field() const {
@@ -1477,11 +1467,6 @@ unsigned MIRLValue::RefCommon::as_Local() const {
     return lv_->root.as_Local();
 }
 
-char MIRLValue::RefCommon::as_Return() const {
-    BUG_ASSERT(is_Return());
-    return lv_->root.as_Return();
-}
-
 unsigned MIRLValue::RefCommon::as_Argument() const {
     BUG_ASSERT(is_Argument());
     return lv_->root.as_Argument();
@@ -1490,11 +1475,6 @@ unsigned MIRLValue::RefCommon::as_Argument() const {
 const HIRPath& MIRLValue::RefCommon::as_Static() const {
     BUG_ASSERT(is_Static());
     return lv_->root.as_Static();
-}
-
-char MIRLValue::RefCommon::as_Deref() const {
-    BUG_ASSERT(is_Deref());
-    return lv_->wrappers[wrapperCount_ - 1].as_Deref();
 }
 
 unsigned MIRLValue::RefCommon::as_Field() const {
@@ -1685,10 +1665,6 @@ void stl::output<ZeroCopyOutput, Vector<i64>>(ZeroCopyOutput& out, const Vector<
     outCont(out, values);
 }
 
-template <>
-void stl::output<ZeroCopyOutput, std::vector<Vector<u8>>>(ZeroCopyOutput& out, const std::vector<Vector<u8>>& values) {
-    outCont(out, values);
-}
 
 template <>
 void stl::output<ZeroCopyOutput, std::vector<MIRAsmParam>>(ZeroCopyOutput& out, const std::vector<MIRAsmParam>& values) {

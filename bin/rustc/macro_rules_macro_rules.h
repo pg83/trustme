@@ -65,8 +65,6 @@ struct MacroPatEnt {
         PAT_PAT_PARAM,
     } type;
 
-    MacroPatEnt();
-
     MacroPatEnt(Span sp, Token tok);
 
     MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type);

@@ -543,7 +543,7 @@ namespace {
                 auto& te = (*ty).as_Borrow();
                 const auto* dataReloc = lit.getReloc();
                 const auto data_ptr = lit.readUint(TargetGetPointerBits() / 8);
-                MIR_ASSERT(state, dataReloc ? data_ptr >= EncodedLiteral::PTR_BASE : data_ptr != 0, StringView("Bad pointer value - 0x") << formatHex(data_ptr));
+                MIR_ASSERT(state, dataReloc || data_ptr != 0, StringView("Bad pointer value - 0x") << formatHex(data_ptr));
 
                 if (!dataReloc) {
                     const HIRType* ptrInner;
@@ -581,13 +581,18 @@ namespace {
                     }
                 }
 
-                const auto ofs = data_ptr - EncodedLiteral::PTR_BASE;
+                const auto ofs = (data_ptr - EncodedLiteral::PTR_BASE) & (U128::max() >> (128 - TargetGetPointerBits()));
                 if (dataReloc->p) {
                     const auto& path = *dataReloc->p;
                     auto ptrVal = MIRConstant::make_ItemAddr({box$(params.monomorphPath(state.sp, path)), ofs});
                     DEBUG(StringView("ptr_val = ") << ptrVal);
                     const HIRType* tmp;
                     const auto& srcTy = state.getStaticType(path);
+                    size_t sourceSize = 0, sourceAlign = 0;
+                    const bool nonNull = ofs == U128(0) || (TargetGetSizeAndAlignOf(state.sp, state.resolve, srcTy, sourceSize, sourceAlign) && ((sourceSize != SIZE_MAX && ofs <= U128(sourceSize)) || (sourceAlign != 0 && ofs % U128(sourceAlign) != U128(0))));
+                    if (!nonNull) {
+                        ERROR(state.sp, E0000, StringView("constant reference may be null"));
+                    }
 
                     auto metaTy = state.resolve.metadataType(state.sp, te.inner);
                     switch (metaTy) {

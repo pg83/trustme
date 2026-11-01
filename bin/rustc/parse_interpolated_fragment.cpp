@@ -47,14 +47,6 @@ InterpolatedFragment::InterpolatedFragment(InterpolatedFragment&& x)
     ptr = x.ptr, x.ptr = nullptr;
 }
 
-InterpolatedFragment& InterpolatedFragment::operator=(InterpolatedFragment&& x) {
-    type = x.type;
-    ptr = x.ptr, x.ptr = nullptr;
-    span = std::move(x.span);
-    tokens = x.tokens;
-    return *this;
-}
-
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ASTExprNode* ptr)
     : type(type)
     , ptr(ptr)

@@ -853,7 +853,7 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     MIREvalStaticRefPtr getStaticref(HIRPath p, const HIRType** outTy = nullptr);
 
-    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, u64* rawAddress = nullptr);
+    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, std::pair<u64, MIREvalRelocPtr>* borrowAddress = nullptr);
 
     const EncodedLiteral& getConst(const HIRPath& inP, const HIRType** outTy);
 
@@ -2878,9 +2878,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto leftPtr = localState.readParamPtr(e.args.at(0));
                     auto rightPtr = localState.readParamPtr(e.args.at(1));
                     auto isAligned = [&](const std::pair<u64, MIREvalRelocPtr>& pointer) {
-                        if (pointer.second && pointer.first < EncodedLiteral::PTR_BASE) {
-                            return false;
-                        }
                         const u64 address = pointer.second ? pointer.first - EncodedLiteral::PTR_BASE : pointer.first;
                         return alignment == 0 || address % alignment == 0;
                     };
@@ -5053,7 +5050,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MI
     }
 }
 
-auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, u64* rawAddress) -> MIREvalValueRef {
+auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, std::pair<u64, MIREvalRelocPtr>* borrowAddress) -> MIREvalValueRef {
     const HIRType* tmpTy = nullptr;
     const HIRType* typ = nullptr;
     MIREvalValueRef metadata;
@@ -5162,26 +5159,53 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                 if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
                     p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone()));
                 }
-                MIR_ASSERT(state, p.first % al == 0, StringView("Unaligned pointer deref"));
-                bool zeroSizedDeref = sz == 0;
-                if (sz == SIZE_MAX) {
-                    size_t itemSize = 1;
-                    if (const auto* slice = typ->opt_Slice()) {
-                        if (!TargetGetSizeOf(state.sp, rootResolve, slice->inner, itemSize)) {
-                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << slice->inner);
-                        }
-                    } else if (typ != HIRCoreType::Str) {
-                        itemSize = 1;
+                struct DerefLayout { bool zero; size_t align; };
+                const auto derefLayout = [&](auto&& recurse, const HIRType* type, size_t size, size_t align) -> DerefLayout {
+                    if (size != SIZE_MAX) {
+                        return {size == 0, align};
                     }
-                    zeroSizedDeref = itemSize == 0 || metadata.readUsize(state) == 0;
-                }
-                if (p.first < EncodedLiteral::PTR_BASE) {
-                    MIR_ASSERT(state, p.first != 0 && !p.second && zeroSizedDeref && rawAddress, StringView("Null (<PTR_BASE) pointer deref"));
-                    MIR_ASSERT(state, &w == &lv.wrappers.back(), StringView("Raw pointer deref followed by an lvalue projection"));
-                    *rawAddress = p.first;
-                    val = MIREvalValueRef();
+                    if (const auto* slice = type->opt_Slice()) {
+                        size_t itemSize;
+                        MIR_ASSERT(state, TargetGetSizeOf(state.sp, rootResolve, slice->inner, itemSize), StringView("Unknown slice element size"));
+                        return {itemSize == 0 || metadata.readUsize(state) == 0, align};
+                    }
+                    if (type == HIRCoreType::Str) {
+                        return {metadata.readUsize(state) == 0, align};
+                    }
+                    if (type->is_TraitObject()) {
+                        const auto vtable = metadata.readPtr(state);
+                        const auto* staticRef = vtable.second.asStaticref();
+                        const auto* path = staticRef ? staticRef->path().data.opt_UfcsKnown() : nullptr;
+                        MIR_ASSERT(state, vtable.first == EncodedLiteral::PTR_BASE && path && path->item == "vtable#", StringView("Invalid dereference vtable"));
+                        MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, rootResolve, path->type, size, align) && size != SIZE_MAX, StringView("Invalid vtable source layout"));
+                        return {size == 0, align};
+                    }
+                    const auto* repr = TargetGetTypeRepr(state.sp, rootResolve, type);
+                    MIR_ASSERT(state, repr && !repr->fields.empty(), StringView("Invalid unsized dereference type - ") << type);
+                    const auto& field = repr->fields.back();
+                    size_t tailSize, tailAlign;
+                    MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, rootResolve, field.ty, tailSize, tailAlign), StringView("Unknown unsized tail layout"));
+                    auto tail = recurse(recurse, field.ty, tailSize, tailAlign);
+                    if (const auto* path = type->opt_Path(); path && path->binding.is_Struct()) {
+                        const auto packing = path->binding.as_Struct()->maxFieldAlignment;
+                        if (packing != 0) {
+                            tail.align = std::min(tail.align, static_cast<size_t>(packing));
+                        }
+                    }
+                    return {field.offset == 0 && tail.zero, std::max(align, tail.align)};
+                };
+                const auto layout = derefLayout(derefLayout, typ, sz, al);
+                const auto address = p.second ? p.first - EncodedLiteral::PTR_BASE : p.first;
+                MIR_ASSERT(state, layout.align != 0 && address % layout.align == 0, StringView("Unaligned pointer deref"));
+                if (layout.zero) {
+                    MIR_ASSERT(state, p.first != 0 || p.second, StringView("Null pointer deref"));
+                    if (borrowAddress) {
+                        *borrowAddress = p;
+                    }
+                    val = MIREvalValueRef(MIREvalAllocationPtr::allocateScratch(valuePool, 0));
                     break;
                 }
+                MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE && p.second, StringView("Dereference outside allocation"));
                 DEBUG(StringView("> ") << MIREvalValueRef(p.second) << StringView(" - o=") << (p.first - EncodedLiteral::PTR_BASE) << StringView(" sz=") << sz << StringView(" ") << typ);
                 // TODO: Determine size using metadata?
                 if (sz == SIZE_MAX) {
@@ -5411,10 +5435,10 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
 
 auto MIREvalCallStackEntry::writeBorrow(MIREvalValueRef dst, HIRBorrowType bt, const MIRLValue& lv) -> void {
     MIREvalValueRef meta;
-    u64 rawAddress = 0;
-    auto val = this->getLval(lv, &meta, &rawAddress);
-    if (rawAddress) {
-        dst.writePtr(state, rawAddress, MIREvalRelocPtr());
+    std::pair<u64, MIREvalRelocPtr> borrowAddress{};
+    auto val = this->getLval(lv, &meta, &borrowAddress);
+    if (borrowAddress.first || borrowAddress.second) {
+        dst.writePtr(state, borrowAddress.first, borrowAddress.second);
     } else {
         dst.writePtr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
     }

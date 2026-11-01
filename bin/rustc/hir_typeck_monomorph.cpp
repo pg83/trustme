@@ -30,14 +30,6 @@ MonomorphStatePtr::MonomorphStatePtr(const MonomorphStatePtr& x)
 {
 }
 
-MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
-    selfTy = x.selfTy;
-    ppImpl = x.ppImpl;
-    ppMethod = x.ppMethod;
-    ppHrb = x.ppHrb;
-    return *this;
-}
-
 MonomorphState::MonomorphState(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy()

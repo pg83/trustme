@@ -34,7 +34,6 @@ namespace {
         void handleFunction(const ASTVisibility& vis, const RcString& name, const ASTFunction& f);
         void handleStatic(const ASTVisibility& vis, const RcString& name, const ASTStatic& s);
 
-        virtual bool isConst() const override;
 
         virtual void visit(ASTExprNodeBlock& n) override;
 
@@ -981,10 +980,6 @@ void RustPrinter::visitWithParensIf(ASTExprNode* node) {
     } else {
         ASTNodeVisitor::visit(node);
     }
-}
-
-auto RustPrinter::isConst() const -> bool {
-    return true;
 }
 
 auto RustPrinter::visit(ASTExprNodeBlock& n) -> void {

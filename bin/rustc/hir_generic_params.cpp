@@ -150,8 +150,3 @@ void stl::output<ZeroCopyOutput, HIRGenericParams::PrintBounds>(ZeroCopyOutput& 
     }
     return;
 }
-
-template <>
-void stl::output<ZeroCopyOutput, std::vector<HIRGenericBound>>(ZeroCopyOutput& out, const std::vector<HIRGenericBound>& values) {
-    outCont(out, values);
-}

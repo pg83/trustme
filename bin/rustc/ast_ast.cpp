@@ -578,15 +578,7 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 {
 }
 
-template <>
-void stl::output<ZeroCopyOutput, ASTStructItem>(ZeroCopyOutput& out, const ASTStructItem& item) {
-    out << item.vis << item.name << StringView(": ") << item.type;
-}
 
-template <>
-void stl::output<ZeroCopyOutput, ASTTupleItem>(ZeroCopyOutput& out, const ASTTupleItem& item) {
-    out << item.vis << item.type;
-}
 
 template <>
 void stl::output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDef& impl) {
@@ -594,11 +586,6 @@ void stl::output<ZeroCopyOutput, ASTImplDef>(ZeroCopyOutput& os, const ASTImplDe
     return;
 }
 
-template <>
-void stl::output<ZeroCopyOutput, ASTImpl>(ZeroCopyOutput& os, const ASTImpl& impl) {
-    os << impl.def();
-    return;
-}
 
 template <>
 void stl::output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTUseItem::Ent& x) {
@@ -606,15 +593,7 @@ void stl::output<ZeroCopyOutput, ASTUseItem::Ent>(ZeroCopyOutput& os, const ASTU
     return;
 }
 
-template <>
-void stl::output<ZeroCopyOutput, std::vector<ASTStructItem>>(ZeroCopyOutput& out, const std::vector<ASTStructItem>& values) {
-    outCont(out, values);
-}
 
-template <>
-void stl::output<ZeroCopyOutput, std::vector<ASTTupleItem>>(ZeroCopyOutput& out, const std::vector<ASTTupleItem>& values) {
-    outCont(out, values);
-}
 
 template <>
 void stl::output<ZeroCopyOutput, std::vector<ASTUseItem::Ent>>(ZeroCopyOutput& out, const std::vector<ASTUseItem::Ent>& values) {

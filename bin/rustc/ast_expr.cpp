@@ -1508,10 +1508,6 @@ ASTExprNode* ASTNodeVisitorDef::visit(ASTExprNode* cnode) {
     return cnode;
 }
 
-bool ASTNodeVisitor::isConst() const {
-    return false;
-}
-
 template <>
 void stl::output<ZeroCopyOutput, ASTExprNodeMacro>(ZeroCopyOutput& os, const ASTExprNodeMacro& node) {
     node.print(os);
