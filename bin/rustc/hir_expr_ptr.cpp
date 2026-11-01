@@ -166,11 +166,6 @@ HIRExprState& HIRExprStatePtr::operator*() {
     return *ptr;
 }
 
-const HIRExprState& HIRExprStatePtr::operator*() const {
-    BUG_ASSERT(ptr);
-    return *ptr;
-}
-
 HIRExprState* HIRExprStatePtr::operator->() {
     BUG_ASSERT(ptr);
     return ptr;

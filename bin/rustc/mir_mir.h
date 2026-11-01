@@ -378,8 +378,6 @@ struct MIRLValue {
             return CRef(*lv_, wrapperCount_);
         }
 
-        MRef innerRef();
-
         void replace(MIRLValue x);
     };
 

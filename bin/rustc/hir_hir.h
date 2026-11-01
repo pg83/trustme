@@ -406,15 +406,6 @@ public:
     };
     using Data = HIRStructData;
 
-    struct FieldDefault {
-        size_t index;
-        HIRExprPtr expr;
-        EncodedLiteral valueRes;
-        HIRConstant::ValueState state = HIRConstant::ValueState::Unknown;
-
-        FieldDefault(size_t index, HIRExprPtr v);
-    };
-
     HIRStruct(HIRGenericParams params, Repr repr, Data data);
 
     HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned align, HIRTraitMarkings tm, HIRStructMarkings sm);

@@ -115,13 +115,6 @@ void Span::warningCb(WarningType warningTag, SpanMessageCallback& msg) const {
     printSpanMessage(tag, msg);
 }
 
-void Span::noteCb(SpanMessageCallback& msg) const {
-    auto tag = makeCallable<SpanMessageCb>([](auto& os) {
-        os << StringView("note");
-    });
-    printSpanMessage(tag, msg);
-}
-
 SpanInner::~SpanInner() {
 }
 

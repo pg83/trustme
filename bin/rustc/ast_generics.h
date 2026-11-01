@@ -29,10 +29,6 @@ public:
         return attrs_;
     }
 
-    const Span& span() const {
-        return span_;
-    }
-
     const RcString& name() const {
         return name_;
     }
@@ -62,10 +58,6 @@ public:
         return attrs_;
     }
 
-    const Span& span() const {
-        return span_;
-    }
-
     const Ident& name() const {
         return name_;
     }
@@ -88,10 +80,6 @@ public:
 
     const ASTAttributeList& attrs() const {
         return attrs_;
-    }
-
-    const Span& span() const {
-        return span_;
     }
 
     const Ident& name() const {

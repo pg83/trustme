@@ -204,12 +204,6 @@ HIRSerialiseWriter::CloseOnDrop::CloseOnDrop(HIRSerialiseWriter& r)
 {
 }
 
-HIRSerialiseWriter::CloseOnDrop::CloseOnDrop(CloseOnDrop&& x)
-    : r(x.r)
-{
-    x.r = nullptr;
-}
-
 HIRSerialiseWriter::CloseOnDrop::~CloseOnDrop() {
     if (r) {
         r->closeObject();
@@ -304,12 +298,6 @@ std::string HIRSerialiseReader::readString() {
 HIRSerialiseReader::CloseOnDrop::CloseOnDrop(HIRSerialiseReader& r)
     : r(&r)
 {
-}
-
-HIRSerialiseReader::CloseOnDrop::CloseOnDrop(CloseOnDrop&& x)
-    : r(x.r)
-{
-    x.r = nullptr;
 }
 
 HIRSerialiseReader::CloseOnDrop::~CloseOnDrop() {

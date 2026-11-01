@@ -373,7 +373,6 @@ class ASTTrait {
     ASTNamedList<ASTItem> items_;
 
 public:
-    ASTTrait();
     ASTTrait(ASTGenericParams params, std::vector<Spanned<TypeTraitPath>> supertraits, std::vector<Spanned<ASTLifetimeRef>> lifetimes);
     ~ASTTrait();
     ASTTrait(ASTTrait&&);
@@ -600,10 +599,6 @@ public:
 
     void setIsUnsafe() {
         isUnsafe_ = true;
-    }
-
-    bool isUnsafe() const {
-        return isUnsafe_;
     }
 
     void setIsConst() {

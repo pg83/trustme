@@ -85,8 +85,6 @@ public:
 
     HIRExprState& operator*();
 
-    const HIRExprState& operator*() const;
-
     HIRExprState* operator->();
 
     const HIRExprState* operator->() const;

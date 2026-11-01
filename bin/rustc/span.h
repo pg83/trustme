@@ -82,7 +82,6 @@ public:
     [[noreturn]] void bugCb(SpanMessageCallback& msg) const;
     [[noreturn]] void errorCb(ErrorType tag, SpanMessageCallback& msg) const;
     void warningCb(WarningType tag, SpanMessageCallback& msg) const;
-    void noteCb(SpanMessageCallback& msg) const;
 
     template <typename F>
     [[noreturn]] void bug(F f) const {
@@ -100,12 +99,6 @@ public:
     void warning(WarningType tag, F f) const {
         SpanMessageCb<F> cb(f);
         warningCb(tag, cb);
-    }
-
-    template <typename F>
-    void note(F f) const {
-        SpanMessageCb<F> cb(f);
-        noteCb(cb);
     }
 
 private:
@@ -224,12 +217,6 @@ Spanned<T> makeSpanned(Span sp, T val) {
         ::Span(span).warning(code, [&](stl::ZeroCopyOutput& os) { \
             os << msg;                                     \
         });                                                \
-    } while (0)
-#define NOTE(span, msg)                           \
-    do {                                          \
-        ::Span(span).note([&](stl::ZeroCopyOutput& os) { \
-            os << msg;                            \
-        });                                       \
     } while (0)
 #define BUG(span, msg)                                        \
     do {                                                      \

@@ -1302,11 +1302,6 @@ ASTExprNodeLetBinding::ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTE
 {
 }
 
-ASTExprNodeAssign::ASTExprNodeAssign()
-    : op(NONE)
-{
-}
-
 ASTExprNodeAssign::ASTExprNodeAssign(Operation op, ASTExprNode* slot, ASTExprNode* value)
     : op(op)
     , slot(slot)
@@ -1330,11 +1325,6 @@ ASTExprNodeCallMethod::ASTExprNodeCallMethod(ASTExprNode* obj, ASTPathNode metho
 ASTExprNodeCallObject::ASTExprNodeCallObject(ASTExprNode* val, std::vector<ASTExprNode*>&& args)
     : val(val)
     , args(std::move(args))
-{
-}
-
-ASTExprNodeLoop::ASTExprNodeLoop()
-    : label("")
 {
 }
 

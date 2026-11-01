@@ -1535,13 +1535,6 @@ MIRLValue::MRef::MRef(MIRLValue& lv)
 {
 }
 
-MIRLValue::MRef MIRLValue::MRef::innerRef() {
-    BUG_ASSERT(wrapperCount_ > 0);
-    auto rv = *this;
-    rv.wrapperCount_--;
-    return rv;
-}
-
 void MIRLValue::MRef::replace(MIRLValue x) {
     if (wrapperCount_ == 0 && x.wrappers.empty()) {
         mutLv_->root = std::move(x.root);

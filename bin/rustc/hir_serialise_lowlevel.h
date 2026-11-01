@@ -19,7 +19,6 @@ struct HIRSerialiseWriter {
 
         explicit CloseOnDrop(HIRSerialiseWriter& r);
         CloseOnDrop(const CloseOnDrop&) = delete;
-        CloseOnDrop(CloseOnDrop&& x);
         ~CloseOnDrop();
     };
 
@@ -55,7 +54,6 @@ struct HIRSerialiseReader {
 
         explicit CloseOnDrop(HIRSerialiseReader& r);
         CloseOnDrop(const CloseOnDrop&) = delete;
-        CloseOnDrop(CloseOnDrop&& x);
         ~CloseOnDrop();
     };
 

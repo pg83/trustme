@@ -15,12 +15,6 @@
 
 using namespace stl;
 
-ASTTrait::ASTTrait()
-    : isMarker_(false)
-    , isUnsafe_(false)
-{
-}
-
 ASTTrait::ASTTrait(ASTGenericParams params, std::vector<Spanned<TypeTraitPath>> supertraits, std::vector<Spanned<ASTLifetimeRef>> lifetimes)
     : params_(mv$(params))
     , supertraits_(mv$(supertraits))

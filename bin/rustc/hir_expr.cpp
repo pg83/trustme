@@ -760,14 +760,6 @@ HIRExprNodeBlock::HIRExprNodeBlock(Span sp)
 {
 }
 
-HIRExprNodeBlock::HIRExprNodeBlock(Span sp, bool isUnsafe, std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode)
-    : HIRExprNode(mv$(sp))
-    , isUnsafe(isUnsafe)
-    , nodes(mv$(nodes))
-    , valueNode(mv$(valueNode))
-{
-}
-
 HIRExprNodeConstBlock::HIRExprNodeConstBlock(Span sp, HIRExprNodeP inner)
     : HIRExprNode(mv$(sp))
     , inner(mv$(inner))

@@ -461,8 +461,6 @@ namespace {
 
             TypeNeed typeBoundNeeded(const Span& sp, const HIRType* ty) const;
 
-            TypeNeed typeBoundNeeded(const Span& sp, const HIRGenericPath& tp) const;
-
             TypeNeed typeBoundNeeded(const Span& sp, const HIRTraitPath& tp) const;
 
             bool boundNeeded(const Span& sp, const HIRGenericBound& b) const;
@@ -4954,16 +4952,6 @@ auto ClosureExprVisitorExtract::Monomorph::typeBoundNeeded(const Span& sp, const
     visitTyWith(ty, [this, &rv](const HIRType* type) {
         return updateTypeNeed(rv, type);
     });
-    return rv;
-}
-
-auto ClosureExprVisitorExtract::Monomorph::typeBoundNeeded(const Span& sp, const HIRGenericPath& tp) const -> TypeNeed {
-    auto rv = TypeNeed::NoGenerics;
-    for (const auto& ty : tp.params.types) {
-        visitTyWith(ty, [this, &rv](const HIRType* type) {
-            return updateTypeNeed(rv, type);
-        });
-    }
     return rv;
 }
 

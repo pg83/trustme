@@ -274,7 +274,6 @@ struct ASTExprNodeAssign: public ASTExprNode {
     ASTExprNode* slot = nullptr;
     ASTExprNode* value = nullptr;
 
-    ASTExprNodeAssign();
 
     ASTExprNodeAssign(Operation op, ASTExprNode* slot, ASTExprNode* value);
 
@@ -332,7 +331,6 @@ struct ASTExprNodeLoop: public ASTExprNode {
     Ident label;
     ASTExprNode* code = nullptr;
 
-    ASTExprNodeLoop();
 
     ASTExprNodeLoop(Ident label, ASTExprNode* code);
 

@@ -1371,12 +1371,6 @@ HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args,
 {
 }
 
-HIRStruct::FieldDefault::FieldDefault(size_t index, HIRExprPtr v)
-    : index(index)
-    , expr(std::move(v))
-{
-}
-
 HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data)
     : params(mv$(params))
     , repr(mv$(repr))

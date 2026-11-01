@@ -70,8 +70,6 @@ struct HIRExprNodeBlock: public HIRExprNode {
 
     HIRExprNodeBlock(Span sp);
 
-    HIRExprNodeBlock(Span sp, bool isUnsafe, std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode);
-
     static constexpr unsigned int kind = 1;
     unsigned int nodeKind() const override;
     void visit(HIRExprVisitor& nv) override;
