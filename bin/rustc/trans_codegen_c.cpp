@@ -7211,7 +7211,8 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         /* `type_id` returns a `TypeId`, and its value is produced by constant
            evaluation (as in rustc's `write_type_id`); `TypeId::of` wraps the
            call in a `const` block, so it never reaches codegen as a call. */
-        MIR_TODO(localMirRes, StringView("Runtime call to the `type_id` intrinsic for ") << params.types.at(0));
+        Span callSpan(localMirRes.sp, e.source.filename, e.source.line, e.source.column, e.source.line, e.source.column);
+        ERROR(callSpan, E0000, StringView("intrinsic `type_id` must be called in a const block"));
     } else if (name == "type_name") {
         auto name = localMirRes.intrinsicTypeName(params.types.at(0));
         emitLvalue(e.retVal);
@@ -10263,11 +10264,9 @@ auto CodeGeneratorC::emitCtypeCb(const HIRType* ty, CTypeCallback& inner, bool i
                 }
                 case HIRTypePathBinding::TAG_Unbound: {
                     MIR_BUG(*mirRes, StringView("Unbound type path in trans - ") << ty);
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
                     MIR_BUG(*mirRes, StringView("Opaque path in trans - ") << ty);
-                    break;
                 }
             }
             if (!inner.empty()) {
@@ -10277,15 +10276,12 @@ auto CodeGeneratorC::emitCtypeCb(const HIRType* ty, CTypeCallback& inner, bool i
         }
         case HIRType::TAG_Generic: {
             MIR_BUG(*mirRes, StringView("Generic in trans - ") << ty);
-            break;
         }
         case HIRType::TAG_TraitObject: {
             MIR_BUG(*mirRes, StringView("Raw trait object - ") << ty);
-            break;
         }
         case HIRType::TAG_ErasedType: {
             MIR_BUG(*mirRes, StringView("ErasedType in trans - ") << ty);
-            break;
         }
         case HIRType::TAG_Array: {
             of << StringView("t_") << TransMangle(ty);
@@ -10296,7 +10292,6 @@ auto CodeGeneratorC::emitCtypeCb(const HIRType* ty, CTypeCallback& inner, bool i
         }
         case HIRType::TAG_Slice: {
             MIR_BUG(*mirRes, StringView("Raw slice object - ") << ty);
-            break;
         }
         case HIRType::TAG_Tuple: {
             auto& te = (*ty).as_Tuple();
@@ -10341,10 +10336,9 @@ auto CodeGeneratorC::emitCtypeCb(const HIRType* ty, CTypeCallback& inner, bool i
             auto& te = (*ty).as_Pattern();
             emitCtypeCb(te.inner, inner, isExternC);
             break;
-        } break;
+        }
         case HIRType::TAG_NodeType:
             MIR_BUG(*mirRes, StringView("NodeType during trans - ") << ty);
-            break;
     }
 }
 

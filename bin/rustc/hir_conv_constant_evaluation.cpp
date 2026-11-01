@@ -5269,7 +5269,7 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, const HIRType** outTy) 
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
     })) {
-        BUG(state.sp, StringView("Constant ") << p << StringView(" references a generic parameter after substitution"));
+        ERROR(state.sp, E0000, StringView("constant evaluation cannot depend on generic parameters: ") << p);
     }
     MonomorphState constMs(rootResolve.crate.types);
     const HIRGenericParams* implParamsDef = nullptr;

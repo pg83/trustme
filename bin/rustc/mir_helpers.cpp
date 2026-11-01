@@ -648,10 +648,8 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                     } else {
                         MIR_BUG(*this, StringView("Field access on invalid type - ") << ty);
                     }
-                    break;
                 }
             }
-            break;
         }
         case MIRLValue::Wrapper::TAG_Deref: {
             switch ((*ty).tag()) {
@@ -673,7 +671,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                     return te.inner;
                 }
             }
-            break;
         }
         case MIRLValue::Wrapper::TAG_Index: {
             switch ((*ty).tag()) {
@@ -688,7 +685,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                     return te.inner;
                 }
             }
-            break;
         }
         case MIRLValue::Wrapper::TAG_Downcast: {
             decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
@@ -715,10 +711,8 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
 
                         return resolve.monomorphExpandOpt(sp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                     }
-                    break;
                 }
             }
-            break;
         }
     }
     UNREACHABLE();
