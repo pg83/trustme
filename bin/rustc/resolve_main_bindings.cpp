@@ -3367,16 +3367,6 @@ namespace {
         UNREACHABLE();
     }
 
-    ASTPath hirToAst(const HIRSimplePath& p) {
-        BUG_ASSERT(p.crateName() != "");
-        ASTPath rv(p.crateName(), {});
-        rv.nodes().reserve(p.components().size());
-        for (const auto& n : p.components()) {
-            rv.nodes().push_back(ASTPathNode(n));
-        }
-        return rv;
-    }
-
     bool spanIsFromMacro(const Span& sp) {
         for (auto s = sp; s; s = s->parentSpan) {
             if (s->nodeKind() == SpanInnerMacro::kind) {
@@ -4124,35 +4114,18 @@ namespace {
             case IndexName::Namespace: {
                 auto itM = findHygienicItem(hmod->modItems, lastnode.name(), lastName);
                 if (itM != hmod->modItems.end()) {
-                    if (itM->second->ent.is_Import()) {
-                        auto& e = itM->second->ent.as_Import();
-                        auto bindings = path.bindings.clone();
-                        path = hirToAst(e.path);
-                        path.bindings = mv$(bindings);
-                    }
                     return;
                 }
             } break;
             case IndexName::Value: {
                 auto itV = findHygienicItem(hmod->valueItems, lastnode.name(), lastName);
                 if (itV != hmod->valueItems.end()) {
-                    if (itV->second->ent.is_Import()) {
-                        auto& e = itV->second->ent.as_Import();
-                        auto bindings = path.bindings.clone();
-                        path = hirToAst(e.path);
-                        path.bindings = mv$(bindings);
-                    }
                     return;
                 }
             } break;
             case IndexName::Macro: {
                 auto itV = findHygienicItem(hmod->macroItems, lastnode.name(), lastName);
                 if (itV != hmod->macroItems.end()) {
-                    if (const auto* e = itV->second->ent.opt_Import()) {
-                        auto bindings = path.bindings.clone();
-                        path = hirToAst(e->path);
-                        path.bindings = mv$(bindings);
-                    }
                     return;
                 }
             } break;
