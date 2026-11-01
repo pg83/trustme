@@ -1590,7 +1590,7 @@ namespace {
                     auto& e = dat.as_MacroInv();
 
                     if (macroRecursionStack.size() > es.wb.settings->recursionLimit) {
-                        ERROR(i.span, E0000, StringView("Exceeded macro recusion limit of ") << es.wb.settings->recursionLimit);
+                        ERROR(i.span, E0000, StringView("Exceeded macro recursion limit of ") << es.wb.settings->recursionLimit);
                     }
                     auto miOwned = mv$(e);
 

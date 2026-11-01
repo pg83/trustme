@@ -35,7 +35,8 @@ enum class AttrStage {
 };
 
 class ExpandDecorator {
-    void unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const;
+protected:
+    virtual void unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const;
 
 public:
     virtual ~ExpandDecorator() = default;

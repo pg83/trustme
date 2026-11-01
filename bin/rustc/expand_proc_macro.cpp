@@ -85,21 +85,20 @@ namespace {
         Pattern = 7,
     };
 
-    struct DecoratorProcMacroDerive: public ExpandDecorator {
+    struct ProcMacroDefinitionDecorator: ExpandDecorator {
         AttrStage stage() const override;
+        void unexpected(const Span& sp, const ASTAttribute& attr, const char* location) const override;
+    };
 
+    struct DecoratorProcMacroDerive: ProcMacroDefinitionDecorator {
         void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
-    struct DecoratorProcMacroAttribute: public ExpandDecorator {
-        AttrStage stage() const override;
-
+    struct DecoratorProcMacroAttribute: ProcMacroDefinitionDecorator {
         void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
-    struct DecoratorProcMacro: public ExpandDecorator {
-        AttrStage stage() const override;
-
+    struct DecoratorProcMacro: ProcMacroDefinitionDecorator {
         void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
@@ -862,8 +861,12 @@ Ident::Hygiene ProcMacroInv::realGetHygiene() const {
     return receivedHygiene;
 }
 
-auto DecoratorProcMacroDerive::stage() const -> AttrStage {
+auto ProcMacroDefinitionDecorator::stage() const -> AttrStage {
     return AttrStage::Post;
+}
+
+void ProcMacroDefinitionDecorator::unexpected(const Span& sp, const ASTAttribute& attr, const char* location) const {
+    ERROR(sp, E0000, StringView("#[") << attr.name() << StringView("] can only be applied to functions, found on ") << location);
 }
 
 auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
@@ -872,7 +875,7 @@ auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, 
     }
 
     if (!i.is_Function()) {
-        TODO(sp, StringView("Error for proc_macro_derive on non-Function"));
+        unexpected(sp, attr, "item");
     }
 
     std::vector<std::string> attributes;
@@ -902,24 +905,16 @@ auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, 
     crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Derive, RcString::newInterned(FMT(traitName)), path, mv$(attributes)});
 }
 
-auto DecoratorProcMacroAttribute::stage() const -> AttrStage {
-    return AttrStage::Post;
-}
-
 auto DecoratorProcMacroAttribute::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (i.is_None()) {
         return;
     }
 
     if (!i.is_Function()) {
-        TODO(sp, StringView("Error for #[proc_macro_attribute] on non-Function"));
+        unexpected(sp, attr, "item");
     }
 
     crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Attribute, path.nodes.back(), path, {}});
-}
-
-auto DecoratorProcMacro::stage() const -> AttrStage {
-    return AttrStage::Post;
 }
 
 auto DecoratorProcMacro::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
@@ -928,7 +923,7 @@ auto DecoratorProcMacro::handle(const Span& sp, const ASTAttribute& attr, const 
     }
 
     if (!i.is_Function()) {
-        TODO(sp, StringView("Error for #[proc_macro] on non-Function"));
+        unexpected(sp, attr, "item");
     }
 
     crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Function, path.nodes.back(), path, {}});
