@@ -1,4 +1,4 @@
-//@ compile-fail: Union patterns require named fields
+//@ compile-fail: associated types cannot be used as tuple patterns
 #![feature(more_qualified_paths)]
 #![allow(incomplete_features)]
 union Bits { word: u32 }

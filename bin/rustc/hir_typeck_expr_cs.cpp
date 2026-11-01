@@ -4597,10 +4597,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     case HIRPatternData::TAG_PathValue: {
                         auto& e = pattern.data.as_PathValue();
                         switch (e.binding.tag()) {
-                            case HIRPatternPathBinding::TAG_Unbound: {
-                                auto& _ = e.binding.as_Unbound();
-                                BUG(sp, StringView(""));
-                            }
+                            default:
+                                UNREACHABLE();
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
@@ -4608,9 +4606,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
-                            }
-                            case HIRPatternPathBinding::TAG_Union: {
-                                BUG(sp, StringView("Union used as a value pattern"));
                             }
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
@@ -4626,10 +4621,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     case HIRPatternData::TAG_PathTuple: {
                         auto& e = pattern.data.as_PathTuple();
                         switch (e.binding.tag()) {
-                            case HIRPatternPathBinding::TAG_Unbound: {
-                                auto& _ = e.binding.as_Unbound();
-                                BUG(sp, StringView(""));
-                            }
+                            default:
+                                UNREACHABLE();
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
@@ -4637,9 +4630,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                                 break;
-                            }
-                            case HIRPatternPathBinding::TAG_Union: {
-                                BUG(sp, StringView("Union used as a tuple pattern"));
                             }
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();
@@ -4655,10 +4645,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     case HIRPatternData::TAG_PathNamed: {
                         auto& e = pattern.data.as_PathNamed();
                         switch (e.binding.tag()) {
-                            case HIRPatternPathBinding::TAG_Unbound: {
-                                auto& _ = e.binding.as_Unbound();
-                                BUG(sp, StringView(""));
-                            }
+                            default:
+                                UNREACHABLE();
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
@@ -5242,17 +5230,13 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         context.equateTypes(sp, ty, *possibleType);
 
                         switch (e.binding.tag()) {
-                            case HIRPatternPathBinding::TAG_Unbound: {
+                            default:
                                 UNREACHABLE();
-                            }
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 const auto& str = *be;
                                 ASSERT_BUG(sp, str.data.is_Unit(), StringView("PathValue used on non-unit struct variant"));
                                 break;
-                            }
-                            case HIRPatternPathBinding::TAG_Union: {
-                                BUG(sp, StringView("PathValue used for union"));
                             }
                             case HIRPatternPathBinding::TAG_Enum: {
                                 auto& be = e.binding.as_Enum();

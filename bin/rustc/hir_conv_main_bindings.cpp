@@ -2796,6 +2796,12 @@ auto Expander::visitPattern(HIRPattern& pat) -> void {
         }
         case HIRPatternData::TAG_PathTuple: {
             auto& e = pat.data.as_PathTuple();
+            if (const auto* projection = e.path.data.opt_UfcsKnown()) {
+                const auto& trait = crate.getTraitByPath(sp, projection->trait.path);
+                if (trait.types.find(projection->item) != trait.types.end()) {
+                    ERROR(sp, E0000, StringView("associated types cannot be used as tuple patterns: ") << e.path);
+                }
+            }
             auto newPath = expandAliasPath(sp, e.path);
             if (newPath != HIRGenericPath()) {
                 DEBUG(StringView("Replacing ") << e.path << StringView(" with ") << newPath);
