@@ -1170,6 +1170,9 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
             }
             rv += intrinsicTypeNameImpl(te->argTypes[i], genericPlaceholders);
         }
+        if (te->isVariadic) {
+            rv += te->argTypes.empty() ? "..." : ", ...";
+        }
         rv += ")";
         if (!(te->rettype->is_Tuple() && te->rettype->as_Tuple().empty())) {
             rv += " -> ";

@@ -2492,9 +2492,14 @@ Expander::Expander(const WireBoard& wb, const HIRCrate& crate)
 }
 
 auto Expander::hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate) -> bool {
-    return std::any_of(bounds.begin(), bounds.end(), [&](const auto& bound) {
-        return bound.ord(candidate) == OrdEqual;
-    });
+    const auto& wanted = candidate.as_TraitBound();
+    for (const auto& bound : bounds) {
+        const auto& existing = bound.as_TraitBound();
+        if (existing.type == wanted.type && existing.trait == wanted.trait && existing.constness == wanted.constness && existing.trait.constness == wanted.trait.constness && existing.isTrivial == wanted.isTrivial) {
+            return true;
+        }
+    }
+    return false;
 }
 
 auto Expander::collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, const HIRType* selfType, GenericBounds& out, const ActiveTraitAlias* active) -> void {

@@ -16,6 +16,5 @@ generate(
     ],
     extra="""
         HIRGenericBound clone() const;
-        Ordering ord(const HIRGenericBound& x) const;
     """,
 )

@@ -274,14 +274,6 @@ namespace {
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
     };
 
-    struct IndexVisitor: public HIRVisitor {
-        const HIRCrate& crate;
-        Span nullSpan;
-
-        IndexVisitor(const HIRCrate& crate);
-
-        void visitParams(HIRGenericParams& params) override;
-    };
 
     struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         AST2HIR& ctx;
@@ -4327,20 +4319,6 @@ template <typename F>
         return projection(index->second);
     }
     return HIRVisitor::visitType(ty);
-}
-
-IndexVisitor::IndexVisitor(const HIRCrate& crate)
-    : HIRVisitor(nullptr, crate.types)
-    , crate(crate)
-{
-}
-
-auto IndexVisitor::visitParams(HIRGenericParams& params) -> void {
-    for (auto& bound : params.bounds) {
-        if (auto* e = bound.opt_TraitBound()) {
-            e->trait.traitPtr = &this->crate.getTraitByPath(nullSpan, e->trait.path.path);
-        }
-    }
 }
 
 auto LowerHIRExprNodeVisitor::enterLoopLabel(const Ident& source) -> RcString {

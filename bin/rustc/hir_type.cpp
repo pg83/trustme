@@ -1716,7 +1716,7 @@ bool HIRType::equalsIgnoringRegions(const HIRType* x) const {
         case HIRType::TAG_Function: {
             auto& te = (*this).as_Function();
             auto& xe = (*x).as_Function();
-            if (te.isUnsafe != xe.isUnsafe) {
+            if (te.isUnsafe != xe.isUnsafe || te.isVariadic != xe.isVariadic || te.trackCaller != xe.trackCaller) {
                 return false;
             }
             if (te.abi != xe.abi) {
@@ -1760,114 +1760,6 @@ Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r)
         }
     }
     return OrdEqual;
-}
-
-Ordering HIRType::ordIgnoringRegions(const HIRType* x) const {
-    Ordering rv;
-
-    if (this == x) {
-        return OrdEqual;
-    }
-    ORD(static_cast<unsigned int>(tag()), static_cast<unsigned int>(x->tag()));
-
-    switch ((*this).tag()) {
-        case HIRType::TAG_Infer: {
-            auto& te = (*this).as_Infer();
-            auto& xe = (*x).as_Infer();
-            // TODO: Should comparing inferrence vars be an error?
-            return ::ord(te.index, xe.index);
-        }
-        case HIRType::TAG_Diverge: {
-            return OrdEqual;
-        }
-        case HIRType::TAG_Primitive: {
-            auto& te = (*this).as_Primitive();
-            auto& xe = (*x).as_Primitive();
-            return ::ord(static_cast<unsigned>(te), static_cast<unsigned>(xe));
-        }
-        case HIRType::TAG_Path: {
-            auto& te = (*this).as_Path();
-            auto& xe = (*x).as_Path();
-            return ::ord(te.path, xe.path);
-        }
-        case HIRType::TAG_Generic: {
-            auto& te = (*this).as_Generic();
-            auto& xe = (*x).as_Generic();
-            if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) {
-                return rv;
-            }
-            return OrdEqual;
-        }
-        case HIRType::TAG_TraitObject: {
-            auto& te = (*this).as_TraitObject();
-            auto& xe = (*x).as_TraitObject();
-            ORD(te.trait, xe.trait);
-            ORD(te.markers, xe.markers);
-            return OrdEqual;
-        }
-        case HIRType::TAG_ErasedType: {
-            auto& te = (*this).as_ErasedType();
-            auto& xe = (*x).as_ErasedType();
-            ORD(te.inner, xe.inner);
-            return OrdEqual;
-        }
-        case HIRType::TAG_Array: {
-            auto& te = (*this).as_Array();
-            auto& xe = (*x).as_Array();
-            ORD(te.inner, xe.inner);
-            ORD(te.size, xe.size);
-            return OrdEqual;
-        }
-        case HIRType::TAG_Slice: {
-            auto& te = (*this).as_Slice();
-            auto& xe = (*x).as_Slice();
-            return ::ord(te.inner, xe.inner);
-        }
-        case HIRType::TAG_Pattern: {
-            auto& te = (*this).as_Pattern();
-            auto& xe = (*x).as_Pattern();
-            ORD(te.inner, xe.inner);
-            return te.pattern.ord(xe.pattern);
-        }
-        case HIRType::TAG_Tuple: {
-            auto& te = (*this).as_Tuple();
-            auto& xe = (*x).as_Tuple();
-            return ::ord(te, xe);
-        }
-        case HIRType::TAG_Borrow: {
-            auto& te = (*this).as_Borrow();
-            auto& xe = (*x).as_Borrow();
-            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type));
-            return ::ord(te.inner, xe.inner);
-        }
-        case HIRType::TAG_Pointer: {
-            auto& te = (*this).as_Pointer();
-            auto& xe = (*x).as_Pointer();
-            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type));
-            return ::ord(te.inner, xe.inner);
-        }
-        case HIRType::TAG_NamedFunction: {
-            auto& te = (*this).as_NamedFunction();
-            auto& xe = (*x).as_NamedFunction();
-            return ::ord(te.path, xe.path);
-        }
-        case HIRType::TAG_Function: {
-            auto& te = (*this).as_Function();
-            auto& xe = (*x).as_Function();
-            ORD(te.isUnsafe, xe.isUnsafe);
-            ORD(te.isVariadic, xe.isVariadic);
-            ORD(te.trackCaller, xe.trackCaller);
-            ORD(te.abi, xe.abi);
-            ORD(te.argTypes, xe.argTypes);
-            return ::ord(te.rettype, xe.rettype);
-        }
-        case HIRType::TAG_NodeType: {
-            auto& te = (*this).as_NodeType();
-            auto& xe = (*x).as_NodeType();
-            return te.ord(xe);
-        }
-    }
-    UNREACHABLE();
 }
 
 bool HIRType::matchTestGenerics(const Span& sp, const HIRType* xIn, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const {
@@ -2181,7 +2073,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
         case HIRType::TAG_Function: {
             auto& te = (*v).as_Function();
             auto& xe = (*x).as_Function();
-            if (te.isUnsafe != xe.isUnsafe) {
+            if (te.isUnsafe != xe.isUnsafe || te.isVariadic != xe.isVariadic || te.trackCaller != xe.trackCaller) {
                 return HIRCompare::Unequal;
             }
             if (te.abi != xe.abi) {

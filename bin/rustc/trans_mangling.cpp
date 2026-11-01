@@ -513,6 +513,7 @@ auto Mangler::fmtType(const HIRType* ty) -> void {
             os << StringView("F");
             os << (e.isUnsafe ? "u" : "");
             os << (e.trackCaller ? "c" : "");
+            os << (e.isVariadic ? "v" : "");
             if (e.abi != ABI_RUST) {
                 os << StringView("e");
                 this->fmtName(e.abi.c_str());
