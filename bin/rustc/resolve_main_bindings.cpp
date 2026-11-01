@@ -4374,26 +4374,57 @@ namespace {
     ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, std::span<const ASTModule* const> parentModules, bool typesOnly = false, bool requireVisible = false);
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
+    const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path);
 
-    ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, const ASTModule* currentMod, std::span<const ASTModule* const> parentModules, bool softFail = false) {
+    template <typename Nodes>
+    const ASTModule& useModuleAt(const Span& span, const ASTCrate& crate, const Nodes& nodes, Vector<const ASTModule*>& parents) {
+        const auto nameOf = [](const auto& node) -> const RcString& {
+            if constexpr (requires { node.name(); }) {
+                return node.name();
+            } else {
+                return node;
+            }
+        };
+        const ASTModule* mod = &crate.rootModule();
+        parents.pushBack(mod);
+        for (const auto& node : nodes) {
+            const auto& name = nameOf(node);
+            const ASTModule* next = nullptr;
+            if (name.size() != 0 && name.c_str()[0] == '#') {
+                unsigned int index = 0;
+                ASSERT_BUG(span, std::sscanf(name.c_str(), "#%u", &index) == 1 && index < mod->anonMods().size() && mod->anonMods()[index], StringView("Invalid anonymous module in ") << mod->path());
+                next = &*mod->anonMods()[index];
+            } else {
+                for (const auto& item : mod->items) {
+                    if (item->name == name && item->data.is_Module()) {
+                        next = &item->data.as_Module();
+                        break;
+                    }
+                }
+                ASSERT_BUG(span, next, StringView("Could not find module ") << name << StringView(" in ") << mod->path());
+                parents.clear();
+            }
+            mod = next;
+            parents.pushBack(mod);
+        }
+        parents.popBack();
+        return *mod;
+    }
+
+    ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, const ASTModule& currentMod, std::span<const ASTModule* const> parentModules, bool softFail = false) {
         switch (path.cls.tag()) {
-            case ASTPathClass::TAG_Invalid: {
-                BUG(span, StringView("Invalid path class encountered"));
-            }
-            case ASTPathClass::TAG_Local: {
-                BUG(span, StringView("Local path class in use statement"));
-            }
-            case ASTPathClass::TAG_UFCS: {
-                BUG(span, StringView("UFCS path class in use statement"));
-            }
+            case ASTPathClass::TAG_Invalid:
+            case ASTPathClass::TAG_Local:
+            case ASTPathClass::TAG_UFCS:
+                BUG(span, StringView("Invalid path class in use statement - ") << path.cls.tagStr());
             case ASTPathClass::TAG_Relative: {
                 auto& e = path.cls.as_Relative();
 
                 if (crate.edition >= ASTEdition::Rust2018) {
                     const auto& name = e.nodes.at(0).name();
                     auto ecIt = settings.implicitCrates.find(name);
-                    const bool shadowedByModule = ecIt != settings.implicitCrates.end() && currentMod && e.nodes.size() > 1
-                        && !ResolveUseGetBindingMod(resolveContext, span, settings, crate, currentMod->path(), *currentMod, name, parentModules, /*types_only*/ true).type.is_Unbound();
+                    const bool shadowedByModule = ecIt != settings.implicitCrates.end() && e.nodes.size() > 1
+                        && !ResolveUseGetBindingMod(resolveContext, span, settings, crate, currentMod.path(), currentMod, name, parentModules, /*types_only*/ true).type.is_Unbound();
                     if (ecIt != settings.implicitCrates.end() && !shadowedByModule) {
                         DEBUG(StringView("Found implict crate ") << name);
                         crate.markExternCrateUsed(ecIt->second);
@@ -4407,9 +4438,38 @@ namespace {
                 if (path.nodes().size() == 1) {
                     auto ct = coretypeFromstring(path.nodes()[0].name().c_str());
                     if (ct != CORETYPE_INVAL) {
+                        const auto& node = path.nodes()[0];
+                        auto bindings = ResolveUseGetBindingMod(resolveContext, span, settings, crate, currentMod.path(), currentMod, node.hygienicName(), parentModules);
+                        if (node.hygienicName() != node.name()) {
+                            ASTPath::Bindings fallback;
+                            if (node.hygiene().hasModPath()) {
+                                const auto& definition = node.hygiene().modPath();
+                                if (definition.crate == "") {
+                                    Vector<const ASTModule*> parents;
+                                    const auto& mod = useModuleAt(span, crate, definition.ents, parents);
+                                    fallback = ResolveUseGetBindingMod(resolveContext, span, settings, crate, mod.path(), mod, node.name(), moduleSpan(parents));
+                                } else {
+                                    const auto* mod = getHirModByPath(span, crate, HIRSimplePath(definition.crate, definition.ents));
+                                    ASSERT_BUG(span, mod, StringView("Missing macro definition module"));
+                                    if (mod->modItems.count(node.name()) || mod->valueItems.count(node.name()) || mod->macroItems.count(node.name())) {
+                                        ASTPath name(definition.crate, {});
+                                        name.nodes().push_back(node.name());
+                                        fallback = ResolveUseGetBindingExt(span, crate, crate.externCrates.at(definition.crate), *mod, name, 0, ASTAbsolutePath(definition.crate, definition.ents));
+                                    }
+                                }
+                            } else {
+                                fallback = ResolveUseGetBindingMod(resolveContext, span, settings, crate, currentMod.path(), currentMod, node.name(), parentModules);
+                            }
+                            bindings.mergeFrom(fallback);
+                        }
+                        if (!bindings.type.is_Unbound()) {
+                            ASTPath resolved(bindings.type);
+                            resolved.bindings = mv$(bindings);
+                            return resolved;
+                        }
                         DEBUG(StringView("Found builtin type for `use` - ") << path);
-                        // TODO: only if the item doesn't already exist?
                         ASTPath rv{crateBuiltinsName(), path.nodes()};
+                        rv.bindings = mv$(bindings);
                         Vector<RcString> nodes;
                         nodes.pushBack(path.nodes().back().name());
                         rv.bindings.type.set(ASTAbsolutePath(crateBuiltinsName(), mv$(nodes)), {});
@@ -4421,36 +4481,7 @@ namespace {
                 // TODO: Check if the desired item is in this module,
                 if (basePath.nodes().size() > 0 && basePath.nodes().back().name().c_str()[0] == '#') {
                     Vector<const ASTModule*> parentMods;
-                    const ASTModule* curMod = &crate.rootModule_;
-                    parentMods.pushBack(curMod);
-                    for (unsigned int i = 0; i < basePath.nodes().size(); i++) {
-                        const auto& name = basePath.nodes()[i].name();
-                        const ASTModule* nextMod = nullptr;
-
-                        if (name.size() > 0 && name.c_str()[0] == '#') {
-                            unsigned int idx = 0;
-                            if (std::sscanf(name.c_str(), "#%u", &idx) != 1) {
-                                BUG(span, StringView("Invalid anon path segment '") << name << StringView("'"));
-                            }
-                            ASSERT_BUG(span, idx < curMod->anonMods().size(), StringView("Invalid anon path segment '") << name << StringView("'"));
-                            BUG_ASSERT(curMod->anonMods()[idx]);
-                            nextMod = &*curMod->anonMods()[idx];
-                        } else {
-                            for (const auto& item : curMod->items) {
-                                if (item->name == name && item->data.is_Module()) {
-                                    nextMod = &item->data.as_Module();
-                                    break;
-                                }
-                            }
-                            ASSERT_BUG(span, nextMod, StringView("Could not find module '") << name << StringView("' in ") << curMod->path());
-                        }
-                        curMod = nextMod;
-                        if (name.c_str()[0] != '#') {
-                            parentMods.clear();
-                        }
-                        parentMods.pushBack(curMod);
-                    }
-                    parentMods.popBack();
+                    const ASTModule* curMod = &useModuleAt(span, crate, basePath.nodes(), parentMods);
                     DEBUG(StringView("parent_mods.size() = ") << parentMods.length());
                     ASSERT_BUG(span, !parentMods.empty(), StringView("Anon module with no named parent"));
                     const ASTModule* sourceMod = parentMods[0];
@@ -4576,7 +4607,7 @@ namespace {
             for (auto& useEnt : useStmtData.entries) {
                 TRACE_FUNCTION_F(useEnt);
                 ActiveUseResolution activeUse(resolveContext, useEnt.path);
-                useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path, &mod, parentModules);
+                useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path, mod, parentModules);
                 if (!useEnt.path.cls.is_Absolute()) {
                     BUG(span, StringView("Use path is not absolute after absolutisation"));
                 }
@@ -4799,29 +4830,13 @@ namespace {
                 auto p = mod.path() + item.name;
                 DEBUG(StringView("Matching item: ") << item.data.tagStr());
                 switch (item.data.tag()) {
-                    case ASTItem::TAG_None: {
-                        break;
-                    }
-                    case ASTItem::TAG_MacroInv: {
-                        BUG(span, StringView("Hit MacroInv in use resolution"));
-                    }
-                    case ASTItem::TAG_GlobalAsm: {
-                        BUG(span, StringView("Hit GlobalAsm in use resolution"));
-                    }
+                    default:
+                        BUG(span, StringView("Invalid item kind in use resolution - ") << item.data.tagStr());
                     case ASTItem::TAG_Macro: {
                         break;
                     }
                     case ASTItem::TAG_Use: {
                         break;
-                    }
-                    case ASTItem::TAG_Impl: {
-                        BUG(span, StringView("Hit Impl in use resolution"));
-                    }
-                    case ASTItem::TAG_NegImpl: {
-                        BUG(span, StringView("Hit NegImpl in use resolution"));
-                    }
-                    case ASTItem::TAG_ExternBlock: {
-                        BUG(span, StringView("Hit Extern in use resolution"));
                     }
                     case ASTItem::TAG_Crate: {
                         auto& e = item.data.as_Crate();
@@ -4986,7 +5001,7 @@ namespace {
                         DEBUG(StringView(" > Needs resolve p=") << static_cast<const void*>(&impE.path));
                         if (!isUseResolutionActive(resolveContext, impE.path)) {
                             ActiveUseResolution activeUse(resolveContext, impE.path);
-                            auto imported = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules), parentModules);
+                            auto imported = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, mod, parentModules), parentModules);
                             if (impE.isSelf) {
                                 imported.value = {};
                                 imported.macro = {};
@@ -5034,7 +5049,7 @@ namespace {
                         auto& resolveStackPtrs = resolveContext.wildcardUses;
                         if (std::find(resolveStackPtrs.begin(), resolveStackPtrs.end(), &impData) == resolveStackPtrs.end()) {
                             resolveStackPtrs.pushBack(&impData);
-                            const auto globPath = ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, &mod, parentModules, /*softFail=*/true);
+                            const auto globPath = ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path, mod, parentModules, /*softFail=*/true);
                             if (globPath.isValid()) {
                                 bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), globPath, parentModules, /*type_only=*/true, /*soft_fail=*/true);
                             }
@@ -5162,8 +5177,6 @@ namespace {
             return ASTPath::Bindings();
         }
     }
-
-    const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path);
 
     const void* getHirModenumByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path, bool& is_enum) {
         const auto* hmod = &crate.externCrates.at(path.crateName()).hir->rootModule;
@@ -5584,7 +5597,7 @@ namespace {
         if (path.cls.is_Absolute() && (path.cls.as_Absolute().crate != "" && path.cls.as_Absolute().crate != crate.crateNameReal)) {
             const auto& pathAbs = path.cls.as_Absolute();
             if (pathAbs.crate == crateBuiltinsName()) {
-                ASTPath::Bindings rv;
+                auto rv = path.bindings.clone();
                 ASSERT_BUG(span, !pathAbs.nodes.empty(), StringView(""));
                 if (coretypeFromstring(path.nodes()[0].name().c_str()) != CORETYPE_INVAL) {
                     rv.type.set(ASTAbsolutePath(crateBuiltinsName(), oneComponent(pathAbs.nodes.back().name())), ASTPathBindingType::make_TypeAlias({nullptr}));

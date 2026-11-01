@@ -103,9 +103,6 @@ bool ASTVisibility::isAtLeast(const ASTVisibility& value) const {
 }
 
 void ASTVisibility::inplaceUnion(const ASTVisibility& value) {
-    if (contains(value)) {
-        return;
-    }
     if (value.contains(*this)) {
         visPath_ = value.visPath_;
         return;
