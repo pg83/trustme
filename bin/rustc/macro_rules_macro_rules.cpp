@@ -320,6 +320,7 @@ namespace {
         Token tok;
         switch (type) {
             case MacroPatEnt::PAT_TOKEN:
+            case MacroPatEnt::PAT_TOKEN_AMBIGUOUS:
                 BUG(lex.pointSpan(), StringView("Encountered PAT_TOKEN when handling capture"));
             case MacroPatEnt::PAT_LOOP:
                 BUG(lex.pointSpan(), StringView("Encountered PAT_LOOP when handling capture"));
@@ -1836,6 +1837,7 @@ namespace {
         TRACE_FUNCTION_F(type);
         switch (type) {
             case MacroPatEnt::PAT_TOKEN:
+            case MacroPatEnt::PAT_TOKEN_AMBIGUOUS:
             case MacroPatEnt::PAT_LOOP:
                 BUG(Span(), StringView("Encountered ") << type << StringView(" in consume_from_frag"));
                 ;
@@ -1932,6 +1934,7 @@ namespace {
             size_t armIndex;
             Vector<bool> conditionHistory;
             Vector<bool> stmtIsItemHistory;
+            bool nullableAmbiguity;
         };
 
         std::vector<Match> matches;
@@ -1942,6 +1945,7 @@ namespace {
             Vector<bool> stmtIsItemHistory;
 
             bool fail = false;
+            bool nullableAmbiguity = false;
             for (;;) {
                 const auto pos = armStream.curPos();
                 const auto& pat = armStream.next();
@@ -1955,9 +1959,10 @@ namespace {
                 } else if (const auto* e = pat.opt_If()) {
                     auto lc = lex.clone();
                     bool rv = true;
+                    bool conditionNullableAmbiguity = false;
                     for (const auto& check : e->ents) {
                         const bool atConditionStart = lc.position() == lex.position();
-                        if (check.ty != MacroPatEnt::PAT_TOKEN) {
+                        if (!check.isToken()) {
                             if (!consumeFromFrag(lc, check.ty)) {
                                 rv = false;
                                 break;
@@ -1972,10 +1977,15 @@ namespace {
                             }
                         }
                         if (atConditionStart && check.isLocalAmbiguity()) {
-                            ERROR(sp, E0000, StringView("local ambiguity when calling macro: multiple parsing options"));
+                            if (check.ty == MacroPatEnt::PAT_TOKEN_AMBIGUOUS) {
+                                conditionNullableAmbiguity = true;
+                            } else {
+                                ERROR(sp, E0000, StringView("local ambiguity when calling macro: multiple parsing options"));
+                            }
                         }
                     }
                     if (rv == e->isEqual) {
+                        nullableAmbiguity |= conditionNullableAmbiguity;
                         DEBUG(StringView("- Succeeded"));
                         armStream.ifSucceeded();
                     }
@@ -2002,7 +2012,7 @@ namespace {
             }
 
             if (!fail) {
-                matches.push_back(Match{i, armStream.takeHistory(), mv$(stmtIsItemHistory)});
+                matches.push_back(Match{i, armStream.takeHistory(), mv$(stmtIsItemHistory), nullableAmbiguity});
                 DEBUG(i << StringView(" MATCHED"));
             } else {
                 DEBUG(i << StringView(" FAILED"));
@@ -2015,6 +2025,9 @@ namespace {
             ERROR(sp, E0000, StringView("No macro arm matched - ") << failPos);
         } else {
             auto i = matches[0].armIndex;
+            if (matches[0].nullableAmbiguity) {
+                ERROR(sp, E0000, StringView("ambiguity: multiple successful parses"));
+            }
             const auto& history = matches[0].conditionHistory;
             const auto& stmtIsItemHistory = matches[0].stmtIsItemHistory;
 
@@ -2309,9 +2322,6 @@ namespace {
                 depth++;
             } else if (tok.type() == close) {
                 DEBUG(StringView("depth--"));
-                if (depth == 0) {
-                    ERROR(lex.pointSpan(), E0000, StringView("Unmatched ") << Token(close) << StringView(" in macro content"));
-                }
                 depth--;
             } else {
             }
@@ -2395,7 +2405,7 @@ namespace {
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                         const auto* ns = state.findName(nameIdent);
                         if (!ns) {
-                            TODO(lex.pointSpan(), StringView("Handle ${ignore(") << name << StringView(")} - Missing"));
+                            ERROR(lex.pointSpan(), E0000, StringView("Unknown macro variable $") << name << StringView(" in ignore expression"));
                         }
 
                         DEBUG(StringView("$") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
@@ -2419,7 +2429,7 @@ namespace {
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                         const auto* ns = state.findName(nameIdent);
                         if (!ns) {
-                            TODO(lex.pointSpan(), StringView("Handle ${count(") << name << StringView(")} - Missing"));
+                            ERROR(lex.pointSpan(), E0000, StringView("Unknown macro variable $") << name << StringView(" in count expression"));
                         }
 
                         DEBUG(StringView("$") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
@@ -2448,7 +2458,7 @@ namespace {
                                     const auto& name = nameIdent.name;
                                     const auto* ns = state.findName(nameIdent);
                                     if (!ns) {
-                                        TODO(lex.pointSpan(), StringView("concat - unmapped name"));
+                                        ERROR(lex.pointSpan(), E0000, StringView("Unknown macro variable $") << name << StringView(" in concat expression"));
                                     } else {
                                         DEBUG(StringView("CONCAT $") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
                                         if (loopDepth < ns->loops.length()) {
@@ -2472,13 +2482,13 @@ namespace {
                                 break;
                             }
                             if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
-                                break;
+                                ERROR(lex.pointSpan(), E0000, StringView("expected identifier or string literal after concat separator"));
                             }
                         }
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                         ret.push_back(MacroExpansionEnt(std::move(ents)));
                     } else {
-                        TODO(lex.pointSpan(), StringView("Handle ${") << ident << StringView("...}"));
+                        ERROR(lex.pointSpan(), E0000, StringView("Unknown metavariable expression ") << ident);
                     }
                     lex.getTokenCheck(TOK_BRACE_CLOSE);
                 } else if (tok.type() == TOK_RWORD_CRATE) {
@@ -2702,13 +2712,10 @@ namespace {
                     auto skipPats1 = macroPatternGetHeadSet(pattern, idx + 1, {});
 
                     DEBUG(StringView("Skip = [") << skipPats1 << StringView("]"));
-                    // TODO: If EOF is in both entry and skip, then remove from entry
                     bool bodySkippable = false;
                     if (std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF) != entryPats1.end()) {
-                        if (std::find(skipPats1.begin(), skipPats1.end(), TOK_EOF) != entryPats1.end()) {
-                            entryPats1.erase(std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF));
-                            bodySkippable = true;
-                        }
+                        entryPats1.erase(std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF));
+                        bodySkippable = true;
                     }
 
                     std::vector<std::vector<SimplePatIfCheck>> entryConds;
@@ -2792,13 +2799,9 @@ namespace {
                             v.insert(v.end(), p.begin(), p.end());
                             repeatConds.push_back(mv$(v));
                         }
-                        // TODO: If entry indicates that it's optional (it had TOK_EOF in it) then push the skip too
                         if (bodySkippable) {
-                            for (const auto& p : skipConds) {
-                                auto v = ::makeVec1<SimplePatIfCheck>({MacroPatEnt::PAT_TOKEN, ent.tok});
-                                v.insert(v.end(), p.begin(), p.end());
-                                repeatConds.push_back(mv$(v));
-                            }
+                            repeatConds.clear();
+                            repeatConds.push_back(::makeVec1<SimplePatIfCheck>({MacroPatEnt::PAT_TOKEN, ent.tok}));
                         }
                     }
                     DEBUG(StringView("Repeat = ["));
@@ -2853,7 +2856,13 @@ namespace {
                         push(SimplePatEnt::make_LoopStart({ent.nameIndex}));
 
                         size_t rewriteStart = rv.size();
-                        if (entryConds.size() == 1 && entryConds[0].back().tok != TOK_EOF) // HACK: if the entry ends with `EOF` then it won't be correct
+                        if (bodySkippable && ent.tok != TOK_NULL) {
+                            for (const auto& p : skipConds) {
+                                auto ambiguous = p;
+                                ambiguous.front().markLocalAmbiguity();
+                                pushIfv(true, mv$(ambiguous), ~0u);
+                            }
+                        } else if (entryConds.size() == 1 && entryConds[0].back().tok != TOK_EOF) // HACK: if the entry ends with `EOF` then it won't be correct
                         {
                             pushIfv(false, entryConds.front(), ~0u);
                         } else if (skipConds.empty()) {
@@ -2868,6 +2877,7 @@ namespace {
                             }
                         }
 
+                        size_t bodyStart = rv.size();
                         macroPatternToSimpleInner(sp, rv, ent.subpats);
                         push(SimplePatEnt::make_LoopNext({/*ent.name_index*/}));
 
@@ -2890,7 +2900,7 @@ namespace {
                                     push(SimplePatEnt::make_ExpectTok(ent.tok));
                                 }
                             }
-                            push(SimplePatEnt::make_Jump({rewriteStart}));
+                            push(SimplePatEnt::make_Jump({bodySkippable && ent.tok != TOK_NULL ? bodyStart : rewriteStart}));
                         } else if (ent.name == "?") {
                             ASSERT_BUG(sp, ent.tok == TOK_NULL, StringView("$()? with a separator isn't valid"));
                         } else {
@@ -4184,6 +4194,9 @@ void stl::output<ZeroCopyOutput, MacroPatEnt::Type>(ZeroCopyOutput& os, MacroPat
         case MacroPatEnt::PAT_TOKEN:
             os << StringView("PAT_TOKEN");
             break;
+        case MacroPatEnt::PAT_TOKEN_AMBIGUOUS:
+            os << StringView("PAT_TOKEN_AMBIGUOUS");
+            break;
         case MacroPatEnt::PAT_LOOP:
             os << StringView("PAT_LOOP");
             break;
@@ -4236,7 +4249,7 @@ void stl::output<ZeroCopyOutput, MacroPatEnt::Type>(ZeroCopyOutput& os, MacroPat
 template <>
 void stl::output<ZeroCopyOutput, SimplePatIfCheck>(ZeroCopyOutput& os, const SimplePatIfCheck& x) {
     os << x.ty;
-    if (x.ty == MacroPatEnt::PAT_TOKEN) {
+    if (x.isToken()) {
         os << StringView(":") << x.tok;
     }
     return;

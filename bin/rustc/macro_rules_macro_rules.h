@@ -63,6 +63,7 @@ struct MacroPatEnt {
         PAT_LITERAL,
 
         PAT_PAT_PARAM,
+        PAT_TOKEN_AMBIGUOUS,
     } type;
 
     MacroPatEnt(Span sp, Token tok);
@@ -76,12 +77,20 @@ struct SimplePatIfCheck {
     MacroPatEnt::Type ty;
     Token tok;
 
+    bool isToken() const {
+        return ty == MacroPatEnt::PAT_TOKEN || ty == MacroPatEnt::PAT_TOKEN_AMBIGUOUS;
+    }
+
     bool isLocalAmbiguity() const {
-        return ty != MacroPatEnt::PAT_TOKEN && tok == TOK_EOF;
+        return ty == MacroPatEnt::PAT_TOKEN_AMBIGUOUS || (!isToken() && tok == TOK_EOF);
     }
 
     void markLocalAmbiguity() {
-        tok = Token(TOK_EOF);
+        if (isToken()) {
+            ty = MacroPatEnt::PAT_TOKEN_AMBIGUOUS;
+        } else {
+            tok = Token(TOK_EOF);
+        }
     }
 
     bool operator==(const SimplePatIfCheck& x) const {
