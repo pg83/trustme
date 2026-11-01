@@ -878,6 +878,7 @@ struct HIREvaluator::MIREvalCallStackEntry {
     std::pair<u64, MIREvalRelocPtr> readParamPtr(const MIRParam& p);
 
     size_t sizeOfOrBug(const HIRType* ty) const;
+    const TypeRepr* reprOfOrBug(const HIRType* ty) const;
 };
 
 static ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const MIREvalAllocationPtr& ap) {
@@ -1915,10 +1916,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     MIR_ASSERT(state, srcTy->as_Path().binding.as_Enum(), StringView("Enum binding pointer not set! - ") << srcTy);
                                     const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
                                     MIR_ASSERT(state, enm.isValue(), StringView("Constant cast Variant to integer with non-value enum - ") << srcTy);
-                                    const auto* repr = TargetGetTypeRepr(state.sp, resolve, srcTy);
-                                    if (!repr) {
-                                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << srcTy);
-                                    }
+                                    const auto* repr = localState.reprOfOrBug(srcTy);
                                     if (repr->variants.is_None()) {
                                         MIR_ASSERT(state, enm.numVariants() == 1, StringView("Enum with no tag and ") << enm.numVariants() << StringView(" variants - ") << srcTy);
                                         dst.writeUint(state, ti.bits, U128(enm.getDiscriminant(0)));
@@ -2157,10 +2155,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             auto& e = sa.src.as_Tuple();
             const HIRType* tmp;
             const auto& ty = state.getLvalueType(sa.dst);
-            auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
-            if (!repr) {
-                BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
-            }
+            const auto* repr = localState.reprOfOrBug(ty);
             MIR_ASSERT(state, repr->fields.size() == e.vals.size(), StringView(""));
             for (size_t i = 0; i < e.vals.size(); i++) {
                 size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
@@ -2172,10 +2167,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             auto& e = sa.src.as_Struct();
             const HIRType* tmp;
             const auto& ty = state.getLvalueType(sa.dst);
-            auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
-            if (!repr) {
-                BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
-            }
+            const auto* repr = localState.reprOfOrBug(ty);
             MIR_ASSERT(state, repr->fields.size() == e.vals.size(), StringView(""));
             for (size_t i = 0; i < e.vals.size(); i++) {
                 size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
@@ -2720,13 +2712,11 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::SUB, e.args.at(1), true);
-                } else if (te->name == "transmute" || te->name == "transmute_unchecked") {
+                } else if (te->name == "transmute" || te->name == "transmute_unchecked" || te->name == "unlikely" || te->name == "black_box") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "init") {
                     MIR_ASSERT(state, e.args.empty(), StringView("`init` takes no arguments"));
                     memset(dst.extWriteBytes(state, dst.getLen()), 0, dst.getLen());
-                } else if (te->name == "unlikely") {
-                    localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "fabsf16" || te->name == "fabsf32" || te->name == "fabsf64" || te->name == "fabsf128") {
                     const HIRType* tmp;
                     auto ti = TypeInfo::forType(state.getParamType(e.args.at(0)));
@@ -2806,10 +2796,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "const_eval_select") {
                     auto argTy = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, argTy->is_Tuple(), StringView("`") << te->name << StringView("` requires a tuple for ARG, got ") << argTy);
-                    auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
-                    if (!repr) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << argTy);
-                    }
+                    const auto* repr = localState.reprOfOrBug(argTy);
                     auto argVal = localState.getLval(e.args.at(0).as_LValue());
                     const auto* callbackType = localState.monomorphExpand(te->params.types.at(1));
                     const auto* callback = callbackType->opt_NamedFunction();
@@ -2835,10 +2822,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     }
                 } else if (te->name == "copy_nonoverlapping" || te->name == "copy") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
-                    }
+                    const size_t elementSize = localState.sizeOfOrBug(ty);
                     auto ptrSrc = localState.readParamPtr(e.args.at(0));
                     auto ptrDst = localState.readParamPtr(e.args.at(1));
                     U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
@@ -2889,17 +2873,12 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         equal = memcmp(left.extReadBytes(state, size), right.extReadBytes(state, size), size) == 0;
                     }
                     dst.writeUint(state, 8, U128(equal ? 1 : 0));
-                } else if (te->name == "black_box") {
-                    localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "forget") {
                 } else if (te->name == "simd_extract" || te->name == "simd_extract_dyn") {
                     auto vectorTy = localState.monomorphExpand(te->params.types.at(0));
                     auto elementTy = localState.monomorphExpand(te->params.types.at(1));
-                    size_t vectorSize;
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize) || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << vectorTy << StringView(" / ") << elementTy);
-                    }
+                    const size_t vectorSize = localState.sizeOfOrBug(vectorTy);
+                    const size_t elementSize = localState.sizeOfOrBug(elementTy);
                     MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, StringView("Invalid SIMD layout for `") << te->name << StringView("`"));
                     auto index = localState.readParamUint(32, e.args.at(1));
                     MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), StringView("SIMD index out of bounds in `") << te->name << StringView("`"));
@@ -2910,11 +2889,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "simd_insert" || te->name == "simd_insert_dyn") {
                     auto vectorTy = localState.monomorphExpand(te->params.types.at(0));
                     auto elementTy = localState.monomorphExpand(te->params.types.at(1));
-                    size_t vectorSize;
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize) || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << vectorTy << StringView(" / ") << elementTy);
-                    }
+                    const size_t vectorSize = localState.sizeOfOrBug(vectorTy);
+                    const size_t elementSize = localState.sizeOfOrBug(elementTy);
                     MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, StringView("Invalid SIMD layout for `") << te->name << StringView("`"));
                     auto index = localState.readParamUint(32, e.args.at(1));
                     MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), StringView("SIMD index out of bounds in `") << te->name << StringView("`"));
@@ -2922,28 +2898,19 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     localState.writeParam(dst.slice(index.truncateU64() * elementSize, elementSize), e.args.at(2));
                 } else if (te->name == "offset") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
-                    }
+                    const size_t elementSize = localState.sizeOfOrBug(ty);
                     auto ptrPair = localState.readParamPtr(e.args.at(0));
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                     dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
                 } else if (te->name == "arith_offset") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
-                    }
+                    const size_t elementSize = localState.sizeOfOrBug(ty);
                     auto ptrPair = localState.readParamPtr(e.args.at(0));
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                     dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
                 } else if (te->name == "ptr_offset_from" || te->name == "ptr_offset_from_unsigned") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
-                    }
+                    const size_t elementSize = localState.sizeOfOrBug(ty);
                     MIR_ASSERT(state, elementSize != 0, StringView("`") << te->name << StringView("` called for a zero-sized type"));
                     MIR_ASSERT(state, elementSize <= static_cast<size_t>(INT64_MAX), StringView("Element size overflows isize in `") << te->name << StringView("`"));
                     auto pointer = localState.readParamPtr(e.args.at(0));
@@ -2983,10 +2950,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, 8, pointerGuaranteedCmp(a, b));
                 } else if (te->name == "write_bytes") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    size_t elementSize;
-                    if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
-                    }
+                    const size_t elementSize = localState.sizeOfOrBug(ty);
                     auto ptrDst = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
                     auto val = localState.readParamUint(8, e.args.at(1));
                     U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
@@ -3005,10 +2969,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
                         dst.writeUint(state, dst.getLen() * 8, U128(0));
                     } else {
-                        const auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
-                        if (!repr) {
-                            BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
-                        }
+                        const auto* repr = localState.reprOfOrBug(ty);
 
                         MIREvalValueRef value;
                         if (const auto* arg = e.args.at(0).opt_Borrow()) {
@@ -5734,6 +5695,14 @@ auto MIREvalCallStackEntry::sizeOfOrBug(const HIRType* ty) const -> size_t {
         MIR_BUG(state, StringView("No size for ") << ty);
     }
     return rv;
+}
+
+auto MIREvalCallStackEntry::reprOfOrBug(const HIRType* ty) const -> const TypeRepr* {
+    const auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
+    if (!repr) {
+        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("repr of ") << ty);
+    }
+    return repr;
 }
 
 template <typename F>
