@@ -2547,10 +2547,8 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
         return HIRCompare::Unequal;
     }
     switch ((*left).tag()) {
-        case HIRType::TAG_Infer: {
-            BUG_ASSERT(!"infer");
-            break;
-        }
+        default:
+            UNREACHABLE();
         case HIRType::TAG_Diverge: {
             return HIRCompare::Equal;
         }
@@ -2751,7 +2749,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
             return le == re ? HIRCompare::Equal : HIRCompare::Unequal;
         }
     }
-    UNREACHABLE();
 }
 
 bool isInteger(const HIRCoreType& v) {

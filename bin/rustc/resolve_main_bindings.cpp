@@ -2338,51 +2338,11 @@ namespace {
                 i.name = i.sourceName;
             }
             switch ((*i.data).tag()) {
-                case ASTItem::TAG_None: {
+                default:
+                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
+                case ASTItem::TAG_None:
+                case ASTItem::TAG_MacroInv:
                     break;
-                }
-                case ASTItem::TAG_MacroInv: {
-                    break;
-                }
-                case ASTItem::TAG_Impl: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_NegImpl: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_ExternBlock: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_GlobalAsm: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Macro: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Use: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Module: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Crate: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Enum: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Trait: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_TraitAlias: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Struct: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
-                case ASTItem::TAG_Union: {
-                    BUG(i.sp, StringView("Resolve_Absolute_ImplItems - ") << i.data->tagStr());
-                }
                 case ASTItem::TAG_Type: {
                     auto& e = (*i.data).as_Type();
                     DEBUG(StringView("Type - ") << i.name);

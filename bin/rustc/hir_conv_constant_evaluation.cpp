@@ -6064,6 +6064,14 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                     ASSERT_BUG(sp, it != trait.types.end(), StringView("Trait ") << e->trait.path << StringView(" has no associated type ") << e->item);
                     return it->second.generics;
                 }
+                if (const auto* e = p.data.opt_UfcsInherent()) {
+                    HMTypeInferrence ivars(crate.types);
+                    HIRSimplePath visibility(crate.crateName, {});
+                    TraitResolution typeResolve(ivars, wb, implParams, itemParams, visibility, nullptr);
+                    auto selected = typeResolve.selectInherentImpl(sp, e->type, e->item, InherentItemKind::Type);
+                    ASSERT_BUG(sp, selected.certainty == SolverCertainty::Proven && selected.impl, StringView("Unresolved inherent associated type - ") << p);
+                    return selected.impl->types.at(e->item).data.params;
+                }
                 BUG(sp, StringView("type - ") << p);
             }
         }

@@ -92,7 +92,7 @@ bool ASTVisibility::isVisible(const ASTAbsolutePath& fromMod) const {
 }
 
 bool ASTVisibility::contains(const ASTVisibility& value) const {
-    return visPath_ ? value.isVisible(*visPath_) : true;
+    return isAtLeast(value);
 }
 
 bool ASTVisibility::isAtLeast(const ASTVisibility& value) const {
@@ -104,7 +104,7 @@ bool ASTVisibility::isAtLeast(const ASTVisibility& value) const {
 
 void ASTVisibility::inplaceUnion(const ASTVisibility& value) {
     if (value.contains(*this)) {
-        visPath_ = value.visPath_;
+        *this = value;
         return;
     }
     TODO(Span(), StringView("Union with incompatible visbility"));
