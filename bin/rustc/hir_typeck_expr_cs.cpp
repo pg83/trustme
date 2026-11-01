@@ -13,6 +13,7 @@
 #include "hir_typeck_monomorph.h"
 #include "hir_typeck_expr_visit.h"
 #include "hir_conv_main_bindings.h"
+#include "hir_main_bindings.h"
 #include "hir_typeck_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
 
@@ -235,97 +236,6 @@ namespace {
 
         void checkTypesEqual(const Span& sp, const HIRType* l, const HIRType* r) const;
         void visit(HIRExprNodeArraySized& node) override;
-    };
-
-    struct ExprVisitorPrint: public HIRExprVisitor {
-        const Context& context;
-        ZeroCopyOutput& os;
-
-        ExprVisitorPrint(const Context& context, ZeroCopyOutput& os);
-
-        void visit(HIRExprNodeBlock& node) override;
-
-        void visit(HIRExprNodeConstBlock& node) override;
-
-        void visit(HIRExprNodeAsm& node) override;
-
-        void visit(HIRExprNodeAsm2& node) override;
-
-        void visit(HIRExprNodeReturn& node) override;
-
-        void visit(HIRExprNodeYield& node) override;
-
-        void visit(HIRExprNodeAWait& node) override;
-
-        void visit(HIRExprNodeUse& node) override;
-
-        void visit(HIRExprNodeLet& node) override;
-
-        void visit(HIRExprNodeLoop& node) override;
-
-        void visit(HIRExprNodeLoopControl& node) override;
-
-        void visit(HIRExprNodeMatch& node) override;
-
-        void visit(HIRExprNodeAssign& node) override;
-
-        void visit(HIRExprNodeBinOp& node) override;
-
-        void visit(HIRExprNodeUniOp& node) override;
-
-        void visit(HIRExprNodeBorrow& node) override;
-
-        void visit(HIRExprNodeRawBorrow& node) override;
-
-        void visit(HIRExprNodeCast& node) override;
-
-        void visit(HIRExprNodeUnsize& node) override;
-
-        void visit(HIRExprNodeIndex& node) override;
-
-        void visit(HIRExprNodeDeref& node) override;
-
-        void visit(HIRExprNodeEmplace& node) override;
-
-        void visit(HIRExprNodeTupleVariant& node) override;
-
-        void visit(HIRExprNodeCallPath& node) override;
-
-        void visit(HIRExprNodeCallValue& node) override;
-
-        void visit(HIRExprNodeCallMethod& node) override;
-
-        void visit(HIRExprNodeField& node) override;
-
-        void visit(HIRExprNodeLiteral& node) override;
-
-        void visit(HIRExprNodeUnitVariant& node) override;
-
-        void visit(HIRExprNodePathValue& node) override;
-
-        void visit(HIRExprNodeVariable& node) override;
-
-        void visit(HIRExprNodeConstParam& node) override;
-
-        void visit(HIRExprNodeStructLiteral& node) override;
-
-        void visit(HIRExprNodeTuple& node) override;
-
-        void visit(HIRExprNodeArrayList& node) override;
-
-        void visit(HIRExprNodeArraySized& node) override;
-
-        void visit(HIRExprNodeClosure& node) override;
-
-        void visit(HIRExprNodeGenerator& node) override;
-
-        void visit(HIRExprNodeGeneratorWrapper& node) override;
-
-        void visit(HIRExprNodeAsyncBlock& node) override;
-
-        HMTypeInferrence::FmtType fmtResTy(const HIRExprNode& n);
-
-        void noRevisit(HIRExprNode& n);
     };
 
     struct NormalizeConstValues final: HIRVisitor {
@@ -7171,8 +7081,32 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             }
         }
         ExprVisitorApply unresolvedTypes{context};
-        for (const auto* node : context.toVisit) {
+        struct StalledInputs final: HIRExprVisitorDef {
+            const ExprVisitorApply& apply;
+            Span sp;
+
+            StalledInputs(HIRTypeInterner& types, const ExprVisitorApply& apply, const Span& sp)
+                : HIRExprVisitorDef(types)
+                , apply(apply)
+                , sp(sp)
+            {
+            }
+
+            void visitNodePtr(HIRExprNodeP& node) override {
+                auto saved = sp;
+                sp = node->span();
+                HIRExprVisitorDef::visitNodePtr(node);
+                sp = saved;
+            }
+
+            const HIRType* visitType(const HIRType* type) override {
+                return apply.checkTypeResolvedTop(sp, type);
+            }
+        };
+        for (auto* node : context.toVisit) {
             (void)unresolvedTypes.checkTypeResolvedTop(node->span(), node->resType);
+            StalledInputs inputs(context.crate.types, unresolvedTypes, node->span());
+            node->visit(inputs);
         }
         for (const auto& coercionP : context.linkCoerce) {
             const auto& coercion = *coercionP;
@@ -7192,8 +7126,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         for (const auto& node : context.toVisit) {
             const auto& sp = node->span();
             WARNING(sp, W0000, StringView("Spare rule - ") << FMT_CB(os, {
-                                   ExprVisitorPrint ev(context, os);
-                                   node->visit(ev);
+                                   HIRDumpExpr(os, context.crate.types, *node);
                                }) << StringView(" -> ") << context.ivars.fmtType(node->resType));
         }
         for (const auto& adv : context.advRevisits) {
@@ -9655,7 +9588,7 @@ auto ExprVisitorApply::checkTypeResolved(const Span& sp, const HIRType* ty, cons
                 DEBUG(ty << StringView(" -> ") << newTy);
                 ty = mv$(newTy);
                 if (ty->is_Infer()) {
-                    ERROR(sp, E0000, StringView("Failed to infer type ") << ty << StringView(" in ") << topType);
+                    ERROR(sp, E0000, StringView("type annotations needed: Failed to infer type ") << ty << StringView(" in ") << topType);
                 }
             }
 
@@ -9708,188 +9641,6 @@ auto ExprVisitorApply::visit(HIRExprNodeArraySized& node) -> void {
             node.size = HIRArraySize(std::move(count));
         }
     }
-}
-
-ExprVisitorPrint::ExprVisitorPrint(const Context& context, ZeroCopyOutput& os)
-    : context(context)
-    , os(os)
-{
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeBlock& node) -> void {
-    os << StringView("_Block {") << context.ivars.fmtType(node.nodes.back()->resType) << StringView("}");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeConstBlock& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeAsm& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeAsm2& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeReturn& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeYield& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeAWait& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeUse& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeLet& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeLoop& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeLoopControl& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeMatch& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeAssign& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeBinOp& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeUniOp& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeBorrow& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeRawBorrow& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeCast& node) -> void {
-    os << StringView("_Cast {") << context.ivars.fmtType(node.value->resType) << StringView("}");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeUnsize& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeIndex& node) -> void {
-    os << StringView("_Index {") << fmtResTy(*node.value) << StringView("}[{") << fmtResTy(*node.index) << StringView("}]");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeDeref& node) -> void {
-    os << StringView("_Deref {") << fmtResTy(*node.value) << StringView("}");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeEmplace& node) -> void {
-    os << StringView("_Emplace(") << fmtResTy(*node.value) << StringView(" in ") << fmtResTy(*node.place) << StringView(")");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeTupleVariant& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeCallPath& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeCallValue& node) -> void {
-    os << StringView("_CallValue {") << fmtResTy(*node.value) << StringView("}(");
-    for (const auto& arg : node.args) {
-        os << StringView("{") << fmtResTy(*arg) << StringView("}, ");
-    }
-    os << StringView(")");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeCallMethod& node) -> void {
-    os << StringView("_CallMethod {") << fmtResTy(*node.value) << StringView("}.") << node.method << StringView("(");
-    for (const auto& arg : node.args) {
-        os << StringView("{") << fmtResTy(*arg) << StringView("}, ");
-    }
-    os << StringView(")");
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeField& node) -> void {
-    os << StringView("_Field {") << fmtResTy(*node.value) << StringView("}.") << node.field;
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeLiteral& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeUnitVariant& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodePathValue& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeVariable& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeConstParam& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeStructLiteral& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeTuple& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeArrayList& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeArraySized& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeClosure& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeGenerator& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeGeneratorWrapper& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::visit(HIRExprNodeAsyncBlock& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorPrint::fmtResTy(const HIRExprNode& n) -> HMTypeInferrence::FmtType {
-    return context.ivars.fmtType(n.resType);
-}
-
-auto ExprVisitorPrint::noRevisit(HIRExprNode& n) -> void {
-    os << StringView("_") << typeid(n).name() << StringView(" {") << context.ivars.fmtType(n.resType) << StringView("}");
 }
 
 auto ConstExprEquate::equateType(const HIRType* left, const HIRType* right) const -> bool {

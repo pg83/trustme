@@ -1440,9 +1440,12 @@ void HIRDumpExpr(ZeroCopyOutput& sink, HIRExprPtr& expr) {
     }
 
     BUG_ASSERT(expr.state);
-    TreeVisitor tv{expr.state->types, sink};
+    HIRDumpExpr(sink, expr.state->types, *expr);
+}
 
-    expr->visit(tv);
+void HIRDumpExpr(ZeroCopyOutput& sink, HIRTypeInterner& types, HIRExprNode& node) {
+    TreeVisitor tv{types, sink};
+    node.visit(tv);
 }
 
 #undef NODE_IS

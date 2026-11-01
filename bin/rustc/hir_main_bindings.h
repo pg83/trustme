@@ -14,6 +14,7 @@ struct WireBoard;
 
 class HIRCrate;
 class HIRExprPtr;
+class HIRExprNode;
 struct HIRTypeInterner;
 
 struct HIRSerialiseWriter;
@@ -25,6 +26,7 @@ namespace stl {
 
 void HIRDump(stl::ZeroCopyOutput& sink, HIRCrate& crate);
 void HIRDumpExpr(stl::ZeroCopyOutput& sink, HIRExprPtr& expr);
+void HIRDumpExpr(stl::ZeroCopyOutput& sink, HIRTypeInterner& types, HIRExprNode& node);
 void HIRSerialise(const std::string& filename, const HIRCrate& crate);
 HIRSerialiseWriter* HIRSerialiseBegin(stl::ObjPool& pool, stl::StringView filename, const HIRCrate& crate);
 void HIRSerialiseFinish(HIRSerialiseWriter& out, const stl::Vector<u64>& exportedGenericInstances);
