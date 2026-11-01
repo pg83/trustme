@@ -60,7 +60,7 @@ namespace {
         void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const override;
     };
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item = nullptr);
+    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item = nullptr);
     void ExpandModExternCrates(const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& modpath, ASTModule& mod, unsigned int firstItem);
     void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem = 0);
     ASTExprNode* ExpandExpr(const ExpandState& es, ASTExprNode* node);
@@ -229,13 +229,17 @@ namespace {
         mod.items = std::move(oldItems);
     }
 
-    void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item) {
+    bool ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item) {
         bool found = false;
+        bool pending = false;
         if (a.name().elems.empty()) {
-            return;
+            return false;
         }
         if (a.isInert()) {
-            return;
+            return false;
+        }
+        if (a.isDeriveHelper()) {
+            return false;
         }
         DEBUG(a);
         auto runDecorator = [&](const RcString& name, const ExpandDecorator& d) {
@@ -253,16 +257,13 @@ namespace {
                         }
                         break;
                     case ExpandMode::Final:
-                        if (stage != AttrStage::Post) {
-                            DEBUG(StringView("#[") << name << StringView("] m=") << (int)es.mode);
-                            return;
-                        }
                         break;
                 }
             }
             DEBUG(StringView("#[") << name << StringView("]"));
             if (es.mode != ExpandMode::Final && !d.isReady(sp, a, es.wb, es.crate, *es.modstack.item, item)) {
                 es.hasMissing = true;
+                pending = true;
                 return;
             }
             f.run(sp, d, a);
@@ -454,10 +455,15 @@ namespace {
             // TODO: Create no-op handlers for a whole heap of attributes
 
             //TODO(sp, StringView("Unknown attribute #[") << a.name() << "]");
+            if (stage == AttrStage::Pre && es.mode != ExpandMode::Final) {
+                es.hasMissing = true;
+                pending = true;
+            }
         }
+        return pending;
     }
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item) {
+    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item) {
         for (auto& a : attrs.items) {
             const RcString rcstringCfg = RcString::newInterned("cfg");
             if (!a.isInert() && a.name() == rcstringCfg) {
@@ -465,8 +471,11 @@ namespace {
             }
         }
         for (auto& a : attrs.items) {
-            ExpandAttr(es, a.span(), a, stage, f, item);
+            if (ExpandAttr(es, a.span(), a, stage, f, item)) {
+                return true;
+            }
         }
+        return false;
     }
 
     const char* const LINT_UNUSED_ATTRIBUTES = "unused_attributes";
@@ -591,8 +600,8 @@ namespace {
         return slice<const ASTAttribute>(start, end - start);
     }
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, const ASTVisibility& vis, ASTItem& item) {
-        ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, const ASTVisibility& vis, ASTItem& item) {
+        return ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
             if (!item.is_None()) {
                 auto attrsSlice = d.wantsAllAttrs() ? slice<const ASTAttribute>(attrs.items.data(), attrs.items.size()) : getAttrsAfter(attrs, a);
                 d.handle(sp, a, es.wb, es.crate, path, mod, modIdx, attrsSlice, vis, item);
@@ -600,16 +609,16 @@ namespace {
         }), &item);
     }
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, ASTItem& item) {
-        ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, ASTItem& item) {
+        return ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
             if (!item.is_None()) {
                 d.handle(sp, a, es.wb, es.crate, path, trait, getAttrsAfter(attrs, a), item);
             }
         }), &item);
     }
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ASTModule& mod, ASTImpl& impl, const ASTVisibility& vis, const RcString& name, ASTItem& item) {
-        ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ASTModule& mod, ASTImpl& impl, const ASTVisibility& vis, const RcString& name, ASTItem& item) {
+        return ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
             if (!item.is_None()) {
                 auto attrsSlice = d.wantsAllAttrs() ? slice<const ASTAttribute>(attrs.items.data(), attrs.items.size()) : getAttrsAfter(attrs, a);
                 d.handle(sp, a, es.wb, es.crate, impl, name, attrsSlice, vis, item);
@@ -1262,7 +1271,11 @@ namespace {
 
             auto attrs = mv$(i.attrs);
             CfgExpandAttrs(es.wb, attrs);
-            ExpandAttrs(es, attrs, AttrStage::Pre, mod, impl, i.vis, i.name, *i.data);
+            if (ExpandAttrs(es, attrs, AttrStage::Pre, mod, impl, i.vis, i.name, *i.data)) {
+                i.attrs = std::move(attrs);
+                impl.items()[idx] = std::move(i);
+                continue;
+            }
 
             switch ((*i.data).tag()) {
                 default:
@@ -1547,7 +1560,10 @@ namespace {
             TRACE_FUNCTION_F(StringView("#") << idx << StringView(" - ") << path);
             DEBUG(StringView("attrs = ") << attrs);
             CfgExpandAttrs(es.wb, attrs);
-            ExpandAttrs(es, attrs, AttrStage::Pre, path, mod, idx, vis, i.data);
+            if (ExpandAttrs(es, attrs, AttrStage::Pre, path, mod, idx, vis, i.data)) {
+                i.attrs = std::move(attrs);
+                continue;
+            }
 
             if (i.data.is_Module()) {
                 auto& e = i.data.as_Module();
@@ -1806,7 +1822,10 @@ namespace {
                         auto attrs = mv$(ti.attrs);
                         auto tiPath = path + ti.name;
                         CfgExpandAttrs(es.wb, attrs);
-                        ExpandAttrs(es, attrs, AttrStage::Pre, tiPath, mod, e, ti.data);
+                        if (ExpandAttrs(es, attrs, AttrStage::Pre, tiPath, mod, e, ti.data)) {
+                            ti.attrs = std::move(attrs);
+                            continue;
+                        }
 
                         switch (ti.data.tag()) {
                             default:
