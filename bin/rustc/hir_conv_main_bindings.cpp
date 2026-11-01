@@ -2002,14 +2002,21 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
     const auto tySelf = crate.types.self();
 
     struct Enumerate {
+        struct ProjectionBound {
+            HIRGenericBound bound;
+            ProjectionBound* next;
+        };
+        ObjPool* pool;
         HIRTypeInterner& types;
         const Span& sp;
         const HIRType* tySelf;
         std::vector<HIRTraitPath> supertraits;
         Vector<const HIRTraitPath*> tpStack;
+        ProjectionBound* projectionBounds = nullptr;
 
-        Enumerate(HIRTypeInterner& types, const Span& sp, const HIRType* tySelf)
-            : types(types)
+        Enumerate(ObjPool* pool, HIRTypeInterner& types, const Span& sp, const HIRType* tySelf)
+            : pool(pool)
+            , types(types)
             , sp(sp)
             , tySelf(tySelf)
         {
@@ -2075,7 +2082,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
             tpStack.popBack();
         }
 
-        void fillTypeAliases(HIRTraitPath& outPath) const {
+        void fillTypeAliases(HIRTraitPath& outPath) {
             const HIRTrait& tr = *outPath.traitPtr;
             for (const auto& ty : tr.types) {
                 if (outPath.typeBounds.count(ty.first) == 0) {
@@ -2098,21 +2105,28 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                     }
                 }
 
-                if (outPath.traitBounds.count(ty.first) == 0) {
-                    std::vector<HIRTraitPath> traits;
-                    for (size_t i = tpStack.length(); i > 0; i--) {
-                        const auto* outer = tpStack[i - 1];
-                        auto it = outer->traitBounds.find(ty.first);
-                        if (it != outer->traitBounds.end()) {
-                            // TODO: Check the source trait
-                            for (const auto& t : it->second.traits) {
-                                traits.push_back(t.clone());
-                            }
-                        }
+                for (size_t i = tpStack.length(); i > 0; i--) {
+                    const auto* outer = tpStack[i - 1];
+                    auto it = outer->traitBounds.find(ty.first);
+                    if (it == outer->traitBounds.end()) {
+                        continue;
                     }
-                    DEBUG(ty.first << StringView(": ") << traits);
-                    if (!traits.empty()) {
-                        outPath.traitBounds.insert(std::make_pair(ty.first, HIRTraitPath::AtyBound{outPath.path.clone(), {}, mv$(traits)}));
+                    auto have = outPath.traitBounds.find(ty.first);
+                    if (have == outPath.traitBounds.end()) {
+                        have = outPath.traitBounds.insert(std::make_pair(ty.first, HIRTraitPath::AtyBound{outPath.path.clone(), it->second.atyParams.clone(), {}})).first;
+                    }
+                    if (have->second.atyParams != it->second.atyParams) {
+                        auto projection = types.path(HIRPath(tySelf, outPath.path.clone(), ty.first, it->second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                        for (const auto& bound : it->second.traits) {
+                            projectionBounds = pool->make<ProjectionBound>(ProjectionBound{HIRGenericBound::make_TraitBound({projection, bound.clone(), bound.constness, false}), projectionBounds});
+                        }
+                        continue;
+                    }
+                    for (const auto& bound : it->second.traits) {
+                        auto& traits = have->second.traits;
+                        if (std::none_of(traits.begin(), traits.end(), [&](const auto& existing) { return existing.constness == bound.constness && existing == bound; })) {
+                            traits.push_back(bound.clone());
+                        }
                     }
                 }
             }
@@ -2122,7 +2136,7 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
     auto thisPath = ip.getSimplePath();
     thisPath.updateCrateName(crate.crateName);
 
-    Enumerate e{crate.types, sp, tySelf};
+    Enumerate e{crate.pool, crate.types, sp, tySelf};
     for (const auto& pt : tr.parentTraits) {
         e.enumSupertraitsIn(*pt.traitPtr, pt.clone());
     }
@@ -2145,6 +2159,9 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
         e.enumSupertraitsIn(*be.trait.traitPtr, be.trait.clone());
     }
 
+    for (auto* bound = e.projectionBounds; bound; bound = bound->next) {
+        tr.params.bounds.push_back(mv$(bound->bound));
+    }
     std::sort(e.supertraits.begin(), e.supertraits.end());
     DEBUG(StringView("supertraits = ") << e.supertraits);
     if (e.supertraits.size() > 0) {
@@ -2170,10 +2187,25 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                     prev->typeBounds.insert(std::move(e));
                 }
                 for (auto& e : it->traitBounds) {
-                    if (prev->traitBounds.count(e.first)) {
-                        TODO(sp, StringView("Merge trait bounds (and make sure to check the source trait)"));
+                    auto have = prev->traitBounds.find(e.first);
+                    if (have != prev->traitBounds.end()) {
+                        auto& destination = have->second;
+                        if (destination.sourceTrait != e.second.sourceTrait || destination.atyParams != e.second.atyParams) {
+                            auto projection = crate.types.path(HIRPath(tySelf, e.second.sourceTrait.clone(), e.first, e.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                            for (auto& bound : e.second.traits) {
+                                const auto constness = bound.constness;
+                                tr.params.bounds.push_back(HIRGenericBound::make_TraitBound({projection, mv$(bound), constness, false}));
+                            }
+                            continue;
+                        }
+                        for (auto& bound : e.second.traits) {
+                            if (std::none_of(destination.traits.begin(), destination.traits.end(), [&](const auto& existing) { return existing.constness == bound.constness && existing == bound; })) {
+                                destination.traits.push_back(mv$(bound));
+                            }
+                        }
+                    } else {
+                        prev->traitBounds.insert(std::move(e));
                     }
-                    prev->traitBounds.insert(std::move(e));
                 }
                 DEBUG(StringView("= ") << *prev);
                 it = e.supertraits.erase(it);

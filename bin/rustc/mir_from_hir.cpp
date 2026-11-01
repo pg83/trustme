@@ -3495,7 +3495,9 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                 valueSize = sliceLen * elementSize;
             } else {
                 size_t sizedValueSize = 0;
-                ASSERT_BUG(sp, TargetGetSizeOf(sp, resolve, e.inner, sizedValueSize), StringView("Matching a reference to an unsized literal - ") << e.inner);
+                if (!resolve.typeIsSized(sp, e.inner) || !TargetGetSizeOf(sp, resolve, e.inner, sizedValueSize)) {
+                    ERROR(sp, E0000, StringView("cannot use unsized non-slice type in constant patterns: ") << e.inner);
+                }
                 valueSize = sizedValueSize;
             }
 

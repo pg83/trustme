@@ -5616,6 +5616,18 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                 return true;
             }
         }
+        if (matchCurrent && declaredTrait.path.path != trait) {
+            const auto& definition = crate.getTraitByPath(sp, declaredTrait.path.path);
+            auto monomorph = MonomorphStatePtr(crate.types, subject, &declaredTrait.path.params, nullptr);
+            for (const auto& parent : definition.allParentTraits) {
+                if (parent.path.path == trait) {
+                    auto response = monomorph.monomorphTraitpath(sp, parent, false);
+                    if (sink.visit(SolverImpl(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness))) {
+                        return true;
+                    }
+                }
+            }
+        }
 
         for (const auto& associated : declaredTrait.traitBounds) {
             auto nestedSubject = crate.types.path(HIRPath(subject, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
@@ -5630,6 +5642,12 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
     auto declaredTraitMayMatch = [&](auto&& visit, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
         if (matchCurrent && declaredTrait.path.path == trait) {
             return true;
+        }
+        if (matchCurrent) {
+            const auto& definition = crate.getTraitByPath(sp, declaredTrait.path.path);
+            if (std::any_of(definition.allParentTraits.begin(), definition.allParentTraits.end(), [&](const auto& parent) { return parent.path.path == trait; })) {
+                return true;
+            }
         }
         for (const auto& associated : declaredTrait.traitBounds) {
             for (const auto& nestedTrait : associated.second.traits) {
@@ -5661,10 +5679,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
             auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait->trait, false);
             const auto* impliedPath = impliedType->opt_Path();
             const auto* impliedProjection = impliedPath ? impliedPath->path.data.opt_UfcsKnown() : nullptr;
-            if (!impliedProjection || !visitTyWith(impliedProjection->type, [](const HIRType* inner) {
-                const auto* path = inner->opt_Path();
-                return path && path->path.data.is_UfcsKnown();
-            })) {
+            if (!impliedProjection) {
                 continue;
             }
             if (visitDeclaredTrait(visitDeclaredTrait, callback, impliedType, impliedTrait, true)) {
