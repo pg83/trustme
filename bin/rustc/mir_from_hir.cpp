@@ -10165,7 +10165,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCast& node) -> void {
                 switch (de) {
                     case HIRCoreType::Str:
                         BUG(node.span(), StringView("Cannot cast to str"));
-                        break;
                     case HIRCoreType::Char:
                         if (tyIn->is_Primitive() && tyIn->as_Primitive() == HIRCoreType::U8) {
                         } else {
@@ -10174,31 +10173,14 @@ auto ExprVisitorConv::visit(HIRExprNodeCast& node) -> void {
                         break;
                     case HIRCoreType::Bool:
                         BUG(node.span(), StringView("Cannot cast to bool"));
-                        break;
                     case HIRCoreType::F32:
                     case HIRCoreType::F64:
-                        if (tyIn->is_Primitive()) {
-                            switch (de) {
-                                case HIRCoreType::Str:
-                                case HIRCoreType::Char:
-                                case HIRCoreType::Bool:
-                                    BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                                    break;
-                                default:
-                                    break;
-                            }
-                        } else {
+                        if (!tyIn->is_Primitive()) {
                             BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
                         }
                         break;
                     default:
                         if (tyIn->opt_Primitive()) {
-                            switch (de) {
-                                case HIRCoreType::Str:
-                                    BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                                default:
-                                    break;
-                            }
                         } else if (const auto* se = tyIn->opt_Path()) {
                             if (se->binding.is_Enum()) {
                                 // TODO: Check if it's a repr(ty/C) enum - and if the type matches

@@ -361,6 +361,7 @@ namespace {
         void printStmt(const ASTExprNode* node, bool hasSemicolon);
         void printIf(const ASTExprNodeIf& node);
         void printArm(const ASTExprNodeMatchArm& arm);
+        void printInlineAsm(const ASTExprNodeAsm2& node);
         void printFallback(const ASTExprNode& node);
     };
 
@@ -2340,7 +2341,141 @@ void State::printLiteral(const ASTExprNode& node) {
     this->word(StringView(text));
 }
 
+void State::printInlineAsm(const ASTExprNodeAsm2& node) {
+    if (markers) {
+        this->printDollarCrate(markers->coreCrate);
+        this->word(StringView("::arch::"));
+    } else {
+        this->word(StringView("::core::arch::"));
+    }
+    this->word(node.options.naked ? StringView("naked_asm!(") : StringView("asm!("));
+    for (const auto& line : node.lines) {
+        StringBuilder value;
+        const auto literal = [&](const auto& text) {
+            for (char c : text) {
+                value << c;
+                if (!node.options.raw && (c == '{' || c == '}')) {
+                    value << c;
+                }
+            }
+        };
+        for (const auto& fragment : line.frags) {
+            literal(fragment.before);
+            value << StringView("{__trustme_asm_") << fragment.index;
+            if (fragment.modifier) {
+                value << StringView(":") << fragment.modifier;
+            }
+            value << StringView("}");
+        }
+        literal(line.trailing);
+        StringBuilder escaped;
+        const StringView bytes(value);
+        printEscapedLiteral(escaped, TOK_STRING, bytes.data(), bytes.length());
+        this->word(StringView(escaped));
+        this->word(StringView(", "));
+    }
+    const auto registerHead = [&](AsmDirection dir, const AsmRegisterSpec& spec) {
+        switch (dir) {
+            case AsmDirection::In: this->word(StringView("in")); break;
+            case AsmDirection::Out: this->word(StringView("out")); break;
+            case AsmDirection::LateOut: this->word(StringView("lateout")); break;
+            case AsmDirection::InOut: this->word(StringView("inout")); break;
+            case AsmDirection::InLateOut: this->word(StringView("inlateout")); break;
+        }
+        this->word(StringView("("));
+        StringBuilder text;
+        if (spec.is_Class()) {
+            text << StringView(to_string(spec.as_Class()));
+        } else {
+            const auto& name = spec.as_Explicit();
+            printEscapedLiteral(text, TOK_STRING, reinterpret_cast<const u8*>(name.data()), name.size());
+        }
+        this->word(StringView(text));
+        this->word(StringView(") "));
+    };
+    for (size_t i = 0; i < node.params.size(); i++) {
+        const auto& param = node.params[i];
+        const AsmRegisterSpec* spec = nullptr;
+        if (const auto* e = param.opt_RegSingle()) {
+            spec = &e->spec;
+        } else if (const auto* e = param.opt_Reg()) {
+            spec = &e->spec;
+        }
+        if (!spec || !spec->is_Explicit()) {
+            StringBuilder name;
+            name << StringView("__trustme_asm_") << i << StringView(" = ");
+            this->word(StringView(name));
+        }
+        switch (param.tag()) {
+            case ASTAsmParam::TAG_Const:
+                this->word(StringView("const "));
+                this->printExpr(nodeExpr(param.as_Const()), Fixup());
+                break;
+            case ASTAsmParam::TAG_Sym:
+                this->word(StringView("sym "));
+                this->printPath(param.as_Sym(), true);
+                break;
+            case ASTAsmParam::TAG_Label:
+                this->word(StringView("label "));
+                this->printExpr(nodeExpr(param.as_Label().code), Fixup());
+                break;
+            case ASTAsmParam::TAG_RegSingle: {
+                const auto& e = param.as_RegSingle();
+                registerHead(e.dir, e.spec);
+                this->printExpr(nodeExpr(e.val), Fixup());
+                break;
+            }
+            case ASTAsmParam::TAG_Reg: {
+                const auto& e = param.as_Reg();
+                registerHead(e.dir, e.spec);
+                if (e.valIn) {
+                    this->printExpr(nodeExpr(e.valIn), Fixup());
+                    this->word(StringView(" => "));
+                    if (e.valOut) {
+                        this->printExpr(nodeExpr(e.valOut), Fixup());
+                    } else {
+                        this->word(StringView("_"));
+                    }
+                } else {
+                    this->word(StringView("_"));
+                }
+                break;
+            }
+        }
+        this->word(StringView(", "));
+    }
+    auto options = node.options;
+    options.naked = false;
+    if (options.any()) {
+        this->word(StringView("options("));
+        bool first = true;
+        const auto option = [&](bool enabled, StringView name) {
+            if (enabled) {
+                if (!first) {
+                    this->word(StringView(", "));
+                }
+                this->word(name);
+                first = false;
+            }
+        };
+        option(node.options.pure, StringView("pure"));
+        option(node.options.nomem, StringView("nomem"));
+        option(node.options.readonly, StringView("readonly"));
+        option(node.options.preservesFlags, StringView("preserves_flags"));
+        option(node.options.noreturn, StringView("noreturn"));
+        option(node.options.nostack, StringView("nostack"));
+        option(node.options.attSyntax, StringView("att_syntax"));
+        option(node.options.raw, StringView("raw"));
+        this->word(StringView(")"));
+    }
+    this->word(StringView(")"));
+}
+
 void State::printFallback(const ASTExprNode& node) {
+    if (const auto* asmNode = cast<const ASTExprNodeAsm2>(&node)) {
+        this->printInlineAsm(*asmNode);
+        return;
+    }
     StringBuilder text;
     node.print(text);
     this->word(StringView(text));

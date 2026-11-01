@@ -2343,6 +2343,7 @@ auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
 
     StringBuilder ss;
     ReprintMarkers markers;
+    markers.coreCrate = wb.astCrate->extCratenameCore;
     pprustExprToString(ss, e, &markers);
     ss << StringView(" ");
     parseText(ss, &markers);

@@ -2670,9 +2670,11 @@ namespace {
                 auto setLocNext = slot.setLoc;
                 if (slot.setLoc.stmtIdx < setBb.statements.size()) {
                     setLocNext.stmtIdx += 1;
-                } else {
-                    setLocNext.bbIdx = setBb.terminator.as_Call().retBlock;
+                } else if (const auto* call = setBb.terminator.opt_Call()) {
+                    setLocNext.bbIdx = call->retBlock;
                     setLocNext.stmtIdx = 0;
+                } else {
+                    continue;
                 }
 
                 if (slot.useLoc.stmtIdx < useBb.statements.size() && (useBb.statements[slot.useLoc.stmtIdx].is_Assign() && useBb.statements[slot.useLoc.stmtIdx].as_Assign().src.is_Use() && useBb.statements[slot.useLoc.stmtIdx].as_Assign().src.as_Use() == thisVar)) {
@@ -6352,6 +6354,12 @@ namespace {
 
             if (const auto* te = block.terminator.opt_Call()) {
                 assignedLval(te->retVal);
+            } else if (const auto* te = block.terminator.opt_Asm2()) {
+                for (const auto& param : te->params) {
+                    if (const auto* reg = param.opt_Reg(); reg && reg->output) {
+                        assignedLval(*reg->output);
+                    }
+                }
             } else if (const auto* te = block.terminator.opt_Drop()) {
                 if (te->flagIdx != ~0u) {
                     usedDfs.mut(te->flagIdx) = true;

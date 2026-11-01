@@ -15,6 +15,7 @@ class ASTModule;
 struct ASTType;
 
 struct PprustMarkers {
+    RcString coreCrate;
     virtual RcString blockItem(const ASTModule& module, size_t index) = 0;
     virtual RcString dollarCrate(const RcString& crateName) = 0;
 };

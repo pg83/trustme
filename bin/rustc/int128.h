@@ -144,10 +144,6 @@ public:
 
     U128& operator>>=(unsigned bits);
 
-    U128 operator<<(U128 bits) const;
-
-    U128 operator>>(U128 bits) const;
-
     U128 operator<<(unsigned bits) const;
 
     U128 operator>>(unsigned bits) const;

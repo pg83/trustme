@@ -2065,6 +2065,11 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         const auto& text = e.second;
 
         AsmLine line;
+        if (options.raw) {
+            line.trailing = text;
+            lines.push_back(std::move(line));
+            continue;
+        }
 
         const char* c = text.c_str();
         std::string curString;

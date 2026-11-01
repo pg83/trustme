@@ -132,20 +132,6 @@ U128& U128::operator>>=(unsigned bits) {
     return *this;
 }
 
-U128 U128::operator<<(U128 bits) const {
-    if (bits >= 128) {
-        return U128(0);
-    }
-    return *this << static_cast<unsigned>(bits.truncateU64());
-}
-
-U128 U128::operator>>(U128 bits) const {
-    if (bits >= 128) {
-        return U128(0);
-    }
-    return *this >> static_cast<unsigned>(bits.truncateU64());
-}
-
 U128 U128::operator<<(unsigned bits) const {
     if (bits == 0) {
         return *this;
