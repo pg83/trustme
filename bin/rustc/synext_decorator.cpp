@@ -2907,9 +2907,8 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, Vector<ASTType
 
     // TODO: Locate type that is directly related to the type param.
     switch (ty->data.tag()) {
-        case TypeData::TAG_None: {
-            break;
-        }
+        default:
+            UNREACHABLE();
         case TypeData::TAG_Any: {
             break;
         }
@@ -2920,9 +2919,6 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, Vector<ASTType
             break;
         }
         case TypeData::TAG_Macro: {
-            break;
-        }
-        case TypeData::TAG_Primitive: {
             break;
         }
         case TypeData::TAG_Function: {
@@ -2959,9 +2955,6 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, Vector<ASTType
         case TypeData::TAG_Pattern: {
             auto& e = ty->data.as_Pattern();
             addFieldBoundFromTy(params, outList, e.inner);
-            break;
-        }
-        case TypeData::TAG_Generic: {
             break;
         }
         case TypeData::TAG_Path: {
