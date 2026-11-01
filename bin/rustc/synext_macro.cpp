@@ -954,13 +954,6 @@ namespace {
         toks.push_back(mv$(t2));
     }
 
-    void pushToks(std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
-        toks.push_back(mv$(t1));
-        toks.push_back(mv$(t2));
-        toks.push_back(mv$(t3));
-        toks.push_back(mv$(t4));
-    }
-
     void pushU16(Vector<u8>& bytes, size_t value) {
         bytes.pushBack(static_cast<u8>(value & 0xFF));
         bytes.pushBack(static_cast<u8>((value >> 8) & 0xFF));

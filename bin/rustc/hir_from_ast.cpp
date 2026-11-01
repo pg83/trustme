@@ -4285,6 +4285,11 @@ auto RebaseDefaultFieldExpr::visit(HIRExprNodeConstParam& node) -> void {
 
 auto RebaseDefaultFieldExpr::visit(HIRExprNodeArraySized& node) -> void {
     HIRExprVisitorDef::visit(node);
+    if (const auto* value = node.size.opt_Unevaluated(); value && value->is_Unevaluated()) {
+        auto& expr = *value->as_Unevaluated()->expr;
+        expr->visit(*this);
+        expr->resType = this->visitType(expr->resType);
+    }
     node.size = monomorph.monomorphArraysize(node.span(), node.size);
 }
 
