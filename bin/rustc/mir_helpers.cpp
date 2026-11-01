@@ -1239,16 +1239,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
     return FMT(ty);
 }
 
-bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb) {
-    LValueCbVisitor v{cb};
-    return v.visitLvalue(lv, u);
-}
-
-bool visitMirLvalueWith(const MIRParam& p, MIRValUsage u, const MIRLvalueCallback& cb) {
-    LValueCbVisitor v{cb};
-    return v.visitParam(p, u);
-}
-
 bool visitMirLvaluesWith(const MIRRValue& rval, const MIRLvalueCallback& cb) {
     LValueCbVisitor v{cb};
     return v.visitRvalue(rval);

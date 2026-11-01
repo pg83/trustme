@@ -115,10 +115,6 @@ public:
 
     const TokenData& rawData() const;
 
-    bool hasData() const {
-        return !data_.is_None();
-    }
-
     const Ident& ident() const {
         return data_.as_Ident();
     }

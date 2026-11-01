@@ -100,8 +100,6 @@ namespace ASTTypeTags {
 
     struct Unit {};
 
-    struct Primitive {};
-
     struct Tuple {};
 
     struct Function {};
@@ -163,10 +161,6 @@ struct ASTType {
         return *data.as_Path();
     }
 
-    const RcString& typeParam() const {
-        return data.as_Generic().name;
-    }
-
     bool isTuple() const {
         return data.is_Tuple();
     }
@@ -184,7 +178,6 @@ ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data);
 ASTType* mkType(stl::ObjPool& pool, Span sp);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
 ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, stl::Vector<ASTType*> innerTypes);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, stl::Vector<ASTType*> args, bool isVariadic, ASTType* ret);

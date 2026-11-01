@@ -30,10 +30,6 @@ struct HIRGenericRef {
 
     static HIRGenericRef newSolverExistential(u32 scope, u16 idx);
 
-    static HIRGenericRef newSelf() {
-        return HIRGenericRef(RcString::newInterned("Self"), GENERICSelf);
-    }
-
     bool isSelf() const {
         return binding == 0xFFFF;
     }

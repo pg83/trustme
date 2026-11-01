@@ -260,10 +260,6 @@ ASTType* mkType(ObjPool& pool, ASTTypeTags::Unit, Span sp) {
     return mkType(pool, sp, TypeData::make_Unit({}));
 }
 
-ASTType* mkType(ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type) {
-    return mkType(pool, sp, TypeData::make_Primitive({type}));
-}
-
 ASTType* mkType(ObjPool& pool, Span sp, enum eCoreType type) {
     return mkType(pool, sp, TypeData::make_Primitive({type}));
 }

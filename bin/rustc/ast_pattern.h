@@ -143,14 +143,6 @@ public:
         return data_;
     }
 
-    ASTPath& path() {
-        return data_.as_StructTuple().path;
-    }
-
-    const ASTPath& path() const {
-        return data_.as_StructTuple().path;
-    }
-
 };
 
 struct ASTStructPatternEntry {

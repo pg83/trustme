@@ -218,23 +218,9 @@ struct MIRLvalueCb final: MIRLvalueCallback {
     }
 };
 
-bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb);
-bool visitMirLvalueWith(const MIRParam& p, MIRValUsage u, const MIRLvalueCallback& cb);
 bool visitMirLvaluesWith(const MIRRValue& rval, const MIRLvalueCallback& cb);
 bool visitMirLvaluesWith(const MIRStatement& stmt, const MIRLvalueCallback& cb);
 bool visitMirLvaluesWith(const MIRTerminator& term, const MIRLvalueCallback& cb);
-
-template <typename F>
-bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, F f) {
-    MIRLvalueCb<F> cb(f);
-    return visitMirLvalueWith(lv, u, cb);
-}
-
-template <typename F>
-bool visitMirLvalue(const MIRParam& p, MIRValUsage u, F f) {
-    MIRLvalueCb<F> cb(f);
-    return visitMirLvalueWith(p, u, cb);
-}
 
 template <typename F>
 bool visitMirLvalues(const MIRRValue& rval, F f) {

@@ -215,22 +215,6 @@ namespace {
         return node;
     }
 
-    const HIRSimplePathData* internMembers(ThinVector<RcString> members) {
-        if (members.empty()) {
-            return nullptr;
-        }
-        u64 h1 = 0, h2 = 0;
-        for (size_t i = 0; i < members.size(); i++) {
-            auto ch = contentHash(members[i]);
-            h1 ^= key1(ch, i);
-            h2 ^= key2(ch, i);
-        }
-        if (const auto* d = findPath(h1, h2)) {
-            return d;
-        }
-        return addPath(h1, h2, std::move(members));
-    }
-
     u64 mixHash(u64 h, u64 v) {
         return splitMix64(h ^ (v + POS_STEP + (h << 6) + (h >> 2)));
     }
@@ -372,7 +356,7 @@ HIRSimplePath HIRSimplePath::parent() const {
 
 HIRSimplePath HIRSimplePath::operator+(const RcString& s) const {
     if (!p) {
-        return HIRSimplePath(internMembers(ThinVector<RcString>({RcString(), s})));
+        return HIRSimplePath(RcString(), {s});
     }
     const auto& m = p->members;
     auto ch = contentHash(s);
@@ -422,14 +406,12 @@ RcString HIRSimplePath::popComponent() {
 void HIRSimplePath::updateCrateName(RcString v) {
     if (!p) {
         if (v != RcString()) {
-            p = internMembers(ThinVector<RcString>({std::move(v)}));
+            *this = HIRSimplePath(std::move(v));
         }
         return;
     }
     const auto& m = p->members;
-    if (m.empty()) {
-        p = internMembers(ThinVector<RcString>({std::move(v)}));
-    } else if (v.c_str()[0] == '\0' && m.size() == 1) {
+    if (v.c_str()[0] == '\0' && m.size() == 1) {
         p = nullptr;
     } else {
         auto chOld = contentHash(m[0]);

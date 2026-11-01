@@ -1683,12 +1683,6 @@ namespace {
                 }
                 case ASTItem::TAG_Crate: {
                     auto& e = dat.as_Crate();
-                    if (e.name != "") {
-                        if (es.crate.externCrates.count(e.name) == 0) {
-                            e.name = es.crate.loadExternCrate(*es.wb.settings, i.span, e.name);
-                        }
-                        es.crate.markExternCrateUsed(e.name);
-                    }
                     if (modpath.nodes.empty()) {
                         es.wb.settings->implicitCrates.insert_or_assign(i.name, e.name);
                     }

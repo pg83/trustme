@@ -1811,10 +1811,6 @@ Token LexFindOperator(StringView s) {
     return TOK_NULL;
 }
 
-Token LexFindOperator(const std::string& s) {
-    return LexFindOperator(StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
-}
-
 Token LexFindReservedWord(const std::string& s, ASTEdition edition) {
     size_t len = 0;
     const sRWORD* RWORDS = nullptr;

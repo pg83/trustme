@@ -59,10 +59,6 @@ public:
 
     TomlKeyValue getNextValue();
 
-    const TomlLexer& lexer() const {
-        return lexer_;
-    }
-
 private:
     std::vector<std::string> getPath(std::vector<std::string> tail) const;
 

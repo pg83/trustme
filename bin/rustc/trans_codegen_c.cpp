@@ -434,8 +434,6 @@ namespace {
 
             bool matchesTemplate(std::initializer_list<const char*> lines, std::initializer_list<const char*> params) const;
 
-            const MIRAsmParam& p(size_t i) const;
-
             const MIRParam& input(size_t i) const;
 
             const MIRLValue& output(size_t i) const;
@@ -10740,10 +10738,6 @@ auto CodeGeneratorC::Asm2TplMatch::matchesTemplate(std::initializer_list<const c
     }
 
     return true;
-}
-
-auto CodeGeneratorC::Asm2TplMatch::p(size_t i) const -> const MIRAsmParam& {
-    return params.at(i);
 }
 
 auto CodeGeneratorC::Asm2TplMatch::input(size_t i) const -> const MIRParam& {
