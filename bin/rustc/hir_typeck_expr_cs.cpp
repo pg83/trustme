@@ -4922,17 +4922,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     return binding.is_Enum() ? actualPath == getParentPath(patternGeneric).path : actualPath == patternGeneric.path;
                 };
                 switch (pattern.data.tag()) {
-                    case HIRPatternData::TAG_Any: {
-                        return true;
-                    }
-                    case HIRPatternData::TAG_Deref: {
-                        return true;
-                    }
+                    default:
+                        UNREACHABLE();
                     case HIRPatternData::TAG_Box: {
                         return type->is_Path();
-                    }
-                    case HIRPatternData::TAG_Ref: {
-                        return type->is_Borrow();
                     }
                     case HIRPatternData::TAG_Tuple: {
                         return type->is_Tuple();
@@ -4977,11 +4970,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         }
                         return false;
                     }
-                    case HIRPatternData::TAG_Or: {
-                        BUG(Span(), StringView("Or-pattern alternatives must be visited before shape matching"));
-                    }
                 }
-                UNREACHABLE();
             }
 
             bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRType* type, HIRPatternBinding::Type bindingMode, bool isFallback, bool isNested) const {
@@ -5142,9 +5131,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
 
                     return false;
                 }
-                if (ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str) {
-                }
-
                 pattern.implicitDerefCount = nDeref;
                 switch (bt) {
                     case HIRBorrowType::Owned:
@@ -5197,16 +5183,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
 
                 bool rv = false;
                 switch (pattern.data.tag()) {
-                    case HIRPatternData::TAG_Ref: {
-                        BUG(sp, StringView("Match ergonomics - `&` pattern already handled"));
-                    }
-                    case HIRPatternData::TAG_Or: {
-                        BUG(sp, StringView("Match ergonomics - `|` pattern already handled"));
-                    }
-                    case HIRPatternData::TAG_Any: {
-                        rv = true;
-                        break;
-                    }
+                    default:
+                        UNREACHABLE();
                     case HIRPatternData::TAG_Value: {
                         auto& pe = pattern.data.as_Value();
                         if (pe.val.is_ByteString()) {

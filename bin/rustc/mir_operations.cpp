@@ -5416,14 +5416,12 @@ namespace {
                     } else {
                         continue;
                     }
-                    bool onlyOne = false;
                     if (e.src.is_Use()) {
                         const auto* srcp = &e.src.as_Use();
                         if (std::any_of(srcp->wrappers.begin(), srcp->wrappers.end(), [](auto& w) {
                             return !w.is_Field() && !w.is_Downcast();
                         })) {
                             DEBUG(StringView("Non-field access"));
-                            onlyOne = true;
                             continue;
                         }
                         // TODO: Why is this limited to locals only?
@@ -5439,7 +5437,6 @@ namespace {
                     } else {
                         continue;
                     }
-                    bool srcIsLvalue = e.src.is_Use();
 
                     DEBUG(StringView("- Locate usage"));
 
@@ -5475,20 +5472,9 @@ namespace {
                         }
 
                         if (optVisitMirLvalues(stmt2, isLvalueUsage)) {
-                            if (!srcIsLvalue) {
-                                if (stmt2.is_Assign() && stmt2.as_Assign().src.is_Use()) {
-                                } else {
-                                    stop = true;
-                                    break;
-                                }
-                            }
                             found = true;
                             stop = true;
                             break;
-                        }
-
-                        if (onlyOne) {
-                            stop = true;
                         }
                     }
                     if (!stop) {
@@ -5500,60 +5486,9 @@ namespace {
                     if (!stop) {
                         state.setCurStmtTerm(&block - &fcn.blocks.front());
                         DEBUG(state << StringView("[find usage] ") << block.terminator);
-                        if (srcIsLvalue) {
-                            isLvalueUsage.found = false;
-                            optVisitMirLvalues(block.terminator, isLvalueUsage);
-                            found |= isLvalueUsage.found;
-                        }
-                        switch (block.terminator.tag()) {
-                            case MIRTerminator::TAG_Incomplete: {
-                                break;
-                            }
-                            case MIRTerminator::TAG_Return: {
-                                break;
-                            }
-                            case MIRTerminator::TAG_UnwindResume: {
-                                break;
-                            }
-                            case MIRTerminator::TAG_UnwindTerminate: {
-                                break;
-                            }
-                            case MIRTerminator::TAG_Unreachable: {
-                                break;
-                            }
-                            case MIRTerminator::TAG_Goto: {
-                                DEBUG(StringView("TODO: Chain"));
-                                break;
-                            }
-                            case MIRTerminator::TAG_If: {
-                                stop = true;
-                                break;
-                            }
-                            case MIRTerminator::TAG_Switch: {
-                                stop = true;
-                                break;
-                            }
-                            case MIRTerminator::TAG_SwitchValue: {
-                                stop = true;
-                                break;
-                            }
-                            case MIRTerminator::TAG_Drop: {
-                                stop = true;
-                                break;
-                            }
-                            case MIRTerminator::TAG_Call: {
-                                stop = true;
-                                break;
-                            }
-                            case MIRTerminator::TAG_TailCall: {
-                                stop = true;
-                                break;
-                            }
-                            case MIRTerminator::TAG_Asm2: {
-                                stop = true;
-                                break;
-                            }
-                        }
+                        isLvalueUsage.found = false;
+                        optVisitMirLvalues(block.terminator, isLvalueUsage);
+                        found |= isLvalueUsage.found;
                     }
                     if (found) {
                         DEBUG(StringView("> Schedule replace ") << e.dst << StringView(" with ") << e.src.as_Use());
