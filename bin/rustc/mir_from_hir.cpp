@@ -1175,6 +1175,9 @@ namespace {
         if (const auto* constant = value.opt_Constant()) {
             binding = *constant;
         }
+        if (value.is_NotYetKnown()) {
+            ERROR(sp, E0000, StringView("constant patterns cannot depend on generic parameters: ") << pve->path);
+        }
         if (binding->valueState == HIRConstant::ValueState::InProgress) {
             ERROR(sp, E0000, StringView("cycle detected when evaluating constant `") << pve->path << StringView("`"));
         }

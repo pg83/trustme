@@ -5488,7 +5488,7 @@ auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& t
             BUG(state.sp, StringView("Infer const generic during concrete evaluation"));
         }
         case HIRConstGeneric::TAG_Generic: {
-            BUG(state.sp, StringView("Generic const ") << v << StringView(" during concrete evaluation"));
+            ERROR(state.sp, E0000, StringView("constant evaluation depends on generic parameters: ") << v);
         }
         case HIRConstGeneric::TAG_Unevaluated: {
             const auto ve = v.as_Unevaluated();
