@@ -1106,6 +1106,21 @@ namespace {
         }
     }
 
+    static void MIRCleanupAsmParams(const MIRTypeResolve& state, MirMutator& mutator, auto& params) {
+        for (auto& p : params) {
+            if (auto* reg = p.opt_Reg()) {
+                if (reg->input) {
+                    MIRCleanupParam(state, mutator, *reg->input);
+                }
+                if (reg->output) {
+                    MIRCleanupLValue(state, mutator, *reg->output);
+                }
+            } else if (p.is_Const()) {
+                MIRCleanupAsmConst(state, mutator, p);
+            }
+        }
+    }
+
     void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p) {
         switch (p.tag()) {
             case MIRParam::TAG_LValue: {
@@ -2176,6 +2191,11 @@ namespace {
                 for (const auto& block : fcn.blocks) {
                     if (block.terminator.is_TailCall()) {
                         return false;
+                    }
+                    for (const auto& statement : block.statements) {
+                        if (const auto* assembly = statement.opt_Asm2(); assembly && assembly->options.naked) {
+                            return false;
+                        }
                     }
                     if (const auto* call = block.terminator.opt_Call()) {
                         const auto* intrinsic = call->fcn.opt_Intrinsic();
@@ -6885,30 +6905,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 }
                 case MIRStatement::TAG_Asm2: {
                     auto& e = stmt.as_Asm2();
-                    for (auto& p : e.params) {
-                        switch (p.tag()) {
-                            case MIRAsmParam::TAG_Const: {
-                                MIRCleanupAsmConst(state, mutator, p);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Sym: {
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Reg: {
-                                auto& v = p.as_Reg();
-                                if (v.input) {
-                                    MIRCleanupParam(state, mutator, *v.input);
-                                }
-                                if (v.output) {
-                                    MIRCleanupLValue(state, mutator, *v.output);
-                                }
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Label: {
-                                break;
-                            }
-                        }
-                    }
+                    MIRCleanupAsmParams(state, mutator, e.params);
                     break;
                 }
                 case MIRStatement::TAG_Assign: {
@@ -7071,18 +7068,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             }
             case MIRTerminator::TAG_Asm2: {
                 auto& e = block.terminator.as_Asm2();
-                for (auto& p : e.params) {
-                    if (auto* reg = p.opt_Reg()) {
-                        if (reg->input) {
-                            MIRCleanupParam(state, mutator, *reg->input);
-                        }
-                        if (reg->output) {
-                            MIRCleanupLValue(state, mutator, *reg->output);
-                        }
-                    } else if (p.is_Const()) {
-                        MIRCleanupAsmConst(state, mutator, p);
-                    }
-                }
+                MIRCleanupAsmParams(state, mutator, e.params);
                 break;
             }
         }

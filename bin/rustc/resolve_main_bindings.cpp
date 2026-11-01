@@ -255,6 +255,17 @@ namespace {
     void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn, DelegationSignatureSource signatureSource = {}, bool hasParentSelf = false, bool isTraitImpl = false);
     void ResolveAbsoluteStatic(Context& itemContext, ASTStatic& e);
 
+    void ResolveAbsoluteAsmSymbol(Context& context, const Span& sp, ASTPath& path) {
+        ResolveAbsolutePath(context, sp, Context::LookupMode::Variable, path);
+        const auto& binding = path.bindings.value.binding;
+        if (binding.is_Struct() || binding.is_EnumVar() || binding.is_Generic() || binding.is_Variable()) {
+            ERROR(sp, E0000, StringView("asm sym operand must name a function or static: ") << path);
+        }
+        if (const auto* value = binding.opt_Static(); value && value->static_ && value->static_->sClass() == ASTStatic::CONST) {
+            ERROR(sp, E0000, StringView("asm sym operand must name a function or static: ") << path);
+        }
+    }
+
     void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPathParams& args) {
         for (auto& ent : args.entries) {
             switch (ent.tag()) {
@@ -1913,7 +1924,7 @@ namespace {
             void visit(ASTExprNodeAsm2& node) override {
                 for (auto& operand : node.params) {
                     if (auto* path = operand.opt_Sym()) {
-                        ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::Variable, *path);
+                        ResolveAbsoluteAsmSymbol(this->context, node.span(), *path);
                     }
                 }
                 ASTNodeVisitorDef::visit(node);
@@ -3183,7 +3194,7 @@ namespace {
                             }
                             case ASTGlobalAsmOperand::TAG_Sym: {
                                 auto& path = operand.as_Sym();
-                                ResolveAbsolutePath(itemContext, i->span, Context::LookupMode::Variable, path);
+                                ResolveAbsoluteAsmSymbol(itemContext, i->span, path);
                                 break;
                             }
                         }

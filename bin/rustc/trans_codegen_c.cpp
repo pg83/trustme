@@ -195,6 +195,7 @@ namespace {
         bool unwindRegion = false;
         bool currentFunctionRealignsArguments = false;
         unsigned destructorLoopDepth = 0;
+        size_t asmSymbolReferenceCount = 0;
 
         static constexpr size_t maxCTypeAlignment = 1u << 28;
         static constexpr size_t backendOptimizationBudget = 10'000;
@@ -275,7 +276,9 @@ namespace {
 
         void emitBoxDrop(unsigned indentLevel, const HIRType* innerType, const HIRType* boxType, const MIRLValue& slot, bool runDestructor);
 
-        std::string asmSymbol(const Span& span, const HIRPath& path) const;
+        std::string asmSymbol(const Span& span, const HIRPath& path, bool* functionSymbol = nullptr) const;
+
+        void emitAsmSymbolReference(const Span& span, const HIRPath& path);
 
         std::string inlineAsmConstant(const MIRConstant& operand) const;
 
@@ -340,6 +343,8 @@ namespace {
         void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override;
 
         void emitLinkageLabel(const char* name, size_t length);
+
+        void emitFunctionAsmLabel(const HIRPath& p, const HIRFunction& item, bool isExternDef);
 
         void emitFunctionLinkageLabel(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef);
 
@@ -1434,16 +1439,19 @@ auto CodeGeneratorC::emitBoxDrop(unsigned indentLevel, const HIRType* innerType,
     }
 }
 
-auto CodeGeneratorC::asmSymbol(const Span& span, const HIRPath& path) const -> std::string {
+auto CodeGeneratorC::asmSymbol(const Span& span, const HIRPath& path, bool* functionSymbol) const -> std::string {
     MonomorphState params(crate.types);
     auto item = resolve_.getValue(span, path, params, false);
+    if (functionSymbol) {
+        *functionSymbol = item.is_Function();
+    }
     const HIRLinkage* linkage = nullptr;
     if (const auto* function = item.opt_Function()) {
         linkage = &(*function)->linkage;
     } else if (const auto* stat = item.opt_Static()) {
         linkage = &(*stat)->linkage;
     } else {
-        BUG(span, StringView("asm sym operand does not name a function or static: ") << path);
+        ERROR(span, E0000, StringView("asm sym operand does not name a function or static: ") << path);
     }
 
     std::string symbol = linkage->name;
@@ -1457,6 +1465,16 @@ auto CodeGeneratorC::asmSymbol(const Span& span, const HIRPath& path) const -> s
         symbol.insert(symbol.begin(), '_');
     }
     return symbol;
+}
+
+auto CodeGeneratorC::emitAsmSymbolReference(const Span& span, const HIRPath& path) -> void {
+    bool function = false;
+    (void)asmSymbol(span, path, &function);
+    if (!function) {
+        return;
+    }
+    of << StringView("static auto* const trustme_asm_symbol_reference_") << asmSymbolReferenceCount++
+       << StringView(" __attribute__((used)) = &") << TransMangleValue(path) << StringView(";\n");
 }
 
 auto CodeGeneratorC::inlineAsmConstant(const MIRConstant& operand) const -> std::string {
@@ -1489,6 +1507,11 @@ auto CodeGeneratorC::globalAsmConstant(const HIRGlobalAssembly& assembly, const 
 }
 
 auto CodeGeneratorC::emitGlobalAsm(const HIRGlobalAssembly& se) -> void {
+    for (const auto& operand : se.operands) {
+        if (const auto* path = operand.opt_Sym()) {
+            emitAsmSymbolReference(se.span, *path);
+        }
+    }
     of << StringView("__asm__ (\"");
     if (usesIntelCompilerAsmDialect() && se.options.attSyntax) {
         of << StringView(".att_syntax prefix; ");
@@ -3006,11 +3029,20 @@ auto CodeGeneratorC::emitLinkageLabel(const char* name, size_t length) -> void {
     of << StringView(")");
 }
 
-auto CodeGeneratorC::emitFunctionLinkageLabel(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) -> void {
+auto CodeGeneratorC::emitFunctionAsmLabel(const HIRPath& p, const HIRFunction& item, bool isExternDef) -> void {
     if (item.linkage.name != "" && item.linkage.name != "main") {
+        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
+    } else if (isExternDef) {
+        const auto name = TransMangleValue(p);
+        emitLinkageLabel(name.c_str(), name.size());
+    }
+}
+
+auto CodeGeneratorC::emitFunctionLinkageLabel(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) -> void {
+    if (isExternDef || (item.linkage.name != "" && item.linkage.name != "main")) {
         emitFunctionDefinitionPrefix(item, isExternDef);
         emitFunctionHeader(p, item, params);
-        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
+        emitFunctionAsmLabel(p, item, isExternDef);
         of << StringView(";\n");
     }
 }
@@ -3042,9 +3074,7 @@ auto CodeGeneratorC::emitFunctionProto(const HIRPath& p, const HIRFunction& item
     TRACE_FUNCTION_F(p);
     emitFunctionDefinitionPrefix(item, isExternDef);
     emitFunctionHeader(p, item, params);
-    if (item.linkage.name != "" && item.linkage.name != "main") {
-        emitLinkageLabel(item.linkage.name.c_str(), item.linkage.name.size());
-    }
+    emitFunctionAsmLabel(p, item, isExternDef);
     of << StringView(";\n\n");
 
     if (crate.functionTracksCaller(sp, p, item)) {
@@ -3118,6 +3148,11 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
             symbol << StringView(item.linkage.name.c_str() + (item.linkage.name.c_str()[0] == '\1' ? 1 : 0));
         }
         const StringView name(symbol);
+        for (const auto& parameter : nakedAsm->as_Asm2().params) {
+            if (const auto* path = parameter.opt_Sym()) {
+                emitAsmSymbolReference(localMirRes.sp, *path);
+            }
+        }
         of << StringView("__asm__(\"");
         if (machO) {
             of << StringView(".pushsection __TEXT,__text,regular,pure_instructions\\n");
@@ -6518,6 +6553,21 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                 of << StringView(",");
             }
             of << StringView(" [trustme_dollar] \"i\" (&trustme_asm_dollar)");
+        }
+        bool hasInputs = !inputs.empty() || escapeDollar;
+        for (const auto& parameter : asmParams) {
+            if (const auto* path = parameter.opt_Sym()) {
+                bool function = false;
+                (void)asmSymbol(localMirRes.sp, *path, &function);
+                if (!function) {
+                    continue;
+                }
+                if (hasInputs) {
+                    of << StringView(",");
+                }
+                of << StringView(" \"X\" (&") << TransMangleValue(*path) << StringView(")");
+                hasInputs = true;
+            }
         }
         of << StringView(" :");
         for (size_t i = 0; i < clobbers.length(); i++) {
