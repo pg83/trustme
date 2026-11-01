@@ -851,7 +851,7 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, const HIRType** outTy = nullptr);
 
-    MIREvalStaticRefPtr getStaticref(HIRPath p, const HIRType** outTy = nullptr);
+    MIREvalStaticRefPtr getStaticref(HIRPath p, const HIRType** outTy = nullptr, bool materializeVtable = false);
 
     MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, std::pair<u64, MIREvalRelocPtr>* borrowAddress = nullptr);
 
@@ -4943,7 +4943,7 @@ auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, const HIRType** o
     return getStaticref(ms.monomorphPath(state.sp, p), outTy);
 }
 
-auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MIREvalStaticRefPtr {
+auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool materializeVtable) -> MIREvalStaticRefPtr {
     rootResolve.revealOpaqueTypesPath(state.sp, p);
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
@@ -4953,7 +4953,60 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy) -> MI
 
     if (const auto* pe = p.data.opt_UfcsKnown()) {
         if (pe->item == rootResolve.board().ctfe->vtableName()) {
-            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
+            if (!materializeVtable) {
+                return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
+            }
+            const size_t ptrBytes = TargetGetPointerBits() / 8;
+            const auto* trait = pe->trait.path == HIRSimplePath() ? nullptr : &rootResolve.crate.getTraitByPath(state.sp, pe->trait.path);
+            const TypeRepr* repr = nullptr;
+            if (trait) {
+                HIRPathParamsBuilder params(pe->trait.params);
+                for (const auto& entry : trait->typeIndexes) {
+                    if (params.types.size() <= entry.second) {
+                        params.types.resize(entry.second + 1);
+                    }
+                    const auto* projection = rootResolve.crate.types.path(HIRPath(pe->type, pe->trait.clone(), entry.first), {});
+                    params.types[entry.second] = rootResolve.expandAssociatedTypes(state.sp, projection);
+                }
+                const auto& definition = rootResolve.crate.getStructByPath(state.sp, trait->vtablePath);
+                const auto* type = rootResolve.crate.types.path(HIRGenericPath(trait->vtablePath, HIRPathParams(mv$(params))), &definition);
+                repr = TargetGetTypeRepr(state.sp, rootResolve, type);
+                MIR_ASSERT(state, repr, StringView("No vtable representation for ") << pe->trait);
+            }
+            auto* literal = valuePool->make<EncodedLiteral>();
+            literal->bytes.zero(repr ? repr->size : 3 * ptrBytes);
+            const auto writePointer = [&](size_t offset, HIRPath path, bool trackCaller = false) {
+                MIR_ASSERT(state, offset + ptrBytes <= literal->bytes.length(), StringView("Vtable field outside allocation"));
+                literal->writeUint(offset, ptrBytes, EncodedLiteral::PTR_BASE);
+                literal->relocations.push_back(Reloc::newNamed(offset, ptrBytes, std::move(path), trackCaller));
+            };
+            size_t size, align;
+            MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, rootResolve, pe->type, size, align) && size != SIZE_MAX, StringView("Invalid vtable source layout"));
+            writePointer(0, HIRPath(pe->type, "#drop_glue"));
+            literal->writeUint(ptrBytes, ptrBytes, size);
+            literal->writeUint(2 * ptrBytes, ptrBytes, align);
+            if (trait) {
+                const auto monomorph = MonomorphStatePtr(rootResolve.crate.types, pe->type, &pe->trait.params, nullptr);
+                for (const auto& method : trait->valueIndexes) {
+                    auto path = HIRPath(pe->type, monomorph.monomorphGenericpath(state.sp, method.second.second, false), method.first);
+                    rootResolve.expandAssociatedTypesPath(state.sp, path);
+                    const auto& sourceTrait = rootResolve.crate.getTraitByPath(state.sp, method.second.second.path);
+                    const auto& function = sourceTrait.values.at(method.first).as_Function();
+                    if (function.receiver == HIRFunction::Receiver::Value) {
+                        path.data.as_UfcsKnown().item = RcString::newInterned(FMT(method.first << StringView("#ptr")));
+                    }
+                    writePointer(repr->fields.at(method.second.first).offset, std::move(path), function.markings.trackCaller);
+                }
+                for (size_t i = 0; i < trait->allParentTraits.size(); i++) {
+                    const auto& field = repr->fields.at(trait->vtableParentTraitsStart + i);
+                    if (!field.ty->is_Tuple()) {
+                        auto path = HIRPath(pe->type, monomorph.monomorphGenericpath(state.sp, trait->allParentTraits[i].path), pe->item);
+                        rootResolve.expandAssociatedTypesPath(state.sp, path);
+                        writePointer(field.offset, std::move(path));
+                    }
+                }
+            }
+            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), literal, literal->bytes.length());
         }
         if (const auto* tyDyn = pe->type->opt_TraitObject()) {
             if (tyDyn->trait.traitPtr && tyDyn->trait.traitPtr->getVtableValueIndex(rootResolve.crate.types, state.sp, tyDyn->trait.path.params, pe->trait, pe->item) > 0) {
@@ -5157,7 +5210,7 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                 }
                 auto p = val.readPtr(state);
                 if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
-                    p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone()));
+                    p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone(), nullptr, true));
                 }
                 struct DerefLayout { bool zero; size_t align; };
                 const auto derefLayout = [&](auto&& recurse, const HIRType* type, size_t size, size_t align) -> DerefLayout {

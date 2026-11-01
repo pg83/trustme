@@ -5439,8 +5439,44 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         ASSERT_BUG(sp, possibleType, StringView("No type for named path pattern ") << pattern);
                         context.equateTypes(sp, ty, *possibleType);
 
+                        for (size_t i = 0; i < e.subPatterns.size(); i++) {
+                            const auto end = e.subPatterns.begin() + i;
+                            if (std::find_if(e.subPatterns.begin(), end, [&](const auto& field) { return field.first == e.subPatterns[i].first; }) != end) {
+                                ERROR(sp, E0000, StringView("field occurs more than once in a pattern: ") << e.subPatterns[i].first);
+                            }
+                        }
+                        if (e.binding.is_Union()) {
+                            if (e.subPatterns.size() != 1) {
+                                ERROR(sp, E0000, StringView("union patterns must select exactly one field"));
+                            }
+                        } else if (e.isExhaustive) {
+                            const HIRStruct* definition = nullptr;
+                            if (e.binding.is_Struct()) {
+                                definition = e.binding.as_Struct();
+                            } else if (e.binding.is_Enum()) {
+                                const auto& variant = e.binding.as_Enum();
+                                if (const auto* data = variant.ptr->data.opt_Data()) {
+                                    const auto* variantType = data->at(variant.varIdx).type;
+                                    if (variantType != context.crate.types.unit()) {
+                                        const auto* path = variantType->opt_Path();
+                                        ASSERT_BUG(sp, path && path->binding.is_Struct(), StringView("Invalid enum variant pattern type"));
+                                        definition = path->binding.as_Struct();
+                                    }
+                                }
+                            }
+                            size_t fields = 0;
+                            if (definition) {
+                                if (const auto* tuple = definition->data.opt_Tuple()) {
+                                    fields = tuple->size();
+                                } else if (const auto* named = definition->data.opt_Named()) {
+                                    fields = named->size();
+                                }
+                            }
+                            if (e.subPatterns.size() != fields) {
+                                ERROR(sp, E0000, StringView("pattern does not mention all fields of ") << e.path);
+                            }
+                        }
                         if (e.subPatterns.empty()) {
-                            // TODO: Check the field count?
                             rv = true;
                         } else {
                             const auto& sd = patternGetNamed(sp, e.path, e.binding);

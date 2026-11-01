@@ -4036,19 +4036,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             switch (pat.data.tag()) {
                                 default:
                                     BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                                case HIRPatternData::TAG_Any: {
-                                    for (const auto& fld : sd) {
-                                        ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, StringView("Too-large struct field index"));
-                                        this->appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
-                                        fieldPath.back()++;
-                                    }
-                                    break;
-                                }
+                                case HIRPatternData::TAG_Any:
                                 case HIRPatternData::TAG_PathNamed: {
-                                    auto& pe = pat.data.as_PathNamed();
-                                    if (sd.size() != 0 && !pe.isWildcard()) {
-                                        BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                                    }
                                     for (const auto& fld : sd) {
                                         ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, StringView("Too-large struct field index"));
                                         this->appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
