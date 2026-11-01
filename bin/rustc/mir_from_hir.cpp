@@ -3990,7 +3990,11 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     if (langBox && e.path.data.as_Generic().path == *langBox) {
                         const auto& innerTy = e.path.data.as_Generic().params.types.at(0);
                         switch (pat.data.tag()) {
+                            case HIRPattern::Data::TAG_PathNamed:
                             case HIRPattern::Data::TAG_Any: {
+                                if (const auto* pe = pat.data.opt_PathNamed()) {
+                                    ASSERT_BUG(sp, pe->subPatterns.empty(), StringView("Box brace pattern has fields - ") << pat);
+                                }
                                 fieldPath.push_back(FIELD_DEREF);
                                 this->appendFrom(sp, emptyPattern, innerTy);
                                 fieldPath.pop_back();
@@ -4074,31 +4078,24 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
                 case HIRTypePathBinding::TAG_Union: {
                     const auto pbe = e.binding.as_Union();
-                    switch (pat.data.tag()) {
-                        default:
-                            TODO(sp, StringView("Match over union - ") << ty << StringView(" with ") << pat);
-                        case HIRPatternData::TAG_Any: {
-                            this->pushRule(PatternRule::make_Any({}));
-                            break;
-                        }
-                        case HIRPatternData::TAG_PathNamed: {
-                            auto& pe = pat.data.as_PathNamed();
-                            ASSERT_BUG(sp, pe.binding.is_Union() && pe.binding.as_Union() == pbe, StringView("Union pattern binding mismatch"));
-                            ASSERT_BUG(sp, pe.subPatterns.size() == 1, StringView("Union pattern must select exactly one field"));
+                    if (pat.data.is_Any()) {
+                        this->pushRule(PatternRule::make_Any({}));
+                    } else {
+                        const auto& pe = pat.data.as_PathNamed();
+                        ASSERT_BUG(sp, pe.binding.is_Union() && pe.binding.as_Union() == pbe, StringView("Union pattern binding mismatch"));
+                        ASSERT_BUG(sp, pe.subPatterns.size() == 1, StringView("Union pattern must select exactly one field"));
 
-                            const auto& fieldPattern = pe.subPatterns.front();
-                            auto fieldIt = std::find_if(pbe->variants.begin(), pbe->variants.end(), [&](const auto& field) {
-                                return field.name == fieldPattern.first;
-                            });
-                            ASSERT_BUG(sp, fieldIt != pbe->variants.end(), StringView("Unable to find union field ") << fieldPattern.first);
+                        const auto& fieldPattern = pe.subPatterns.front();
+                        auto fieldIt = std::find_if(pbe->variants.begin(), pbe->variants.end(), [&](const auto& field) {
+                            return field.name == fieldPattern.first;
+                        });
+                        ASSERT_BUG(sp, fieldIt != pbe->variants.end(), StringView("Unable to find union field ") << fieldPattern.first);
 
-                            const auto fieldIndex = static_cast<unsigned>(fieldIt - pbe->variants.begin());
-                            ASSERT_BUG(sp, fieldIndex < FIELD_INDEX_MAX, StringView("Too-large union field index"));
-                            fieldPath.push_back(fieldIndex);
-                            this->appendFrom(sp, fieldPattern.second, maybeMonomorph(fieldIt->ty));
-                            fieldPath.pop_back();
-                            break;
-                        }
+                        const auto fieldIndex = static_cast<unsigned>(fieldIt - pbe->variants.begin());
+                        ASSERT_BUG(sp, fieldIndex < FIELD_INDEX_MAX, StringView("Too-large union field index"));
+                        fieldPath.push_back(fieldIndex);
+                        this->appendFrom(sp, fieldPattern.second, maybeMonomorph(fieldIt->ty));
+                        fieldPath.pop_back();
                     }
                     break;
                 }
@@ -4376,18 +4373,11 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         case HIRType::TAG_Borrow: {
             auto& e = (*ty).as_Borrow();
             fieldPath.push_back(FIELD_DEREF);
-            switch (pat.data.tag()) {
-                default:
-                    BUG(sp, StringView("Matching borrow invalid pattern - ") << ty << StringView(" with ") << pat);
-                case HIRPatternData::TAG_Any: {
-                    this->appendFrom(sp, emptyPattern, e.inner);
-                    break;
-                }
-                case HIRPatternData::TAG_Ref: {
-                    auto& pe = pat.data.as_Ref();
-                    this->appendFrom(sp, *pe.sub, e.inner);
-                    break;
-                }
+            if (pat.data.is_Any()) {
+                this->appendFrom(sp, emptyPattern, e.inner);
+            } else {
+                const auto& pe = pat.data.as_Ref();
+                this->appendFrom(sp, *pe.sub, e.inner);
             }
             fieldPath.pop_back();
             break;
