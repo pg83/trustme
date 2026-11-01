@@ -9457,7 +9457,7 @@ auto ExprVisitorApply::checkTypeResolvedConstgeneric(const Span& sp, HIRConstGen
     if (v.is_Infer()) {
         auto val = ivars.getValue(v).clone();
         if (val.is_Infer()) {
-            ERROR(sp, E0000, StringView("Failed to infer const argument ") << v << StringView(" in ") << topType);
+            ERROR(sp, E0000, StringView("type annotations needed: Failed to infer const argument ") << v << StringView(" in ") << topType);
         }
         v = std::move(val);
     }
@@ -9574,11 +9574,7 @@ auto ExprVisitorApply::checkTypeResolved(const Span& sp, const HIRType* ty, cons
         }
 
         void visitConstgeneric(HIRConstGeneric& v) override {
-            if (v.is_Infer()) {
-                auto val = parent.ivars.getValue(v).clone();
-                DEBUG(v << StringView(" -> ") << val);
-                v = std::move(val);
-            }
+            parent.checkTypeResolvedConstgeneric(sp, v, topType);
             HIRVisitor::visitConstgeneric(v);
         }
 
