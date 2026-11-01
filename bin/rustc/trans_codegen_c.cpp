@@ -1620,22 +1620,31 @@ auto CodeGeneratorC::emitTypeFn(const HIRType* ty) -> void {
     of << StringView("*");
     emitCtype(ty);
     of << StringView(")(");
-    if (te.argTypes.empty() && !te.trackCaller) {
+    unsigned int passedCount = 0;
+    for (const auto* arg : te.argTypes) {
+        passedCount += argumentIsPassed(te.abi, arg);
+    }
+    if (passedCount == 0 && !te.trackCaller && !te.isVariadic) {
         of << StringView("void)");
     } else {
+        unsigned int emitted = 0;
         for (unsigned int i = 0; i < te.argTypes.length(); i++) {
-            if (i != 0) {
+            if (!argumentIsPassed(te.abi, te.argTypes[i])) {
+                continue;
+            }
+            if (emitted != 0) {
                 of << StringView(",");
             }
             of << StringView(" ");
             this->emitFunctionArgument(te.abi, te.argTypes[i], FMT_CB(ss, ss << StringView("arg") << i;));
+            emitted++;
         }
         if (te.isVariadic) {
-            of << StringView(", ...");
+            of << StringView(emitted != 0 ? ", ..." : "...");
         }
         if (te.trackCaller) {
             MIR_ASSERT(*mirRes, !te.isVariadic, StringView("#[track_caller] on a variadic function pointer"));
-            if (!te.argTypes.empty()) {
+            if (emitted != 0) {
                 of << StringView(",");
             }
             of << StringView(" const trustme_caller_location* trustme_caller");
@@ -5567,10 +5576,7 @@ auto CodeGeneratorC::mangleResolvedValuePath(const HIRPath& path) const -> RcStr
 auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Call& e, unsigned indentLevel, bool tailCall) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     const auto* targetPath = e.fcn.opt_Path();
-    const bool targetTracksCaller = e.tracksCaller || (targetPath && trackedFunctions.count(*targetPath) != 0);
-    if (tailCall && e.fcn.is_Intrinsic()) {
-        MIR_BUG(localMirRes, StringView("Intrinsic used as an explicit tail-call target"));
-    }
+    const bool targetTracksCaller = !tailCall && (e.tracksCaller || (targetPath && trackedFunctions.count(*targetPath) != 0));
     of << indent;
 
     const auto calleeAbi = this->calleeAbi(localMirRes, e.fcn);
@@ -5611,10 +5617,8 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
     }
 
     if (tailCall) {
-        if (targetTracksCaller == currentFunctionTracksCaller) {
-            of << StringView("TRUSTME_MUSTTAIL ");
-        }
-        of << StringView("return ");
+        MIR_ASSERT(localMirRes, !currentFunctionTracksCaller, StringView("Caller-tracked function contains an explicit tail call"));
+        of << StringView("TRUSTME_MUSTTAIL return ");
     }
 
     switch (e.fcn.tag()) {
@@ -5687,7 +5691,11 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
                     of << StringView(" = ");
                 }
             }
-            of << mangleResolvedValuePath(e2);
+            if (tailCall) {
+                emitReifiedFunctionName(e2, false);
+            } else {
+                of << mangleResolvedValuePath(e2);
+            }
             break;
         }
         case MIRCallTarget::TAG_Intrinsic: {

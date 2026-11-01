@@ -2173,6 +2173,12 @@ namespace {
                     return false;
                 }
 
+                for (const auto& block : fcn.blocks) {
+                    if (block.terminator.is_TailCall()) {
+                        return false;
+                    }
+                }
+
                 // TODO: Allow functions that are just a switch on an input.
                 if (fcn.blocks.size() == 1) {
                     return fcn.blocks[0].statements.size() < 10 && !fcn.blocks[0].terminator.is_Goto();

@@ -210,6 +210,19 @@ auto OuterVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) -> void {
 auto OuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     auto _ = this->ms.setItemGenerics(item.params);
     if (item.code) {
+        if (ms.crate.functionTracksCaller(item.code->span(), p.getFullPath(), item)) {
+            struct CheckTailCalls: HIRExprVisitorDef {
+                using HIRExprVisitorDef::HIRExprVisitorDef;
+
+                void visit(HIRExprNodeReturn& node) override {
+                    if (node.isTailCall) {
+                        ERROR(node.span(), E0000, StringView("a function marked with `#[track_caller]` cannot perform a tail-call"));
+                    }
+                    HIRExprVisitorDef::visit(node);
+                }
+            } check{ms.crate.types};
+            item.code->visit(check);
+        }
         DEBUG(StringView("Function code ") << p);
         TypecheckCode(ms, item.args, item.traitReturnType.value_or(item.returnType), item.code);
     } else {
