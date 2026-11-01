@@ -602,7 +602,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
             switch ((*ty).tag()) {
                 default:
                     MIR_BUG(*this, StringView("Field access on unexpected type - ") << ty);
-                    break;
                 case HIRType::TAG_Array: {
                     auto& te = (*ty).as_Array();
                     return te.inner;
@@ -627,7 +626,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                         switch (str.data.tag()) {
                             case HIRStructData::TAG_Unit: {
                                 MIR_BUG(*this, StringView("Field on unit-like struct - ") << ty);
-                                break;
                             }
                             case HIRStructData::TAG_Tuple: {
                                 auto& se = str.data.as_Tuple();
@@ -659,14 +657,12 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
             switch ((*ty).tag()) {
                 default:
                     MIR_BUG(*this, StringView("Deref on unexpected type - ") << ty);
-                    break;
                 case HIRType::TAG_Path: {
                     if (const auto* innerPtr = this->isTypeOwnedBox(ty)) {
                         return innerPtr;
                     } else {
                         MIR_BUG(*this, StringView("Deref on unexpected type - ") << ty);
                     }
-                    break;
                 }
                 case HIRType::TAG_Pointer: {
                     auto& te = (*ty).as_Pointer();
@@ -683,7 +679,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
             switch ((*ty).tag()) {
                 default:
                     MIR_BUG(*this, StringView("Index on unexpected type - ") << ty);
-                    break;
                 case HIRType::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
                     return te.inner;
@@ -700,7 +695,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
             switch ((*ty).tag()) {
                 default:
                     MIR_BUG(*this, StringView("Downcast on unexpected type - ") << ty);
-                    break;
                 case HIRType::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     MIR_ASSERT(*this, te.binding.is_Enum() || te.binding.is_Union(), StringView("Downcast on non-Enum"));
@@ -914,7 +908,6 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
             switch (tuMatch.tag()) {
                 default:
                     MIR_TODO(*this, StringView("offset_of: field ") << values[i]);
-                    break;
                 case MIRConstant::TAG_Int: {
                     auto& fieldIdx = tuMatch.as_Int();
                     MIR_ASSERT(*this, fieldIdx.v.isI64() && fieldIdx.v >= S128(0), StringView("Invalid tuple field index ") << fieldIdx.v);
@@ -929,6 +922,14 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
                 }
                 case MIRConstant::TAG_StaticString: {
                     auto& fieldName = tuMatch.as_StaticString();
+                    const auto namedIndex = [&](const auto& fields) {
+                        for (size_t index = 0; index < fields.size(); index++) {
+                            if (fields[index].name == fieldName) {
+                                return index;
+                            }
+                        }
+                        ERROR(sp, E0000, StringView("no named field `") << fieldName << StringView("` on ") << curTy);
+                    };
                     char* end = nullptr;
                     auto numericIdx = std::strtoul(fieldName.c_str(), &end, 10);
                     if (end != fieldName.c_str() && *end == '\0') {
@@ -939,40 +940,25 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
                             const auto& str = *bep;
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Named: {
-                                    auto& fields = str.data.as_Named();
-                                    idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                                        return x.name == fieldName;
-                                    }) - fields.begin();
+                                    idx = namedIndex(str.data.as_Named());
                                     break;
                                 }
-                                case HIRStructData::TAG_Tuple: {
-                                    MIR_BUG(*this, StringView("Named field on tuple struct: ") << curTy << StringView(" .") << fieldName);
-                                    break;
-                                }
+                                case HIRStructData::TAG_Tuple:
                                 case HIRStructData::TAG_Unit: {
-                                    auto& _ = str.data.as_Unit();
-                                    MIR_BUG(*this, StringView("Empty struct: ") << curTy << StringView(" .") << fieldName);
-                                    break;
+                                    ERROR(sp, E0000, StringView("no named field `") << fieldName << StringView("` on ") << curTy);
                                 }
                             }
                         } else if (const auto* bep = tyPath->binding.opt_Union()) {
-                            const auto& unm = *bep;
-                            const auto& fields = unm.variants;
-                            idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                                return x.name == fieldName;
-                            }) - fields.begin();
+                            idx = namedIndex(bep->variants);
                         } else if (const auto* bep = tyPath->binding.opt_Enum()) {
                             const auto& enm = *bep;
                             MIR_ASSERT(*this, enm.data.is_Data(), StringView("Non-Data enum: ") << curTy << StringView(" .") << fieldName);
-                            const auto& fields = enm.data.as_Data();
-                            idx = std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                                return x.name == fieldName;
-                            }) - fields.begin();
+                            idx = namedIndex(enm.data.as_Data());
                         } else {
-                            MIR_TODO(*this, StringView("offset_of: named field/variant - ") << fieldName);
+                            ERROR(sp, E0000, StringView("no named field `") << fieldName << StringView("` on ") << curTy);
                         }
                     } else {
-                        MIR_TODO(*this, StringView("offset_of: named field/variant - ") << fieldName);
+                        ERROR(sp, E0000, StringView("no named field `") << fieldName << StringView("` on ") << curTy);
                     }
                     break;
                 }
@@ -982,7 +968,9 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
         if (!repr) {
             MIR_BUG(*this, StringView("Calling `offset_of!` on type with non-defined repr: ") << curTy);
         }
-        MIR_ASSERT(*this, idx < repr->fields.size(), StringView("Field index ") << idx << StringView(" out of range for ") << curTy);
+        if (idx >= repr->fields.size()) {
+            ERROR(sp, E0000, StringView("field index ") << idx << StringView(" out of range for ") << curTy);
+        }
         curTy = repr->fields[idx].ty;
         baseOfs += repr->fields[idx].offset;
     }
