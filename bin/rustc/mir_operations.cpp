@@ -4257,6 +4257,33 @@ namespace {
 
                 if (auto* e = stmt.opt_Assign()) {
                     struct H {
+                        static void validateBinaryOperands(const MIRTypeResolve& state, MIRBinOp op, const MIRConstant& left, const MIRConstant& right) {
+                            const bool integerLeft = left.is_Int() || left.is_Uint();
+                            const bool integerRight = right.is_Int() || right.is_Uint();
+                            bool valid = false;
+                            switch (op) {
+                                case MIRBinOp::BIT_SHL:
+                                case MIRBinOp::BIT_SHR:
+                                    MIR_ASSERT(state, integerLeft && integerRight, StringView("Invalid constant shift operands - ") << left << StringView(" and ") << right);
+                                    return;
+                                case MIRBinOp::ADD:
+                                case MIRBinOp::SUB:
+                                case MIRBinOp::MUL:
+                                case MIRBinOp::DIV:
+                                case MIRBinOp::MOD:
+                                    valid = integerLeft || left.is_Float();
+                                    break;
+                                case MIRBinOp::BIT_AND:
+                                case MIRBinOp::BIT_OR:
+                                case MIRBinOp::BIT_XOR:
+                                    valid = integerLeft || left.is_Bool();
+                                    break;
+                                default:
+                                    return;
+                            }
+                            MIR_ASSERT(state, valid && left.tag() == right.tag() && state.getConstType(left) == state.getConstType(right), StringView("Invalid constant binary operands - ") << left << StringView(" and ") << right);
+                        }
+
                         static S128 truncateS(HIRCoreType ct, S128 v) {
                             auto u = H::truncateU(ct, v.getInner());
                             switch (ct) {
@@ -4470,6 +4497,7 @@ namespace {
                                 if (valL.is_Const() || valR.is_Const()) {
                                 } else if (valL.is_Generic() || valR.is_Generic()) {
                                 } else {
+                                    H::validateBinaryOperands(state, se.op, valL, valR);
                                     MIRConstant newValue;
                                     switch (se.op) {
                                         case MIRBinOp::EQ:
@@ -4504,293 +4532,166 @@ namespace {
                                             break;
 
                                         case MIRBinOp::ADD:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::ADD - ") << valL << StringView(" + ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Float: {
-                                                    auto& le = valL.as_Float();
-                                                    auto& re = valR.as_Float();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::ADD - ") << valL << StringView(" / ") << valR);
-                                                    newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) + roundFloatValue(re.v, re.t), le.t);
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::ADD - ") << valL << StringView(" + ") << valR);
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v + re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::ADD - ") << valL << StringView(" + ") << valR);
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v + re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Float()) {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) + roundFloatValue(re.v, re.t), le.t);
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v + re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v + re.v), le.t});
                                             }
                                             break;
                                         case MIRBinOp::SUB:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::SUB - ") << valL << StringView(" + ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Float: {
-                                                    auto& le = valL.as_Float();
-                                                    auto& re = valR.as_Float();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::SUB - ") << valL << StringView(" / ") << valR);
-                                                    newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) - roundFloatValue(re.v, re.t), le.t);
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::SUB - ") << valL << StringView(" - ") << valR);
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v - re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::SUB - ") << valL << StringView(" - ") << valR);
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v - re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Float()) {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) - roundFloatValue(re.v, re.t), le.t);
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v - re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v - re.v), le.t});
                                             }
                                             break;
                                         case MIRBinOp::MUL:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::MUL - ") << valL << StringView(" * ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Float: {
-                                                    auto& le = valL.as_Float();
-                                                    auto& re = valR.as_Float();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::MUL - ") << valL << StringView(" / ") << valR);
-                                                    newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) * roundFloatValue(re.v, re.t), le.t);
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::MUL - ") << valL << StringView(" * ") << valR);
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v * re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::MUL - ") << valL << StringView(" * ") << valR);
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v * re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Float()) {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) * roundFloatValue(re.v, re.t), le.t);
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v * re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v * re.v), le.t});
                                             }
                                             break;
                                         case MIRBinOp::DIV:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::DIV - ") << valL << StringView(" / ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Float: {
-                                                    auto& le = valL.as_Float();
-                                                    auto& re = valR.as_Float();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::DIV - ") << valL << StringView(" / ") << valR);
-                                                    newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) / roundFloatValue(re.v, re.t), le.t);
-                                                    break;
+                                            if (valL.is_Float()) {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) / roundFloatValue(re.v, re.t), le.t);
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                if (re.v != 0) {
+                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v / re.v), le.t});
                                                 }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::DIV - ") << valL << StringView(" / ") << valR);
-                                                    if (re.v != 0) {
-                                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v / re.v), le.t});
-                                                    }
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::DIV - ") << valL << StringView(" / ") << valR);
-                                                    if (re.v != 0) {
-                                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v / re.v), le.t});
-                                                    }
-                                                    break;
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                if (re.v != 0) {
+                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v / re.v), le.t});
                                                 }
                                             }
                                             break;
                                         case MIRBinOp::MOD:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::MOD - ") << valL << StringView(" % ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Float:
-                                                    break;
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::MOD - ") << valL << StringView(" % ") << valR);
-                                                    MIR_ASSERT(state, re.v != 0, StringView("Const eval error: Constant division by zero"));
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v % re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::MOD - ") << valL << StringView(" % ") << valR);
-                                                    MIR_ASSERT(state, re.v != 0, StringView("Const eval error: Constant division by zero"));
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v % re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Float()) {
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, re.v != 0, StringView("Const eval error: Constant division by zero"));
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v % re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, re.v != 0, StringView("Const eval error: Constant division by zero"));
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v % re.v), le.t});
                                             }
                                             break;
 
                                         case MIRBinOp::BIT_AND:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::BIT_AND - ") << valL << StringView(" & ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Bool: {
-                                                    auto& le = valL.as_Bool();
-                                                    auto& re = valR.as_Bool();
-                                                    newValue = MIRConstant::make_Bool({le.v && re.v});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::BIT_AND - ") << valL << StringView(" ^ ") << valR);
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v & re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::BIT_AND - ") << valL << StringView(" ^ ") << valR);
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v & re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Bool()) {
+                                                auto& le = valL.as_Bool();
+                                                auto& re = valR.as_Bool();
+                                                newValue = MIRConstant::make_Bool({le.v && re.v});
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v & re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v & re.v), le.t});
                                             }
                                             break;
                                         case MIRBinOp::BIT_OR:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::BIT_OR - ") << valL << StringView(" | ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Bool: {
-                                                    auto& le = valL.as_Bool();
-                                                    auto& re = valR.as_Bool();
-                                                    newValue = MIRConstant::make_Bool({le.v || re.v});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::BIT_OR - ") << valL << StringView(" | ") << valR);
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v | re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::BIT_OR - ") << valL << StringView(" | ") << valR);
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v | re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Bool()) {
+                                                auto& le = valL.as_Bool();
+                                                auto& re = valR.as_Bool();
+                                                newValue = MIRConstant::make_Bool({le.v || re.v});
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v | re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v | re.v), le.t});
                                             }
                                             break;
                                         case MIRBinOp::BIT_XOR:
-                                            MIR_ASSERT(state, valL.tag() == valR.tag(), StringView("Mismatched types for eBinOp::BIT_XOR - ") << valL << StringView(" ^ ") << valR);
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Bool: {
-                                                    auto& le = valL.as_Bool();
-                                                    auto& re = valR.as_Bool();
-                                                    newValue = MIRConstant::make_Bool({le.v != re.v});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    auto& re = valR.as_Int();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::BIT_XOR - ") << valL << StringView(" ^ ") << valR);
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v ^ re.v), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    auto& re = valR.as_Uint();
-                                                    MIR_ASSERT(state, le.t == re.t, StringView("Mismatched types for eBinOp::BIT_XOR - ") << valL << StringView(" ^ ") << valR);
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v ^ re.v), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Bool()) {
+                                                auto& le = valL.as_Bool();
+                                                auto& re = valR.as_Bool();
+                                                newValue = MIRConstant::make_Bool({le.v != re.v});
+                                            } else if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v ^ re.v), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v ^ re.v), le.t});
                                             }
                                             break;
 
                                         case MIRBinOp::BIT_SHL: {
                                             U128 shiftLenR;
-                                            switch (valR.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Mismatched types for eBinOp::BIT_SHL - ") << valL << StringView(" >> ") << valR);
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& re = valR.as_Int();
-                                                    shiftLenR = re.v.getInner();
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& re = valR.as_Uint();
-                                                    shiftLenR = re.v;
-                                                    break;
-                                                }
+                                            if (valR.is_Int()) {
+                                                auto& re = valR.as_Int();
+                                                shiftLenR = re.v.getInner();
+                                            } else {
+                                                auto& re = valR.as_Uint();
+                                                shiftLenR = re.v;
                                             }
                                             MIR_ASSERT(state, shiftLenR <= 128, StringView("Const eval error: Over-sized eBinOp::BIT_SHL - ") << valL << StringView(" << ") << valR);
                                             auto shiftLen = shiftLenR.truncateU64();
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v << shiftLen), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v << shiftLen), le.t});
                                             }
                                         } break;
                                         case MIRBinOp::BIT_SHR: {
                                             U128 shiftLenR;
-                                            switch (valR.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Mismatched types for eBinOp::BIT_SHR - ") << valL << StringView(" >> ") << valR);
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& re = valR.as_Int();
-                                                    shiftLenR = re.v.getInner();
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& re = valR.as_Uint();
-                                                    shiftLenR = re.v;
-                                                    break;
-                                                }
+                                            if (valR.is_Int()) {
+                                                auto& re = valR.as_Int();
+                                                shiftLenR = re.v.getInner();
+                                            } else {
+                                                auto& re = valR.as_Uint();
+                                                shiftLenR = re.v;
                                             }
                                             MIR_ASSERT(state, shiftLenR <= 128, StringView("Const eval error: Over-sized shift - ") << valL << StringView(" >> ") << valR);
                                             auto shiftLen = shiftLenR.truncateU64();
-                                            switch (valL.tag()) {
-                                                default:
-                                                    MIR_BUG(state, StringView("Invalid constant operands for binary operation - ") << valL << StringView(" and ") << valR);
-                                                case MIRConstant::TAG_Int: {
-                                                    auto& le = valL.as_Int();
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
-                                                    break;
-                                                }
-                                                case MIRConstant::TAG_Uint: {
-                                                    auto& le = valL.as_Uint();
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v >> shiftLen), le.t});
-                                                    break;
-                                                }
+                                            if (valL.is_Int()) {
+                                                auto& le = valL.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
+                                            } else {
+                                                auto& le = valL.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v >> shiftLen), le.t});
                                             }
                                         } break;
                                     }

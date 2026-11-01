@@ -301,18 +301,6 @@ const HIRType* TraitResolveCommon::getConstParamType(const Span& sp, unsigned bi
     return p->values.at(slot).type;
 }
 
-Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refT& b) const {
-    ORD(a.first, b.first);
-    ORD(a.second, b.second);
-    return OrdEqual;
-}
-
-Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b) const {
-    ORD(a.first, b.first);
-    ORD(a.second.path, b.second);
-    return OrdEqual;
-}
-
 TraitResolveCommon::TraitResolveCommon(const WireBoard& wb)
     : wb(wb)
     , crate(*wb.crate)

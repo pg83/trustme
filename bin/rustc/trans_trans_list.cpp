@@ -194,16 +194,6 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
     return rv;
 }
 
-HIRGenericPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRGenericPath& p) const {
-    return HIRGenericPath(p.path, this->monomorph(resolve, p.params));
-}
-
-HIRPathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const {
-    auto rv = this->monomorphPathParams(sp, p, false);
-    rv = rv.mapTypes([&](const HIRType* arg) { return resolve.expandAssociatedTypes(sp, arg); });
-    return rv;
-}
-
 const HIRType* TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRType* ty) const {
     return resolve.monomorphExpand(sp, ty, *this);
 }

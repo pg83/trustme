@@ -335,8 +335,6 @@ namespace {
 
         void printEscapedString(const std::string& s);
 
-        void printEscapedString(const Vector<u8>& s);
-
         void printEscapedStringInner(const char* start, const char* end);
 
         void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override;
@@ -2555,11 +2553,6 @@ auto CodeGeneratorC::emitFloat(FloatValue v, HIRCoreType ty) -> void {
 
 auto CodeGeneratorC::printEscapedString(const std::string& s) -> void {
     printEscapedStringInner(s.c_str(), s.c_str() + s.size());
-}
-
-auto CodeGeneratorC::printEscapedString(const Vector<u8>& s) -> void {
-    const char* start = reinterpret_cast<const char*>(s.data());
-    printEscapedStringInner(start, start + s.length());
 }
 
 auto CodeGeneratorC::printEscapedStringInner(const char* start, const char* end) -> void {

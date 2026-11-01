@@ -41,8 +41,6 @@ struct TransParams: public MonomorphiserPP {
 
     const HIRType* monomorph(const ::StaticTraitResolve& resolve, const HIRType* p) const;
     HIRPath monomorph(const ::StaticTraitResolve& resolve, const HIRPath& p) const;
-    HIRGenericPath monomorph(const ::StaticTraitResolve& resolve, const HIRGenericPath& p) const;
-    HIRPathParams monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const;
 
     bool hasTypes() const {
         return forceMonomorphisation || ppMethod.hasParams() || ppImpl.hasParams();

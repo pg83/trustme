@@ -214,8 +214,6 @@ struct TraitResolveCommon {
 
     struct CachedBoundCmp {
         typedef std::pair<const HIRType*, HIRGenericPath> keyT;
-        typedef std::pair<const HIRType*, const HIRGenericPath&> refT;
-        typedef std::pair<const HIRType*, const HIRSimplePath&> refSpT;
 
         Ordering ord(const keyT& a, const keyT& b) const {
             return ::ord(a, b);
@@ -225,25 +223,6 @@ struct TraitResolveCommon {
             return ord(a, b) == OrdLess;
         }
 
-        Ordering ord(const keyT& a, const refT& b) const;
-
-        bool operator()(const keyT& a, const refT& b) const {
-            return ord(a, b) == OrdLess;
-        }
-
-        bool operator()(const refT& a, const keyT& b) const {
-            return ord(b, a) == OrdGreater;
-        }
-
-        Ordering ord(const keyT& a, const refSpT& b) const;
-
-        bool operator()(const keyT& a, const refSpT& b) const {
-            return ord(a, b) == OrdLess;
-        }
-
-        bool operator()(const refSpT& a, const keyT& b) const {
-            return ord(b, a) == OrdGreater;
-        }
     };
 
     typedef RangeVecMap<std::pair<const HIRType*, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
