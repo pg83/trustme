@@ -9439,6 +9439,12 @@ auto ExprVisitorApply::visit(HIRExprNodeCast& node) -> void {
     if (source && source->binding.is_Enum() && target && !isInteger(*target)) {
         ERROR(node.span(), E0000, StringView("Invalid cast from enum ") << node.value->resType << StringView(" to ") << node.dstType);
     }
+    if (target && isFloat(*target)) {
+        const auto* primitive = node.value->resType->opt_Primitive();
+        if (!primitive || (!isInteger(*primitive) && !isFloat(*primitive))) {
+            ERROR(node.span(), E0000, StringView("Invalid cast from ") << node.value->resType << StringView(" to ") << node.dstType);
+        }
+    }
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeUnsize& node) -> void {

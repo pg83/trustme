@@ -1937,22 +1937,14 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                             }
                             break;
                         case TypeInfo::Float:
-                            switch (srcTi.ty) {
-                                case TypeInfo::Signed: {
-                                    auto v = inval.readSint(state, srcTi.bits);
-                                    dst.writeFloat(state, ti.bits, ti.bits == 32 ? v.toFloat() : v.toDouble());
-                                    break;
-                                }
-                                case TypeInfo::Unsigned: {
-                                    auto v = inval.readUint(state, srcTi.bits);
-                                    dst.writeFloat(state, ti.bits, ti.bits == 32 ? v.toFloat() : v.toDouble());
-                                    break;
-                                }
-                                case TypeInfo::Float:
-                                    dst.writeFloat(state, ti.bits, inval.readFloat(state, srcTi.bits));
-                                    break;
-                                case TypeInfo::Other:
-                                    MIR_TODO(state, StringView("Cast ") << srcTy << StringView(" to float"));
+                            if (srcTi.ty == TypeInfo::Signed) {
+                                auto v = inval.readSint(state, srcTi.bits);
+                                dst.writeFloat(state, ti.bits, ti.bits == 32 ? v.toFloat() : v.toDouble());
+                            } else if (srcTi.ty == TypeInfo::Unsigned) {
+                                auto v = inval.readUint(state, srcTi.bits);
+                                dst.writeFloat(state, ti.bits, ti.bits == 32 ? v.toFloat() : v.toDouble());
+                            } else {
+                                dst.writeFloat(state, ti.bits, inval.readFloat(state, srcTi.bits));
                             }
                             break;
                         default:
@@ -2468,6 +2460,9 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
                         deferUnloweredLayout(ty);
+                        if (!typeIsConcrete(ty)) {
+                            ERROR(state.sp, E0000, StringView("constant alignment depends on generic parameters: ") << ty);
+                        }
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
@@ -3219,10 +3214,6 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         }
     }
     const auto& path = *pathP;
-
-    if (monomorphisePathNeeded(path)) {
-        BUG(state.sp, StringView("Const call to generic ") << path << StringView(" during concrete evaluation"));
-    }
 
     if (requireConstCalls) {
         if (const auto* e = path.data.opt_UfcsKnown()) {
