@@ -6997,7 +6997,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         if (traitObject.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
                             return true;
                         })) {
-                            e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
+                            e.fcn = MIRTailCallTarget::make_Value(MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe));
                         }
                     }
                 }

@@ -968,15 +968,12 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 auto& e = term.as_TailCall();
                 of << StringView("TAILCALL ");
                 switch (e.fcn.tag()) {
-                    case MIRCallTarget::TAG_Intrinsic: {
-                        UNREACHABLE();
-                    }
-                    case MIRCallTarget::TAG_Value: {
+                    case MIRTailCallTarget::TAG_Value: {
                         auto& f = e.fcn.as_Value();
                         of << StringView("(") << fmt(f) << StringView(")");
                         break;
                     }
-                    case MIRCallTarget::TAG_Path: {
+                    case MIRTailCallTarget::TAG_Path: {
                         auto& f = e.fcn.as_Path();
                         of << fmt(f);
                         break;

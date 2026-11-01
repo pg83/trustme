@@ -5749,18 +5749,15 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
 auto CodeGeneratorC::emitTermTailCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_TailCall& e, unsigned indentLevel) -> void {
     MIRCallTarget target;
     switch (e.fcn.tag()) {
-        case MIRCallTarget::TAG_Value: {
+        case MIRTailCallTarget::TAG_Value: {
             auto& value = e.fcn.as_Value();
             target = MIRCallTarget::make_Value(value.clone());
             break;
         }
-        case MIRCallTarget::TAG_Path: {
+        case MIRTailCallTarget::TAG_Path: {
             auto& path = e.fcn.as_Path();
             target = MIRCallTarget::make_Path(path.clone());
             break;
-        }
-        case MIRCallTarget::TAG_Intrinsic: {
-            UNREACHABLE();
         }
     }
     std::vector<MIRParam> args;

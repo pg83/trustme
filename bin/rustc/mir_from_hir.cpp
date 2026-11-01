@@ -9059,7 +9059,7 @@ auto ExprVisitorConv::coroutineReturn(const Span& sp, const HIRType* valueTy) ->
 auto ExprVisitorConv::visit(HIRExprNodeReturn& node) -> void {
     TRACE_FUNCTION_F(StringView("_Return"));
     if (node.isTailCall) {
-        MIRCallTarget target;
+        MIRTailCallTarget target;
         std::vector<MIRParam> args;
 
         if (auto* call = cast<HIRExprNodeCallPath>(node.value.get())) {
@@ -9073,7 +9073,7 @@ auto ExprVisitorConv::visit(HIRExprNodeReturn& node) -> void {
                     ERROR(node.span(), E0000, StringView("intrinsics cannot be tail-called with `become`"));
                 }
             }
-            target = MIRCallTarget::make_Path(call->path.clone());
+            target = MIRTailCallTarget::make_Path(call->path.clone());
         } else if (auto* call = cast<HIRExprNodeCallValue>(node.value.get())) {
             ASSERT_BUG(node.span(), call->value->resType->is_Function(), StringView("Tail call through a non-function value"));
             this->visitNodePtr(call->value);
@@ -9086,7 +9086,7 @@ auto ExprVisitorConv::visit(HIRExprNodeReturn& node) -> void {
             if (!builder.blockActive()) {
                 return;
             }
-            target = MIRCallTarget::make_Value(mv$(fcnVal));
+            target = MIRTailCallTarget::make_Value(mv$(fcnVal));
         } else {
             BUG(node.span(), StringView("Tail call expression was not a call"));
         }

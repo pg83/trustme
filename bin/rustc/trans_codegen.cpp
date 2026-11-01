@@ -431,14 +431,8 @@ auto FunctionOrder::collectDependencies(FunctionOrderNode& source) -> void {
                 const HIRType* tmp;
                 order.addDropDependency(source, mirResolve.getLvalueType(drop->slot));
             }
-            const MIRCallTarget* callTarget = nullptr;
             if (const auto* call = terminator.opt_Call()) {
-                callTarget = &call->fcn;
-            } else if (const auto* call = terminator.opt_TailCall()) {
-                callTarget = &call->fcn;
-            }
-            if (callTarget) {
-                if (const auto* intrinsic = callTarget->opt_Intrinsic()) {
+                if (const auto* intrinsic = call->fcn.opt_Intrinsic()) {
                     if (intrinsic->name == "drop_in_place") {
                         order.addDropDependency(source, intrinsic->params.types.at(0));
                     }

@@ -470,7 +470,7 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
                 return false;
             }
             switch (ae.fcn.tag()) {
-                case MIRCallTarget::TAG_Value: {
+                case MIRTailCallTarget::TAG_Value: {
                     auto& afe = ae.fcn.as_Value();
                     auto& bfe = be.fcn.as_Value();
                     if (afe != bfe) {
@@ -478,16 +478,13 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
                     }
                     break;
                 }
-                case MIRCallTarget::TAG_Path: {
+                case MIRTailCallTarget::TAG_Path: {
                     auto& afe = ae.fcn.as_Path();
                     auto& bfe = be.fcn.as_Path();
                     if (afe != bfe) {
                         return false;
                     }
                     break;
-                }
-                case MIRCallTarget::TAG_Intrinsic: {
-                    UNREACHABLE();
                 }
             }
             if (ae.args != be.args) {
@@ -975,20 +972,17 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
         }
         case MIRTerminator::TAG_TailCall: {
             auto& se = src.as_TailCall();
-            MIRCallTarget tgt;
+            MIRTailCallTarget tgt;
             switch (se.fcn.tag()) {
-                case MIRCallTarget::TAG_Value: {
+                case MIRTailCallTarget::TAG_Value: {
                     auto& ste = se.fcn.as_Value();
-                    tgt = MIRCallTarget::make_Value(this->cloneLval(ste));
+                    tgt = MIRTailCallTarget::make_Value(this->cloneLval(ste));
                     break;
                 }
-                case MIRCallTarget::TAG_Path: {
+                case MIRTailCallTarget::TAG_Path: {
                     auto& ste = se.fcn.as_Path();
-                    tgt = MIRCallTarget::make_Path(this->monomorph(ste));
+                    tgt = MIRTailCallTarget::make_Path(this->monomorph(ste));
                     break;
-                }
-                case MIRCallTarget::TAG_Intrinsic: {
-                    UNREACHABLE();
                 }
             }
             return MIRTerminator::make_TailCall({mv$(tgt), this->cloneParamVec(se.args), se.source, se.tracksCaller});

@@ -3170,18 +3170,16 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             if (const auto* path = e.fcn.opt_Path()) {
                 return callPath(localState.valuePool->make<HIRPath>(path->clone()), false);
             }
-            if (const auto* value = e.fcn.opt_Value()) {
-                const HIRType* tmp;
-                const auto& ty = state.getLvalueType(*value);
-                MIR_ASSERT(state, ty->is_Function(), StringView("Indirect tail call through non-function-pointer type ") << ty);
+            const auto& value = e.fcn.as_Value();
+            const HIRType* tmp;
+            const auto& ty = state.getLvalueType(value);
+            MIR_ASSERT(state, ty->is_Function(), StringView("Indirect tail call through non-function-pointer type ") << ty);
 
-                auto pointer = localState.getLval(*value).readPtr(state);
-                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, StringView("Function pointer has a nonzero offset"));
-                const auto* function = pointer.second.asStaticref();
-                MIR_ASSERT(state, function, StringView("Function pointer has no symbolic function relocation"));
-                return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
-            }
-            MIR_BUG(state, StringView("Intrinsic used as an explicit tail-call target"));
+            auto pointer = localState.getLval(value).readPtr(state);
+            MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, StringView("Function pointer has a nonzero offset"));
+            const auto* function = pointer.second.asStaticref();
+            MIR_ASSERT(state, function, StringView("Function pointer has no symbolic function relocation"));
+            return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
         }
     }
 }

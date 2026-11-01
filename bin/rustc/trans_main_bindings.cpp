@@ -1861,18 +1861,15 @@ static void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& co
             case MIRTerminator::TAG_TailCall: {
                 auto& e = bb.terminator.as_TailCall();
                 switch (e.fcn.tag()) {
-                    case MIRCallTarget::TAG_Value: {
+                    case MIRTailCallTarget::TAG_Value: {
                         auto& e2 = e.fcn.as_Value();
                         TransEnumerateFillFromMIRLValue(state, e2);
                         break;
                     }
-                    case MIRCallTarget::TAG_Path: {
+                    case MIRTailCallTarget::TAG_Path: {
                         auto& e2 = e.fcn.as_Path();
                         state.insertPath(e2);
                         break;
-                    }
-                    case MIRCallTarget::TAG_Intrinsic: {
-                        UNREACHABLE();
                     }
                 }
                 for (const auto& arg : e.args) {

@@ -166,6 +166,7 @@ namespace {
         MIRUnwindAction deserialiseMirUnwindAction();
         MIRSwitchValues deserialiseMirSwitchvalues();
         MIRCallTarget deserialiseMirCalltarget();
+        MIRTailCallTarget deserialiseMirTailCallTarget();
 
         MIRParam deserialiseMirParam();
 
@@ -646,6 +647,7 @@ namespace {
         void serialise(const MIRSwitchValues& sv);
 
         void serialise(const MIRCallTarget& ct);
+        void serialise(const MIRTailCallTarget& ct);
 
         void serialise(const MIRParam& p);
 
@@ -1281,7 +1283,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
            deserialiseMirSwitchvalues()})
         _(Drop, {static_cast<MIRDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
         _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
-        _(TailCall, {deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
+        _(TailCall, {deserialiseMirTailCallTarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
         _(Asm2, {deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>(), static_cast<unsigned int>(in.readCount())})
 #undef _
         default:
@@ -1334,6 +1336,17 @@ MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
 #undef _
         default:
             BUG(Span(), StringView("Bad tag for MIR::CallTarget - ") << tag);
+    }
+}
+
+MIRTailCallTarget HirDeserialiser::deserialiseMirTailCallTarget() {
+    switch (auto tag = in.readTag()) {
+        case MIRTailCallTarget::TAG_Value:
+            return MIRTailCallTarget::make_Value(deserialiseMirLvalue());
+        case MIRTailCallTarget::TAG_Path:
+            return MIRTailCallTarget::make_Path(deserialisePath());
+        default:
+            ERROR(Span(), E0000, StringView("Invalid explicit tail-call target in crate metadata: ") << tag);
     }
 }
 
@@ -4355,6 +4368,18 @@ auto HirSerialiser::serialise(const MIRCallTarget& ct) -> void {
             serialisePathparams(e.params);
             break;
         }
+    }
+}
+
+auto HirSerialiser::serialise(const MIRTailCallTarget& ct) -> void {
+    out.writeTag(static_cast<int>(ct.tag()));
+    switch (ct.tag()) {
+        case MIRTailCallTarget::TAG_Value:
+            serialise(ct.as_Value());
+            break;
+        case MIRTailCallTarget::TAG_Path:
+            serialisePath(ct.as_Path());
+            break;
     }
 }
 

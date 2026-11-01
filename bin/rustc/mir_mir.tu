@@ -161,6 +161,17 @@ generate(
 )
 
 generate(
+    name="MIRTailCallTarget",
+    default="Value",
+    clone=False,
+    output=True,
+    variants=[
+        v("Value", "MIRLValue", copy=False),
+        v("Path", "HIRPath", copy=False),
+    ],
+)
+
+generate(
     name="MIRSwitchValues",
     default="Unsigned",
     clone=False,
@@ -256,7 +267,7 @@ generate(
             ("bool", "tracksCaller", "false"),
         ], copy=False),
         v("TailCall", fields=[
-            ("MIRCallTarget", "fcn"),
+            ("MIRTailCallTarget", "fcn"),
             ("std::vector<MIRParam>", "args"),
             ("SourceLocation", "source"),
             ("bool", "tracksCaller", "false"),

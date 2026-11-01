@@ -336,18 +336,15 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                 auto& e = block.terminator.as_TailCall();
                 os << StringView("tailcall ");
                 switch (e.fcn.tag()) {
-                    case MIRCallTarget::TAG_Value: {
+                    case MIRTailCallTarget::TAG_Value: {
                         auto& e2 = e.fcn.as_Value();
                         os << StringView("(") << FMT_M(e2) << StringView(")");
                         break;
                     }
-                    case MIRCallTarget::TAG_Path: {
+                    case MIRTailCallTarget::TAG_Path: {
                         auto& e2 = e.fcn.as_Path();
                         os << e2;
                         break;
-                    }
-                    case MIRCallTarget::TAG_Intrinsic: {
-                        UNREACHABLE();
                     }
                 }
                 os << StringView("( ");

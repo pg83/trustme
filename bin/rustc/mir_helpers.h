@@ -656,18 +656,15 @@ public:
             case MIRTerminator::TAG_TailCall: {
                 auto& e = term.as_TailCall();
                 switch (e.fcn.tag()) {
-                    case MIRCallTarget::TAG_Value: {
+                    case MIRTailCallTarget::TAG_Value: {
                         auto& ce = e.fcn.as_Value();
                         rv |= visitLvalue(ce, MIRValUsage::Read);
                         break;
                     }
-                    case MIRCallTarget::TAG_Path: {
+                    case MIRTailCallTarget::TAG_Path: {
                         auto& ce = e.fcn.as_Path();
                         visitPath(ce);
                         break;
-                    }
-                    case MIRCallTarget::TAG_Intrinsic: {
-                        UNREACHABLE();
                     }
                 }
                 for (auto& v : e.args) {
