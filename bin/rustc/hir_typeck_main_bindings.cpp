@@ -29,6 +29,7 @@ namespace {
         HIRFunction* fcnPtr = nullptr;
         unsigned int fcnErasedCount = 0;
         bool checkingFunctionSignature = false;
+        bool checkingItemSignature = false;
         bool checkingTypeDeclarationParams = false;
 
         Vector<const HIRType*> selfTypes;
@@ -272,6 +273,9 @@ auto TypecheckVisitor::visitPathParams(HIRPathParams& pp) -> void {
             if (checkingFunctionSignature) {
                 ERROR(sp, E0000, StringView("the placeholder `_` is not allowed in function signatures"));
             }
+            if (checkingItemSignature) {
+                ERROR(sp, E0000, StringView("the placeholder `_` is not allowed in item signatures"));
+            }
             break;
         }
         case HIRType::TAG_Diverge: {
@@ -449,6 +453,8 @@ auto TypecheckVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void
 
 auto TypecheckVisitor::visitParams(HIRGenericParams& params) -> void {
     TRACE_FUNCTION_F(params.fmtArgs());
+    const bool itemSignature = checkingItemSignature;
+    checkingItemSignature = false;
     for (auto& tps : params.types) {
         tps.defaultValue = this->visitType(tps.defaultValue);
     }
@@ -475,6 +481,7 @@ auto TypecheckVisitor::visitParams(HIRGenericParams& params) -> void {
     for (auto& type : mutRange(params.wellFormedTypes)) {
         type = this->visitType(type);
     }
+    checkingItemSignature = itemSignature;
 }
 
 auto TypecheckVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
@@ -501,21 +508,27 @@ auto TypecheckVisitor::visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) -> vo
 auto TypecheckVisitor::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
     auto _ = resolve_.setImplGenerics(item.structMarkings.dstType, item.params);
     checkingTypeDeclarationParams = true;
+    checkingItemSignature = true;
     HIRVisitor::visitStruct(p, item);
+    checkingItemSignature = false;
     checkingTypeDeclarationParams = false;
 }
 
 auto TypecheckVisitor::visitUnion(HIRItemPath p, HIRUnion& item) -> void {
     auto _ = resolve_.setImplGenerics(MetadataType::None, item.params);
     checkingTypeDeclarationParams = true;
+    checkingItemSignature = true;
     HIRVisitor::visitUnion(p, item);
+    checkingItemSignature = false;
     checkingTypeDeclarationParams = false;
 }
 
 auto TypecheckVisitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
     auto _ = resolve_.setImplGenerics(MetadataType::None, item.params);
     checkingTypeDeclarationParams = true;
+    checkingItemSignature = true;
     HIRVisitor::visitEnum(p, item);
+    checkingItemSignature = false;
     checkingTypeDeclarationParams = false;
 }
 

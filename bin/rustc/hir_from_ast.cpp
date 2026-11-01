@@ -271,7 +271,7 @@ namespace {
     };
 
 
-    struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
+    struct LowerHIRExprNodeVisitor: public ASTNodeVisitorDef {
         AST2HIR& ctx;
 
         explicit LowerHIRExprNodeVisitor(AST2HIR& ctx);
@@ -315,8 +315,6 @@ namespace {
         virtual void visit(ASTExprNodeAsyncBlock& v) override;
 
         virtual void visit(ASTExprNodeGeneratorBlock& v) override;
-
-        virtual void visit(ASTExprNodeTry& v) override;
 
         virtual void visit(ASTExprNodeMacro& v) override;
 
@@ -4462,10 +4460,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeGeneratorBlock& v) -> void {
     rv.reset(ctx.crate->pool->make<HIRExprNodeGenerator>(v.span(), ctx.LowerHIRType(v.returnType), ctx.crate->types.infer(), HIRPattern(), false, ctx.crate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
     rv.reset(ctx.crate->pool->make<HIRExprNodeCallPath>(v.span(), HIRSimplePath(ctx.coreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(rv))));
     rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), mv$(rv), RcString::newInterned("fuse"), HIRPathParams(), std::vector<HIRExprNodeP>()));
-}
-
-auto LowerHIRExprNodeVisitor::visit(ASTExprNodeTry& v) -> void {
-    TODO(v.span(), StringView("Handle _Try"));
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeMacro& v) -> void {

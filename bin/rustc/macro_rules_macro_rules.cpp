@@ -961,6 +961,20 @@ namespace {
             return consumeExpr(lex, true);
         };
 
+        const auto consumeFlowValue = [&]() {
+            switch (lex.next()) {
+                case TOK_EOF:
+                case TOK_SEMICOLON:
+                case TOK_COMMA:
+                case TOK_PAREN_CLOSE:
+                case TOK_BRACE_CLOSE:
+                case TOK_SQUARE_CLOSE:
+                    return true;
+                default:
+                    return consumeExpr(lex);
+            }
+        };
+
         if (startsClosure()) {
             return consumeClosure();
         }
@@ -1009,23 +1023,25 @@ namespace {
                 case TOK_RWORD_BREAK:
                     lex.consume();
                     lex.consumeIf(TOK_LIFETIME);
-                    if (0) {
-                        case TOK_RWORD_RETURN:
-                            lex.consume();
+                    if (!consumeFlowValue()) {
+                        return false;
                     }
-                    switch (lex.next()) {
-                        case TOK_EOF:
-                        case TOK_SEMICOLON:
-                        case TOK_COMMA:
-                        case TOK_PAREN_CLOSE:
-                        case TOK_BRACE_CLOSE:
-                        case TOK_SQUARE_CLOSE:
-                            break;
-                        default:
-                            if (!consumeExpr(lex)) {
-                                return false;
-                            }
-                            break;
+                    break;
+                case TOK_RWORD_RETURN:
+                case TOK_RWORD_YIELD:
+                    lex.consume();
+                    if (!consumeFlowValue()) {
+                        return false;
+                    }
+                    break;
+                case TOK_RWORD_DO:
+                    lex.consume();
+                    if (lex.next() != TOK_IDENT || lex.nextTok().ident().name != "yeet") {
+                        return false;
+                    }
+                    lex.consume();
+                    if (!consumeFlowValue()) {
+                        return false;
                     }
                     break;
                 case TOK_IDENT:
@@ -1996,7 +2012,7 @@ namespace {
 
         if (matches.size() == 0) {
             // TODO: Keep track of where each arm failed.
-            TODO(sp, StringView("No arm matched - ") << failPos);
+            ERROR(sp, E0000, StringView("No macro arm matched - ") << failPos);
         } else {
             auto i = matches[0].armIndex;
             const auto& history = matches[0].conditionHistory;

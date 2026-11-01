@@ -19,7 +19,7 @@ namespace {
         return (... || (cast<T>(&node) != nullptr));
     }
 
-    struct RustPrinter: public ASTNodeVisitor {
+    struct RustPrinter: public ASTNodeVisitorDef {
         ZeroCopyOutput& os;
         int indentLevel;
         bool exprRoot;
@@ -40,8 +40,6 @@ namespace {
         virtual void visit(ASTExprNodeAsyncBlock& n) override;
 
         virtual void visit(ASTExprNodeGeneratorBlock& n) override;
-
-        virtual void visit(ASTExprNodeTry& n) override;
 
         virtual void visit(ASTExprNodeMacro& n) override;
 
@@ -1040,11 +1038,6 @@ auto RustPrinter::visit(ASTExprNodeGeneratorBlock& n) -> void {
     if (n.isMove) {
         os << StringView("move ");
     }
-    ASTNodeVisitor::visit(n.inner);
-}
-
-auto RustPrinter::visit(ASTExprNodeTry& n) -> void {
-    os << StringView("try ");
     ASTNodeVisitor::visit(n.inner);
 }
 

@@ -60,7 +60,7 @@ namespace {
         void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const override;
     };
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f);
+    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item = nullptr);
     void ExpandModExternCrates(const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& modpath, ASTModule& mod, unsigned int firstItem);
     void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem = 0);
     ASTExprNode* ExpandExpr(const ExpandState& es, ASTExprNode* node);
@@ -229,7 +229,7 @@ namespace {
         mod.items = std::move(oldItems);
     }
 
-    void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f) {
+    void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item) {
         bool found = false;
         if (a.name().elems.empty()) {
             return;
@@ -261,6 +261,10 @@ namespace {
                 }
             }
             DEBUG(StringView("#[") << name << StringView("]"));
+            if (es.mode != ExpandMode::Final && !d.isReady(sp, a, es.wb, es.crate, *es.modstack.item, item)) {
+                es.hasMissing = true;
+                return;
+            }
             f.run(sp, d, a);
             a.markInert();
         };
@@ -307,11 +311,7 @@ namespace {
         if (builtinName) {
             if (const auto* d = ExpandFindDecorator(es.wb, *builtinName)) {
                 found = true;
-                if (d->stage() == stage && (d->runDuringIter() || (es.mode != ExpandMode::Final && stage == AttrStage::Pre) || (es.mode == ExpandMode::Final && stage == AttrStage::Post))) {
-                    DEBUG(StringView("#[") << *builtinName << StringView("]"));
-                    f.run(sp, *d, a);
-                    a.markInert();
-                }
+                runDecorator(*builtinName, *d);
             }
         }
         if (!found && singleName && !namesImportedProcMacro()) {
@@ -457,15 +457,15 @@ namespace {
         }
     }
 
-    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f) {
+    void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f, const ASTItem* item) {
         for (auto& a : attrs.items) {
             const RcString rcstringCfg = RcString::newInterned("cfg");
             if (!a.isInert() && a.name() == rcstringCfg) {
-                ExpandAttr(es, a.span(), a, stage, f);
+                ExpandAttr(es, a.span(), a, stage, f, item);
             }
         }
         for (auto& a : attrs.items) {
-            ExpandAttr(es, a.span(), a, stage, f);
+            ExpandAttr(es, a.span(), a, stage, f, item);
         }
     }
 
@@ -597,7 +597,7 @@ namespace {
                 auto attrsSlice = d.wantsAllAttrs() ? slice<const ASTAttribute>(attrs.items.data(), attrs.items.size()) : getAttrsAfter(attrs, a);
                 d.handle(sp, a, es.wb, es.crate, path, mod, modIdx, attrsSlice, vis, item);
             }
-        }));
+        }), &item);
     }
 
     void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, ASTItem& item) {
@@ -605,7 +605,7 @@ namespace {
             if (!item.is_None()) {
                 d.handle(sp, a, es.wb, es.crate, path, trait, getAttrsAfter(attrs, a), item);
             }
-        }));
+        }), &item);
     }
 
     void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ASTModule& mod, ASTImpl& impl, const ASTVisibility& vis, const RcString& name, ASTItem& item) {
@@ -614,7 +614,7 @@ namespace {
                 auto attrsSlice = d.wantsAllAttrs() ? slice<const ASTAttribute>(attrs.items.data(), attrs.items.size()) : getAttrsAfter(attrs, a);
                 d.handle(sp, a, es.wb, es.crate, impl, name, attrsSlice, vis, item);
             }
-        }));
+        }), &item);
     }
 
     bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {

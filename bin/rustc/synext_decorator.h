@@ -46,6 +46,8 @@ public:
 
     virtual bool wantsAllAttrs() const;
 
+    virtual bool isReady(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTItem* item) const;
+
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const;
 
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const;

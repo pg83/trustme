@@ -531,7 +531,11 @@ namespace {
 
         AttrStage stage() const override;
 
+        bool runDuringIter() const override;
+
         bool wantsAllAttrs() const override;
+
+        bool isReady(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTItem* item) const override;
 
         void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&, ASTStructItem&) const override {
             ERROR(sp, E0000, StringView("#[derive] can only be applied to structs, enums and unions"));
@@ -1903,6 +1907,10 @@ bool ExpandDecorator::runDuringIter() const {
 
 bool ExpandDecorator::wantsAllAttrs() const {
     return false;
+}
+
+bool ExpandDecorator::isReady(const Span&, const ASTAttribute&, const WireBoard&, const ASTCrate&, ASTModule&, const ASTItem*) const {
+    return true;
 }
 
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const {
@@ -4373,7 +4381,26 @@ auto DecoratorDerive::stage() const -> AttrStage {
     return AttrStage::Pre;
 }
 
+auto DecoratorDerive::runDuringIter() const -> bool {
+    return true;
+}
+
 auto DecoratorDerive::wantsAllAttrs() const -> bool {
+    return true;
+}
+
+auto DecoratorDerive::isReady(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTItem* item) const -> bool {
+    if (!item || !(item->is_Struct() || item->is_Enum() || item->is_Union())) {
+        return true;
+    }
+    for (const auto& path : getDeriveItems(attr)) {
+        if (isCoercePointee(path) || findBuiltinDerive(registry, sp, wb, crate, mod, path)) {
+            continue;
+        }
+        if (findMacro(sp, wb, crate, mod, path, false).empty()) {
+            return false;
+        }
+    }
     return true;
 }
 
