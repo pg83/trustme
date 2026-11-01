@@ -5420,13 +5420,17 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto params = ParseGenericParamsOpt(lex);
                     GET_CHECK_TOK(tok, lex, TOK_COLON);
                     ASTType* type = ParseType(lex);
-                    if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+                    const bool whereBeforeBody = lex.getTokenIf(TOK_RWORD_WHERE);
+                    if (whereBeforeBody) {
                         ParseWhereClause(lex, params);
                     }
 
                     // TODO: reject a valueless const that survives cfg.
                     ASTExprNode* val = nullptr;
                     if (lex.getTokenIf(TOK_EQUAL)) {
+                        if (whereBeforeBody) {
+                            ERROR(lex.pointSpan(), E0000, StringView("where clauses are not allowed before const item bodies"));
+                        }
                         val = ParseExpr(lex);
                     }
                     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
