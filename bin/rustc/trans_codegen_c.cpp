@@ -1086,14 +1086,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             this->push_back(s);
         }
 
-        void pushLib(std::string s) {
-            if (ty_.size() > 0 && ty_.back() == Ty::Implicit && s == this->getVec().back()) {
-                return;
-            }
-            ty_.push_back(Ty::Implicit);
-            this->push_back(std::move(s));
-        }
-
         void pushBorder() {
         }
 
@@ -1218,9 +1210,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
 
             for (const auto& path : opt.librarySearchDirs) {
                 librariesAndDirs.pushDir(path.c_str());
-            }
-            for (const auto& path : opt.libraries) {
-                librariesAndDirs.pushLib(path.c_str());
             }
             librariesAndDirs.pushBorder();
 

@@ -88,6 +88,9 @@ def main() -> int:
     proc_macro_aux_builds = re.findall(
         r"^//@\s*proc-macro-aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE
     )
+    native_static_aux_builds = re.findall(
+        r"^//@\s*native-static-aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE
+    )
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -97,15 +100,34 @@ def main() -> int:
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         dependency_args = []
+        for aux in native_static_aux_builds:
+            aux_src = os.path.join(os.path.dirname(src), "aux", aux)
+            aux_name = os.path.splitext(os.path.basename(aux))[0]
+            native_dir = os.path.join(work, "native")
+            os.makedirs(native_dir, exist_ok=True)
+            with open(aux_src) as aux_file:
+                aux_edition_match = re.search(r"^//@\s*edition:\s*(\d+)", aux_file.read(), re.MULTILINE)
+            aux_edition = aux_edition_match.group(1) if aux_edition_match else edition
+            archive = os.path.join(native_dir, f"lib{aux_name}.a")
+            output = archive if system_rustc else os.path.join(native_dir, f"lib{aux_name}.rlib")
+            lib.run(
+                [rustc, aux_src, "-L", os.path.join(libstd, "release"),
+                 "--crate-type", "staticlib" if system_rustc else "lib",
+                 "--crate-name", aux_name, "--edition", aux_edition, "-o", output],
+                env=env,
+            )
+            if not system_rustc:
+                lib.run([env.get("AR", "ar"), "rcs", archive, output + ".o"], env=env)
+            dependency_args.extend(("-L", f"native={native_dir}"))
         if rust_lib_dependencies:
             dependencies = lib.untar(
                 lib.require_env("RUST_LIB_DEPENDENCIES"),
                 os.path.join(work, "rust-lib-dependencies"),
             )
-            dependency_args = lib.extern_rlib_args(
+            dependency_args.extend(lib.extern_rlib_args(
                 dependencies,
                 ["rand", "rand_xorshift"],
-            )
+            ))
         # `//@ proc-macro-aux-build: name.rs`: an aux crate built as a macro host -
         # tst/unit/aux/name.rs built as a proc-macro crate. Ours writes the host
         # as an executable with its metadata beside it, so the unit also needs

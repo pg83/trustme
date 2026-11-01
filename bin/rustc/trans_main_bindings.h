@@ -44,7 +44,6 @@ struct TransOptions {
 
     std::vector<std::string> librarySearchDirs;
     std::vector<std::string> frameworkSearchDirs;
-    std::vector<std::string> libraries;
 };
 
 enum class CodegenOutput {
