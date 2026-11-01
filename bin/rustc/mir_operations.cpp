@@ -282,28 +282,6 @@ namespace {
         }
     }
 
-    bool typeAcceptsAllBitPatterns(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {
-        if (const auto* primitive = ty->opt_Primitive()) {
-            return *primitive != HIRCoreType::Bool && *primitive != HIRCoreType::Char && *primitive != HIRCoreType::Str;
-        }
-        if (const auto* array = ty->opt_Array()) {
-            return array->size.as_Known() == 0 || typeAcceptsAllBitPatterns(sp, resolve, array->inner);
-        }
-        if (ty->is_Tuple() || (ty->is_Path() && ty->as_Path().binding.is_Struct())) {
-            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-            if (!repr) {
-                return false;
-            }
-            for (const auto& field : repr->fields) {
-                if (!typeAcceptsAllBitPatterns(sp, resolve, field.ty)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
     MIRConstant createVtable(const HIRType* ty, const HIRTraitPath& trait, const RcString& vtableName) {
         auto vtablePath = HIRPath(mv$(ty), trait.path.clone(), vtableName);
         return MIRConstant::make_ItemAddr(box$(vtablePath));
@@ -423,91 +401,22 @@ namespace {
                     }
                     return MIRRValue::make_EnumVariant({te.path.data.as_Generic().clone(), varIdx, mv$(vals)});
                 } else if (te.binding.is_Union()) {
-                    unsigned varIdx = ~0u;
-                    const auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
-                    MIR_ASSERT(state, repr, StringView(""));
-                    // TODO: Find a way of storing backing information that specifies the variant (maybe as a relocation?)
-
-                    if (varIdx == ~0u) {
-                        for (const auto& e : repr->fields) {
-                            if (e.ty->is_Array() && e.ty->as_Array().inner == HIRCoreType::U8 && e.ty->as_Array().size.as_Known() == repr->size) {
-                                DEBUG(StringView("Found an array covering the whole union"));
-                                varIdx = &e - &repr->fields.front();
-                                break;
-                            }
+                    MIR_ASSERT(state, repr->size <= lit.size, StringView("Union literal is shorter than its representation"));
+                    EncodedLiteral value;
+                    value.bytes.append(lit.base.bytes.data() + lit.ofs, repr->size);
+                    const auto end = lit.ofs + repr->size;
+                    for (const auto& relocation : lit.base.relocations) {
+                        if (relocation.ofs >= end || relocation.ofs + relocation.len <= lit.ofs) {
+                            continue;
+                        }
+                        MIR_ASSERT(state, relocation.ofs >= lit.ofs && relocation.ofs + relocation.len <= end, StringView("Relocation crosses union literal boundary"));
+                        if (relocation.p) {
+                            value.relocations.push_back(Reloc::newNamed(relocation.ofs - lit.ofs, relocation.len, params.monomorphPath(state.sp, *relocation.p), relocation.preserveTrackCaller));
+                        } else {
+                            value.relocations.push_back(Reloc::newBytes(relocation.ofs - lit.ofs, relocation.len, relocation.bytes));
                         }
                     }
-                    if (varIdx == ~0u) {
-                        if (repr->fields.size() == 2 && repr->fields[0].ty == state.crate.types.unit()) {
-                            bool isNonzero = false;
-                            for (size_t i = 0; i < repr->size; i++) {
-                                if (lit.slice(i, 1).readUint(1) != 0) {
-                                    isNonzero = true;
-                                    break;
-                                }
-                            }
-
-                            varIdx = (isNonzero ? 1 : 0);
-                        }
-                    }
-
-                    if (varIdx == ~0u) {
-                        for (const auto& e : repr->fields) {
-                            if (e.ty->is_Pointer() || e.ty->is_Primitive()) {
-                                if (lit.getReloc() && !e.ty->is_Pointer()) {
-                                    continue;
-                                }
-
-                                size_t fldSize = 0;
-                                TargetGetSizeOf(state.sp, state.resolve, e.ty, fldSize);
-                                if (fldSize == repr->size) {
-                                    varIdx = &e - &repr->fields.front();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (varIdx == ~0u) {
-                        const auto literalEnd = lit.ofs + lit.size;
-                        const bool hasRelocation = std::any_of(lit.base.relocations.begin(), lit.base.relocations.end(), [&](const auto& relocation) {
-                            return relocation.ofs < literalEnd && lit.ofs < relocation.ofs + relocation.len;
-                        });
-                        if (!hasRelocation) {
-                            for (const auto& e : repr->fields) {
-                                size_t fieldSize = 0;
-                                if (TargetGetSizeOf(state.sp, state.resolve, e.ty, fieldSize) && fieldSize == repr->size && typeAcceptsAllBitPatterns(state.sp, state.resolve, e.ty)) {
-                                    DEBUG(StringView("Found an unrestricted covering field"));
-                                    varIdx = &e - &repr->fields.front();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (varIdx == ~0u) {
-                        const auto literalEnd = lit.ofs + lit.size;
-                        const bool hasRelocation = std::any_of(lit.base.relocations.begin(), lit.base.relocations.end(), [&](const auto& relocation) {
-                            return relocation.ofs < literalEnd && lit.ofs < relocation.ofs + relocation.len;
-                        });
-                        size_t widest = 0;
-                        if (!hasRelocation) {
-                            for (const auto& e : repr->fields) {
-                                size_t fieldSize = 0;
-                                if (TargetGetSizeOf(state.sp, state.resolve, e.ty, fieldSize) && fieldSize <= repr->size && fieldSize > widest && typeAcceptsAllBitPatterns(state.sp, state.resolve, e.ty)) {
-                                    widest = fieldSize;
-                                    varIdx = &e - &repr->fields.front();
-                                }
-                            }
-                        }
-                    }
-
-                    if (varIdx == ~0u) {
-                        MIR_TODO(state, StringView("MIR_Cleanup_LiteralToRValue - ") << path << StringView(": ") << ty << StringView(" = ") << lit << StringView(" - Decode union into MIR"));
-                    }
-                    auto innerRval = MIRCleanupLiteralToRValue(state, mutator, lit, repr->fields[varIdx].ty, params, mv$(path));
-                    auto innerLval = mutator.inTemporary(repr->fields[varIdx].ty, mv$(innerRval));
-                    return MIRRValue::make_UnionVariant({te.path.data.as_Generic().clone(), varIdx, mv$(innerLval)});
+                    return MIRConstant::make_Encoded({ty, mv$(value)});
                 } else {
                     MIR_BUG(state, StringView("Unexpected type for literal from ") << path << StringView(" - ") << ty << StringView(" (lit = ") << lit << StringView(")"));
                 }

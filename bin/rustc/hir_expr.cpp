@@ -1171,20 +1171,6 @@ HIRExprVisitorDef::HIRExprVisitorDef(HIRTypeInterner& types)
 }
 
 template <>
-void stl::output<ZeroCopyOutput, HIRExprNodeClosure::AvuCache::Capture>(ZeroCopyOutput& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
-    os << StringView("#") << x.rootSlot;
-    for (const auto& n : x.fields) {
-        if (n == RcString()) {
-            os << StringView(".*");
-        } else {
-            os << StringView(".") << n;
-        }
-    }
-    os << StringView("[") << x.usage << StringView("]");
-    return;
-}
-
-template <>
 void stl::output<ZeroCopyOutput, HIRValueUsage>(ZeroCopyOutput& os, HIRValueUsage x) {
     switch (x) {
         case HIRValueUsage::Unknown:

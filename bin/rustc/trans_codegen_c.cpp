@@ -9907,67 +9907,36 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue& val) -> void {
 
 auto CodeGeneratorC::emitEncodedConstant(const HIRType* type, const EncodedLiteral& encoded) -> void {
     size_t size = 0;
-    size_t align = 0;
-    TargetGetSizeAndAlignOf(sp, resolve_, type, size, align);
-    const bool pointerAligned = align * 8 >= TargetGetPointerBits();
+    MIR_ASSERT(*mirRes, TargetGetSizeOf(sp, resolve_, type, size) && size == encoded.bytes.length(), StringView("Encoded constant size does not match its type"));
+    of << StringView("([]() -> const auto& { static const auto value = [] { ");
+    emitCtype(type, FMT_CB(ss, ss << StringView("value");));
+    of << StringView("; memcpy(&value, ");
+    printBytes(reinterpret_cast<const char*>(encoded.bytes.data()), encoded.bytes.length());
+    of << StringView(", ") << size << StringView("); ");
 
-    of << StringView("([]() -> const auto& { static const union { ");
-    emitCtype(type, FMT_CB(ss, ss << StringView("val");));
-    of << StringView("; ");
-    if (pointerAligned) {
-        const auto pointerSize = TargetGetPointerBits() / 8;
-        const auto words = size == 0 ? 0 : 1 + (size - 1) / pointerSize;
-        of << StringView("uintptr_t raw[") << words << StringView("]");
-    } else {
-        of << StringView("u8 raw[") << size << StringView("]");
-    }
-    of << StringView("; } value = { .raw = {");
-
-    if (pointerAligned) {
-        const auto pointerSize = TargetGetPointerBits() / 8;
-        auto relocation = encoded.relocations.begin();
-        for (size_t i = 0; i < encoded.bytes.length(); i += pointerSize) {
-            u64 word = 0;
-            for (size_t byte = 0; byte < pointerSize && i + byte < encoded.bytes.length(); byte++) {
-                word |= static_cast<u64>(encoded.bytes[i + byte]) << (byte * 8);
-            }
-            if (i > 0) {
-                of << StringView(",");
-            }
-            if (relocation != encoded.relocations.end() && relocation->ofs <= i) {
-                MIR_ASSERT(*mirRes, relocation->ofs == i, StringView("Relocation not aligned to a pointer - ") << relocation->ofs << StringView(" != ") << i);
-                MIR_ASSERT(*mirRes, relocation->len == pointerSize, StringView("Relocation size not pointer size - ") << relocation->len << StringView(" != ") << pointerSize);
-                word -= EncodedLiteral::PTR_BASE;
-                of << StringView("(uintptr_t)");
-                if (relocation->p) {
-                    if (relocation->p->data.is_UfcsInherent() && relocation->p->data.as_UfcsInherent().item == "#type_id") {
-                        of << StringView("&__typeid_") << TransMangleTypeId(relocation->p->data.as_UfcsInherent().type);
-                    } else {
-                        of << StringView("&");
-                        emitReifiedFunctionName(*relocation->p, relocation->preserveTrackCaller);
-                    }
-                } else {
-                    printBytes(relocation->bytes.data(), relocation->bytes.size());
-                }
-                if (word > 0) {
-                    of << StringView("+") << word;
-                }
-                ++relocation;
+    const auto pointerSize = TargetGetPointerBits() / 8;
+    size_t end = 0;
+    for (const auto& relocation : encoded.relocations) {
+        MIR_ASSERT(*mirRes, relocation.ofs >= end && relocation.len == pointerSize && relocation.ofs <= size && relocation.len <= size - relocation.ofs, StringView("Invalid encoded constant relocation"));
+        end = relocation.ofs + relocation.len;
+        const auto offset = EncodedLiteralSlice(encoded).slice(relocation.ofs, relocation.len).readUint(pointerSize).truncateU64() - EncodedLiteral::PTR_BASE;
+        of << StringView("{ const uintptr_t pointer = (uintptr_t)");
+        if (relocation.p) {
+            if (relocation.p->data.is_UfcsInherent() && relocation.p->data.as_UfcsInherent().item == "#type_id") {
+                of << StringView("&__typeid_") << TransMangleTypeId(relocation.p->data.as_UfcsInherent().type);
             } else {
-                of << StringView("0x") << formatHex(word) << StringView("ull");
+                of << StringView("&");
+                emitReifiedFunctionName(*relocation.p, relocation.preserveTrackCaller);
             }
+        } else {
+            printBytes(relocation.bytes.data(), relocation.bytes.size());
         }
-        MIR_ASSERT(*mirRes, relocation == encoded.relocations.end(), StringView("Relocation outside encoded constant"));
-    } else {
-        MIR_ASSERT(*mirRes, encoded.relocations.empty(), StringView("Non-pointer-aligned encoded constant has relocations"));
-        for (size_t i = 0; i < encoded.bytes.length(); i++) {
-            if (i > 0) {
-                of << StringView(",");
-            }
-            of << static_cast<unsigned>(encoded.bytes[i]);
+        if (offset > 0) {
+            of << StringView("+") << offset;
         }
+        of << StringView("; memcpy((u8*)&value+") << relocation.ofs << StringView(", &pointer, ") << relocation.len << StringView("); } ");
     }
-    of << StringView("} }; return value.val; }())");
+    of << StringView("return value; }(); return value; }())");
 }
 
 auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr) -> void {
