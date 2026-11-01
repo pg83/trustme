@@ -3838,43 +3838,34 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         }
         case HIRType::TAG_Primitive: {
             auto& e = (*ty).as_Primitive();
-            switch (pat.data.tag()) {
-                default:
-                    BUG(sp, StringView("Matching primitive with invalid pattern - ") << pat);
-                case HIRPatternData::TAG_Any: {
-                    this->pushRule(PatternRule::make_Any({}));
-                    break;
-                }
-                case HIRPatternData::TAG_Range: {
-                    auto& pe = pat.data.as_Range();
-                    if (!pe.start || !pe.end) {
-                        BUG_ASSERT(pe.start || pe.end);
-                        if (pe.start) {
-                            this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, resolve, pat, *pe.start, e), H::getPatternValueMax(sp, pat, e), true}));
-                        } else {
-                            this->pushRule(PatternRule::make_ValueRange({H::getPatternValueMin(sp, pat, e), H::getPatternValue(sp, resolve, pat, *pe.end, e), pe.isInclusive}));
-                        }
+            if (pat.data.is_Any()) {
+                this->pushRule(PatternRule::make_Any({}));
+            } else if (pat.data.is_Range()) {
+                auto& pe = pat.data.as_Range();
+                if (!pe.start || !pe.end) {
+                    BUG_ASSERT(pe.start || pe.end);
+                    if (pe.start) {
+                        this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, resolve, pat, *pe.start, e), H::getPatternValueMax(sp, pat, e), true}));
                     } else {
-                        this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, resolve, pat, *pe.start, e), H::getPatternValue(sp, resolve, pat, *pe.end, e), pe.isInclusive}));
+                        this->pushRule(PatternRule::make_ValueRange({H::getPatternValueMin(sp, pat, e), H::getPatternValue(sp, resolve, pat, *pe.end, e), pe.isInclusive}));
                     }
-                    break;
+                } else {
+                    this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, resolve, pat, *pe.start, e), H::getPatternValue(sp, resolve, pat, *pe.end, e), pe.isInclusive}));
                 }
-                case HIRPatternData::TAG_Value: {
-                    auto& pe = pat.data.as_Value();
-                    switch (e) {
-                        case HIRCoreType::Bool:
-                            // TODO: Support values from `const` too
-                            this->pushRule(PatternRule::make_Bool(pe.val.as_Integer().value != 0));
-                            break;
-                        case HIRCoreType::Str:
-                            ASSERT_BUG(sp, pe.val.is_String(), StringView("Matching `str` with non-string value pattern - ") << pat);
-                            this->pushRule(PatternRule::make_Value(pe.val.as_String()));
-                            break;
-                        default:
-                            this->pushRule(H::getPatternValue(sp, resolve, pat, pe.val, e));
-                            break;
-                    }
-                    break;
+            } else {
+                auto& pe = pat.data.as_Value();
+                switch (e) {
+                    case HIRCoreType::Bool:
+                        // TODO: Support values from `const` too
+                        this->pushRule(PatternRule::make_Bool(pe.val.as_Integer().value != 0));
+                        break;
+                    case HIRCoreType::Str:
+                        ASSERT_BUG(sp, pe.val.is_String(), StringView("Matching `str` with non-string value pattern - ") << pat);
+                        this->pushRule(PatternRule::make_Value(pe.val.as_String()));
+                        break;
+                    default:
+                        this->pushRule(H::getPatternValue(sp, resolve, pat, pe.val, e));
+                        break;
                 }
             }
             break;
@@ -3882,42 +3873,32 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
             fieldPath.push_back(0);
-            switch (pat.data.tag()) {
-                case HIRPattern::Data::TAG_Any: {
-                    // TODO: Avoid storing the empty patterns, to save on space/cost
-                    for (const auto& sty : e) {
-                        this->appendFrom(sp, emptyPattern, sty);
-                        fieldPath.back()++;
-                    }
-                    break;
+            if (pat.data.is_Any()) {
+                // TODO: Avoid storing the empty patterns, to save on space/cost
+                for (const auto& sty : e) {
+                    this->appendFrom(sp, emptyPattern, sty);
+                    fieldPath.back()++;
                 }
-                case HIRPattern::Data::TAG_Tuple: {
-                    auto& pe = pat.data.as_Tuple();
-                    BUG_ASSERT(e.length() == pe.subPatterns.size());
-                    for (unsigned int i = 0; i < e.length(); i++) {
-                        this->appendFrom(sp, pe.subPatterns[i], e[i]);
-                        fieldPath.back()++;
-                    }
-                    break;
+            } else if (pat.data.is_Tuple()) {
+                auto& pe = pat.data.as_Tuple();
+                BUG_ASSERT(e.length() == pe.subPatterns.size());
+                for (unsigned int i = 0; i < e.length(); i++) {
+                    this->appendFrom(sp, pe.subPatterns[i], e[i]);
+                    fieldPath.back()++;
                 }
-                case HIRPattern::Data::TAG_SplitTuple: {
-                    auto& pe = pat.data.as_SplitTuple();
-                    BUG_ASSERT(e.length() >= pe.leading.size() + pe.trailing.size());
-                    unsigned trailingStart = e.length() - pe.trailing.size();
-                    for (unsigned int i = 0; i < e.length(); i++) {
-                        if (i < pe.leading.size()) {
-                            this->appendFrom(sp, pe.leading[i], e[i]);
-                        } else if (i < trailingStart) {
-                            this->appendFrom(sp, emptyPattern, e[i]);
-                        } else {
-                            this->appendFrom(sp, pe.trailing[i - trailingStart], e[i]);
-                        }
-                        fieldPath.back()++;
+            } else {
+                auto& pe = pat.data.as_SplitTuple();
+                BUG_ASSERT(e.length() >= pe.leading.size() + pe.trailing.size());
+                unsigned trailingStart = e.length() - pe.trailing.size();
+                for (unsigned int i = 0; i < e.length(); i++) {
+                    if (i < pe.leading.size()) {
+                        this->appendFrom(sp, pe.leading[i], e[i]);
+                    } else if (i < trailingStart) {
+                        this->appendFrom(sp, emptyPattern, e[i]);
+                    } else {
+                        this->appendFrom(sp, pe.trailing[i - trailingStart], e[i]);
                     }
-                    break;
-                }
-                default: {
-                    BUG(sp, StringView("Matching tuple with invalid pattern - ") << pat);
+                    fieldPath.back()++;
                 }
             }
             fieldPath.pop_back();
@@ -4025,51 +4006,36 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         case HIRStructData::TAG_Tuple: {
                             auto& sd = strData.as_Tuple();
                             fieldPath.push_back(0);
-                            switch (pat.data.tag()) {
-                                default:
-                                    BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                                case HIRPatternData::TAG_Any:
-                                case HIRPatternData::TAG_PathNamed: {
-                                    for (const auto& fld : sd) {
-                                        ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, StringView("Too-large struct field index"));
-                                        this->appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
-                                        fieldPath.back()++;
-                                    }
-                                    break;
+                            if (pat.data.is_Any() || pat.data.is_PathNamed()) {
+                                for (const auto& fld : sd) {
+                                    ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, StringView("Too-large struct field index"));
+                                    this->appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
+                                    fieldPath.back()++;
                                 }
-                                case HIRPatternData::TAG_PathTuple: {
-                                    auto& pe = pat.data.as_PathTuple();
-                                    BUG_ASSERT(pe.binding.is_Struct());
-                                    PH::pushPatternTuple(*this, sp, pe, patternType);
-                                    break;
-                                }
+                            } else {
+                                auto& pe = pat.data.as_PathTuple();
+                                BUG_ASSERT(pe.binding.is_Struct());
+                                PH::pushPatternTuple(*this, sp, pe, patternType);
                             }
                             fieldPath.pop_back();
                             break;
                         }
                         case HIRStructData::TAG_Named: {
                             auto& sd = strData.as_Named();
-                            switch (pat.data.tag()) {
-                                default:
-                                    BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                                case HIRPatternData::TAG_Any: {
-                                    fieldPath.push_back(0);
-                                    for (const auto& fld : sd) {
-                                        ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, StringView("Too-large struct field index"));
-                                        this->appendFrom(sp, emptyPattern, maybeMonomorph(fld.ty));
-                                        fieldPath.back()++;
-                                    }
-                                    fieldPath.pop_back();
-                                    break;
+                            if (pat.data.is_Any()) {
+                                fieldPath.push_back(0);
+                                for (const auto& fld : sd) {
+                                    ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, StringView("Too-large struct field index"));
+                                    this->appendFrom(sp, emptyPattern, maybeMonomorph(fld.ty));
+                                    fieldPath.back()++;
                                 }
-                                case HIRPatternData::TAG_PathNamed: {
-                                    auto& pe = pat.data.as_PathNamed();
-                                    BUG_ASSERT(pe.binding.is_Struct());
-                                    fieldPath.push_back(0);
-                                    PH::pushPatternStruct(*this, sp, pe, patternType);
-                                    fieldPath.pop_back();
-                                    break;
-                                }
+                                fieldPath.pop_back();
+                            } else {
+                                auto& pe = pat.data.as_PathNamed();
+                                BUG_ASSERT(pe.binding.is_Struct());
+                                fieldPath.push_back(0);
+                                PH::pushPatternStruct(*this, sp, pe, patternType);
+                                fieldPath.pop_back();
                             }
                             break;
                         }
@@ -4105,77 +4071,66 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    switch (pat.data.tag()) {
-                        default:
-                            BUG(sp, StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
-                        case HIRPatternData::TAG_Any: {
-                            this->pushRule(PatternRule::make_Any({}));
-                            break;
-                        }
-                        case HIRPatternData::TAG_PathValue: {
-                            auto& pe = pat.data.as_PathValue();
-                            BUG_ASSERT(pe.binding.is_Enum());
-                            this->pushRule(PatternRule::make_Variant({pe.binding.as_Enum().varIdx, {}}));
-                            break;
-                        }
-                        case HIRPatternData::TAG_PathTuple: {
-                            auto& pe = pat.data.as_PathTuple();
-                            BUG_ASSERT(pe.binding.is_Enum());
-                            const auto& be = pe.binding.as_Enum();
+                    if (pat.data.is_Any()) {
+                        this->pushRule(PatternRule::make_Any({}));
+                    } else if (pat.data.is_PathValue()) {
+                        auto& pe = pat.data.as_PathValue();
+                        BUG_ASSERT(pe.binding.is_Enum());
+                        this->pushRule(PatternRule::make_Variant({pe.binding.as_Enum().varIdx, {}}));
+                    } else if (pat.data.is_PathTuple()) {
+                        auto& pe = pat.data.as_PathTuple();
+                        BUG_ASSERT(pe.binding.is_Enum());
+                        const auto& be = pe.binding.as_Enum();
 
-                            PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
-                            subBuilder.fieldPath = fieldPath;
-                            subBuilder.rootIndex = rootIndex;
-                            ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, StringView("Too-large variant index in ") << ty);
-                            subBuilder.fieldPath.push_back(be.varIdx);
-                            subBuilder.fieldPath.push_back(0);
+                        PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
+                        subBuilder.fieldPath = fieldPath;
+                        subBuilder.rootIndex = rootIndex;
+                        ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, StringView("Too-large variant index in ") << ty);
+                        subBuilder.fieldPath.push_back(be.varIdx);
+                        subBuilder.fieldPath.push_back(0);
 
-                            PH::pushPatternTuple(subBuilder, sp, pe, patternType);
+                        PH::pushPatternTuple(subBuilder, sp, pe, patternType);
 
-                            this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
-                                auto& sr = subBuilder.rulesets[i];
-                                this->pushRule(PatternRule::make_Variant({be.varIdx, mv$(sr.rules)}));
-                                this->pushBindings(mv$(sr.bindings));
-                                this->pushDerefs(mv$(sr.derefs));
-                            });
-                            break;
-                        }
-                        case HIRPatternData::TAG_PathNamed: {
-                            auto& pe = pat.data.as_PathNamed();
-                            BUG_ASSERT(pe.binding.is_Enum());
-                            const auto& be = pe.binding.as_Enum();
+                        this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
+                            auto& sr = subBuilder.rulesets[i];
+                            this->pushRule(PatternRule::make_Variant({be.varIdx, mv$(sr.rules)}));
+                            this->pushBindings(mv$(sr.bindings));
+                            this->pushDerefs(mv$(sr.derefs));
+                        });
+                    } else {
+                        auto& pe = pat.data.as_PathNamed();
+                        BUG_ASSERT(pe.binding.is_Enum());
+                        const auto& be = pe.binding.as_Enum();
 
-                            PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
-                            subBuilder.fieldPath = fieldPath;
-                            subBuilder.rootIndex = rootIndex;
-                            ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, StringView("Too-large variant index"));
-                            subBuilder.fieldPath.push_back(be.varIdx);
-                            subBuilder.fieldPath.push_back(0);
+                        PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
+                        subBuilder.fieldPath = fieldPath;
+                        subBuilder.rootIndex = rootIndex;
+                        ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, StringView("Too-large variant index"));
+                        subBuilder.fieldPath.push_back(be.varIdx);
+                        subBuilder.fieldPath.push_back(0);
 
-                            if (be.ptr->isValue()) {
-                                BUG_ASSERT(pe.subPatterns.empty());
-                            } else if (be.ptr->data.as_Data().at(be.varIdx).type == resolve.hirCrate().types.unit()) {
-                                BUG_ASSERT(pe.subPatterns.empty());
-                            } else if (!be.ptr->data.as_Data().at(be.varIdx).isStruct) {
-                                BUG_ASSERT(pe.subPatterns.empty());
-                                const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
-                                for (unsigned int i = 0; i < sd.size(); i++) {
-                                    const auto& fld = sd[i];
-                                    subBuilder.appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
-                                    subBuilder.fieldPath.back()++;
-                                }
-                            } else {
-                                PH::pushPatternStruct(subBuilder, sp, pe, patternType);
+                        if (be.ptr->isValue()) {
+                            BUG_ASSERT(pe.subPatterns.empty());
+                        } else if (be.ptr->data.as_Data().at(be.varIdx).type == resolve.hirCrate().types.unit()) {
+                            BUG_ASSERT(pe.subPatterns.empty());
+                        } else if (!be.ptr->data.as_Data().at(be.varIdx).isStruct) {
+                            BUG_ASSERT(pe.subPatterns.empty());
+                            const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
+                            for (unsigned int i = 0; i < sd.size(); i++) {
+                                const auto& fld = sd[i];
+                                subBuilder.appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
+                                subBuilder.fieldPath.back()++;
                             }
-
-                            this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
-                                auto& sr = subBuilder.rulesets[i];
-                                this->pushRule(PatternRule::make_Variant({be.varIdx, mv$(sr.rules)}));
-                                this->pushBindings(mv$(sr.bindings));
-                                this->pushDerefs(mv$(sr.derefs));
-                            });
-                            break;
+                        } else {
+                            PH::pushPatternStruct(subBuilder, sp, pe, patternType);
                         }
+
+                        this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
+                            auto& sr = subBuilder.rulesets[i];
+                            this->pushRule(PatternRule::make_Variant({be.varIdx, mv$(sr.rules)}));
+                            this->pushBindings(mv$(sr.bindings));
+                            this->pushDerefs(mv$(sr.derefs));
+                        });
                     }
                     break;
                 }
@@ -4203,77 +4158,66 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 break;
             }
             fieldPath.push_back(0);
-            switch (pat.data.tag()) {
-                default:
-                    BUG(sp, StringView("Matching array with invalid pattern - ") << pat);
-                case HIRPatternData::TAG_Any: {
-                    if (e.size.as_Known() < PARTIAL_ARRAY_MIN) {
-                        for (u64 i = 0; i < e.size.as_Known(); i++) {
-                            this->appendFrom(sp, emptyPattern, e.inner);
-                            fieldPath.back()++;
-                        }
-                    } else {
-                        this->pushRule(PatternRule::make_Any({}));
-                    }
-                    break;
-                }
-                case HIRPatternData::TAG_Value: {
-                    auto& pe = pat.data.as_Value();
-                    ASSERT_BUG(sp, pe.val.is_ByteString(), StringView("Matching array with non-byte-string value pattern - ") << pat);
-                    const auto& bytes = pe.val.as_ByteString().v;
-                    ASSERT_BUG(sp, e.inner == HIRCoreType::U8 && e.size.as_Known() == bytes.size(), StringView("Byte string pattern type mismatch - ") << pat << StringView(" vs ") << ty);
-                    for (auto byte : bytes) {
-                        this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<u8>(byte)), HIRCoreType::U8})));
+            if (pat.data.is_Any()) {
+                if (e.size.as_Known() < PARTIAL_ARRAY_MIN) {
+                    for (u64 i = 0; i < e.size.as_Known(); i++) {
+                        this->appendFrom(sp, emptyPattern, e.inner);
                         fieldPath.back()++;
                     }
-                    break;
+                } else {
+                    this->pushRule(PatternRule::make_Any({}));
                 }
-                case HIRPatternData::TAG_Slice: {
-                    auto& pe = pat.data.as_Slice();
-                    ASSERT_BUG(sp, e.size.as_Known() == pe.subPatterns.size(), StringView("Pattern size mismatch"));
-                    for (const auto& v : pe.subPatterns) {
-                        this->appendFrom(sp, v, e.inner);
+            } else if (pat.data.is_Value()) {
+                auto& pe = pat.data.as_Value();
+                ASSERT_BUG(sp, pe.val.is_ByteString(), StringView("Matching array with non-byte-string value pattern - ") << pat);
+                const auto& bytes = pe.val.as_ByteString().v;
+                ASSERT_BUG(sp, e.inner == HIRCoreType::U8 && e.size.as_Known() == bytes.size(), StringView("Byte string pattern type mismatch - ") << pat << StringView(" vs ") << ty);
+                for (auto byte : bytes) {
+                    this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<u8>(byte)), HIRCoreType::U8})));
+                    fieldPath.back()++;
+                }
+            } else if (pat.data.is_Slice()) {
+                auto& pe = pat.data.as_Slice();
+                ASSERT_BUG(sp, e.size.as_Known() == pe.subPatterns.size(), StringView("Pattern size mismatch"));
+                for (const auto& v : pe.subPatterns) {
+                    this->appendFrom(sp, v, e.inner);
+                    fieldPath.back()++;
+                }
+            } else {
+                auto& pe = pat.data.as_SplitSlice();
+                ASSERT_BUG(sp, pe.leading.size() < FIELD_INDEX_MAX, StringView("Too many leading slice rules to fit encodng"));
+                const auto arraySize = e.size.as_Known();
+                ASSERT_BUG(sp, pe.leading.size() <= arraySize, StringView("Too many leading slice rules for array type"));
+                ASSERT_BUG(sp, pe.trailing.size() <= arraySize - pe.leading.size(), StringView("Too many slice rules for array type"));
+                for (const auto& subpat : pe.leading) {
+                    this->appendFrom(sp, subpat, e.inner);
+                    fieldPath.back()++;
+                }
+                if (arraySize < PARTIAL_ARRAY_MIN) {
+                    while (fieldPath.back() < arraySize - pe.trailing.size()) {
+                        this->appendFrom(sp, emptyPattern, e.inner);
                         fieldPath.back()++;
                     }
-                    break;
-                }
-                case HIRPatternData::TAG_SplitSlice: {
-                    auto& pe = pat.data.as_SplitSlice();
-                    ASSERT_BUG(sp, pe.leading.size() < FIELD_INDEX_MAX, StringView("Too many leading slice rules to fit encodng"));
-                    const auto arraySize = e.size.as_Known();
-                    ASSERT_BUG(sp, pe.leading.size() <= arraySize, StringView("Too many leading slice rules for array type"));
-                    ASSERT_BUG(sp, pe.trailing.size() <= arraySize - pe.leading.size(), StringView("Too many slice rules for array type"));
-                    for (const auto& subpat : pe.leading) {
+                    for (const auto& subpat : pe.trailing) {
                         this->appendFrom(sp, subpat, e.inner);
                         fieldPath.back()++;
                     }
-                    if (arraySize < PARTIAL_ARRAY_MIN) {
-                        while (fieldPath.back() < arraySize - pe.trailing.size()) {
-                            this->appendFrom(sp, emptyPattern, e.inner);
-                            fieldPath.back()++;
-                        }
+                } else {
+                    if (!pe.trailing.empty()) {
+                        ASSERT_BUG(sp, arraySize - pe.trailing.size() <= static_cast<u16>(-1), StringView("Array pattern field index cannot be encoded"));
+                        fieldPath.back() = static_cast<u16>(arraySize - pe.trailing.size());
                         for (const auto& subpat : pe.trailing) {
                             this->appendFrom(sp, subpat, e.inner);
                             fieldPath.back()++;
                         }
-                    } else {
-                        if (!pe.trailing.empty()) {
-                            ASSERT_BUG(sp, arraySize - pe.trailing.size() <= static_cast<u16>(-1), StringView("Array pattern field index cannot be encoded"));
-                            fieldPath.back() = static_cast<u16>(arraySize - pe.trailing.size());
-                            for (const auto& subpat : pe.trailing) {
-                                this->appendFrom(sp, subpat, e.inner);
-                                fieldPath.back()++;
-                            }
-                        }
                     }
+                }
 
-                    if (pe.extraBind.isValid()) {
-                        PatternBinding pb(fieldPath, pe.extraBind);
-                        pb.field.pop_back();
-                        pb.splitSlice = std::make_pair(pe.leading.size(), pe.trailing.size());
-                        this->pushBinding(mv$(pb));
-                    }
-                    break;
+                if (pe.extraBind.isValid()) {
+                    PatternBinding pb(fieldPath, pe.extraBind);
+                    pb.field.pop_back();
+                    pb.splitSlice = std::make_pair(pe.leading.size(), pe.trailing.size());
+                    this->pushBinding(mv$(pb));
                 }
             }
             fieldPath.pop_back();
@@ -4281,92 +4225,81 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         }
         case HIRType::TAG_Slice: {
             auto& e = (*ty).as_Slice();
-            switch (pat.data.tag()) {
-                default:
-                    BUG(sp, StringView("Matching over [T] with invalid pattern - ") << pat);
-                case HIRPatternData::TAG_Any: {
-                    this->pushRule(PatternRule::make_Any({}));
-                    break;
+            if (pat.data.is_Any()) {
+                this->pushRule(PatternRule::make_Any({}));
+            } else if (pat.data.is_Value()) {
+                auto& pe = pat.data.as_Value();
+                ASSERT_BUG(sp, pe.val.is_ByteString() && e.inner == HIRCoreType::U8, StringView("Matching slice with non-byte-string value pattern - ") << pat);
+                Vector<u8> data;
+                data.grow(pe.val.as_ByteString().v.size());
+                for (auto byte : pe.val.as_ByteString().v) {
+                    data.pushBack(static_cast<u8>(byte));
                 }
-                case HIRPatternData::TAG_Value: {
-                    auto& pe = pat.data.as_Value();
-                    ASSERT_BUG(sp, pe.val.is_ByteString() && e.inner == HIRCoreType::U8, StringView("Matching slice with non-byte-string value pattern - ") << pat);
-                    Vector<u8> data;
-                    data.grow(pe.val.as_ByteString().v.size());
-                    for (auto byte : pe.val.as_ByteString().v) {
-                        data.pushBack(static_cast<u8>(byte));
-                    }
-                    this->pushRule(PatternRule::make_Value(mv$(data)));
-                    break;
+                this->pushRule(PatternRule::make_Value(mv$(data)));
+            } else if (pat.data.is_Slice()) {
+                auto& pe = pat.data.as_Slice();
+                PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
+                subBuilder.fieldPath = fieldPath;
+                subBuilder.rootIndex = rootIndex;
+                subBuilder.fieldPath.push_back(0);
+                ASSERT_BUG(sp, pe.subPatterns.size() < FIELD_INDEX_MAX, StringView("Too many slice rules to fit encodng"));
+                for (const auto& subpat : pe.subPatterns) {
+                    subBuilder.appendFrom(sp, subpat, e.inner);
+                    subBuilder.fieldPath.back()++;
                 }
-                case HIRPatternData::TAG_Slice: {
-                    auto& pe = pat.data.as_Slice();
-                    PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
-                    subBuilder.fieldPath = fieldPath;
-                    subBuilder.rootIndex = rootIndex;
-                    subBuilder.fieldPath.push_back(0);
-                    ASSERT_BUG(sp, pe.subPatterns.size() < FIELD_INDEX_MAX, StringView("Too many slice rules to fit encodng"));
-                    for (const auto& subpat : pe.subPatterns) {
+
+                this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
+                    auto& sr = subBuilder.rulesets[i];
+                    this->pushRule(PatternRule::make_Slice({static_cast<unsigned int>(pe.subPatterns.size()), mv$(sr.rules)}));
+                    this->pushBindings(mv$(sr.bindings));
+                    this->pushDerefs(mv$(sr.derefs));
+                });
+            } else {
+                auto& pe = pat.data.as_SplitSlice();
+                PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
+                subBuilder.fieldPath = fieldPath;
+                subBuilder.rootIndex = rootIndex;
+                ASSERT_BUG(sp, pe.leading.size() < FIELD_INDEX_MAX, StringView("Too many leading slice rules to fit encodng"));
+                subBuilder.fieldPath.push_back(0);
+                for (const auto& subpat : pe.leading) {
+                    subBuilder.appendFrom(sp, subpat, e.inner);
+                    subBuilder.fieldPath.back()++;
+                }
+                auto leadingRulesets = mv$(subBuilder.rulesets);
+                subBuilder.rulesets.clear();
+                subBuilder.rulesets.resize(1);
+                subBuilder.subsetStart = 0;
+                subBuilder.subsetEnd = 1;
+
+                if (pe.trailing.size()) {
+                    ASSERT_BUG(sp, pe.trailing.size() < FIELD_INDEX_MAX, StringView("Too many trailing slice rules to fit encodng"));
+                    subBuilder.fieldPath.back() = FIELD_INDEX_MAX + (FIELD_INDEX_MAX - pe.trailing.size());
+                    for (const auto& subpat : pe.trailing) {
                         subBuilder.appendFrom(sp, subpat, e.inner);
                         subBuilder.fieldPath.back()++;
                     }
-
-                    this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
-                        auto& sr = subBuilder.rulesets[i];
-                        this->pushRule(PatternRule::make_Slice({static_cast<unsigned int>(pe.subPatterns.size()), mv$(sr.rules)}));
-                        this->pushBindings(mv$(sr.bindings));
-                        this->pushDerefs(mv$(sr.derefs));
-                    });
-                    break;
                 }
-                case HIRPatternData::TAG_SplitSlice: {
-                    auto& pe = pat.data.as_SplitSlice();
-                    PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
-                    subBuilder.fieldPath = fieldPath;
-                    subBuilder.rootIndex = rootIndex;
-                    ASSERT_BUG(sp, pe.leading.size() < FIELD_INDEX_MAX, StringView("Too many leading slice rules to fit encodng"));
-                    subBuilder.fieldPath.push_back(0);
-                    for (const auto& subpat : pe.leading) {
-                        subBuilder.appendFrom(sp, subpat, e.inner);
-                        subBuilder.fieldPath.back()++;
-                    }
-                    auto leadingRulesets = mv$(subBuilder.rulesets);
-                    subBuilder.rulesets.clear();
-                    subBuilder.rulesets.resize(1);
-                    subBuilder.subsetStart = 0;
-                    subBuilder.subsetEnd = 1;
+                auto trailingRulesets = mv$(subBuilder.rulesets);
 
-                    if (pe.trailing.size()) {
-                        ASSERT_BUG(sp, pe.trailing.size() < FIELD_INDEX_MAX, StringView("Too many trailing slice rules to fit encodng"));
-                        subBuilder.fieldPath.back() = FIELD_INDEX_MAX + (FIELD_INDEX_MAX - pe.trailing.size());
-                        for (const auto& subpat : pe.trailing) {
-                            subBuilder.appendFrom(sp, subpat, e.inner);
-                            subBuilder.fieldPath.back()++;
-                        }
-                    }
-                    auto trailingRulesets = mv$(subBuilder.rulesets);
-
-                    if (pe.extraBind.isValid()) {
-                        PatternBinding pb(fieldPath, pe.extraBind);
-                        pb.splitSlice = std::make_pair(pe.leading.size(), pe.trailing.size());
-                        this->pushBinding(mv$(pb));
-                    }
-
-                    this->multiplyRulesets(leadingRulesets.size() * trailingRulesets.size(), [&](size_t i) {
-                        size_t iL = i % leadingRulesets.size();
-                        size_t iT = i / leadingRulesets.size();
-                        auto& srL = leadingRulesets[iL];
-                        auto& srT = trailingRulesets[iT];
-                        auto rulesL = srL.clone();
-                        auto rulesT = srT.clone();
-                        this->pushRule(PatternRule::make_SplitSlice({static_cast<unsigned int>(pe.leading.size() + pe.trailing.size()), static_cast<unsigned int>(pe.trailing.size()), mv$(rulesL.rules), mv$(rulesT.rules)}));
-                        this->pushBindings(mv$(rulesL.bindings));
-                        this->pushBindings(mv$(rulesT.bindings));
-                        this->pushDerefs(mv$(rulesL.derefs));
-                        this->pushDerefs(mv$(rulesT.derefs));
-                    });
-                    break;
+                if (pe.extraBind.isValid()) {
+                    PatternBinding pb(fieldPath, pe.extraBind);
+                    pb.splitSlice = std::make_pair(pe.leading.size(), pe.trailing.size());
+                    this->pushBinding(mv$(pb));
                 }
+
+                this->multiplyRulesets(leadingRulesets.size() * trailingRulesets.size(), [&](size_t i) {
+                    size_t iL = i % leadingRulesets.size();
+                    size_t iT = i / leadingRulesets.size();
+                    auto& srL = leadingRulesets[iL];
+                    auto& srT = trailingRulesets[iT];
+                    auto rulesL = srL.clone();
+                    auto rulesT = srT.clone();
+                    this->pushRule(PatternRule::make_SplitSlice({static_cast<unsigned int>(pe.leading.size() + pe.trailing.size()), static_cast<unsigned int>(pe.trailing.size()), mv$(rulesL.rules), mv$(rulesT.rules)}));
+                    this->pushBindings(mv$(rulesL.bindings));
+                    this->pushBindings(mv$(rulesT.bindings));
+                    this->pushDerefs(mv$(rulesL.derefs));
+                    this->pushDerefs(mv$(rulesT.derefs));
+                });
             }
             break;
         }
