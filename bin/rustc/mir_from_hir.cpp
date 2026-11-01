@@ -1418,18 +1418,13 @@ namespace {
 
             DEBUG(StringView("> ") << curTy << StringView(" #") << idx);
             switch ((*curTy).tag()) {
-                case HIRType::TAG_Infer: {
-                    BUG(sp, StringView("Ivar for in match type"));
-                }
-                case HIRType::TAG_Diverge: {
-                    BUG(sp, StringView("Diverge in match type"));
-                }
-                case HIRType::TAG_Primitive: {
-                    BUG(sp, StringView("Destructuring a primitive"));
-                }
-                case HIRType::TAG_Pattern: {
-                    BUG(sp, StringView("Destructuring a pattern type"));
-                }
+                default:
+                    BUG(sp, StringView("Invalid type in pattern projection - ") << curTy << StringView(" #") << idx);
+                case HIRType::TAG_Pointer:
+                case HIRType::TAG_NamedFunction:
+                case HIRType::TAG_Function:
+                case HIRType::TAG_NodeType:
+                    ERROR(sp, E0000, StringView("Attempting to project a pattern into ") << curTy);
                 case HIRType::TAG_Tuple: {
                     auto& e = (*curTy).as_Tuple();
                     ASSERT_BUG(sp, idx < e.length(), StringView("Tuple index out of range"));
@@ -1457,15 +1452,8 @@ namespace {
                         }
                     };
                     switch (e.binding.tag()) {
-                        case HIRTypePathBinding::TAG_Unbound: {
-                            BUG(sp, StringView("Encounterd unbound path - ") << e.path);
-                        }
-                        case HIRTypePathBinding::TAG_Opaque: {
-                            BUG(sp, StringView("Destructuring an opaque type - ") << curTy);
-                        }
-                        case HIRTypePathBinding::TAG_ExternType: {
-                            BUG(sp, StringView("Destructuring an extern type - ") << curTy);
-                        }
+                        default:
+                            BUG(sp, StringView("Invalid path type in pattern projection - ") << curTy << StringView(" #") << idx);
                         case HIRTypePathBinding::TAG_Struct: {
                             const auto pbe = e.binding.as_Struct();
                             switch (pbe->data.tag()) {
@@ -1513,15 +1501,6 @@ namespace {
                     }
                     break;
                 }
-                case HIRType::TAG_Generic: {
-                    BUG(sp, StringView("Destructuring a generic - ") << curTy);
-                }
-                case HIRType::TAG_TraitObject: {
-                    BUG(sp, StringView("Destructuring a trait object - ") << curTy);
-                }
-                case HIRType::TAG_ErasedType: {
-                    BUG(sp, StringView("Destructuring an erased type - ") << curTy);
-                }
                 case HIRType::TAG_Array: {
                     auto& e = (*curTy).as_Array();
                     curTy = e.inner;
@@ -1550,18 +1529,6 @@ namespace {
                     curTy = e.inner;
                     lval = MIRLValue::newDeref(mv$(lval));
                     break;
-                }
-                case HIRType::TAG_Pointer: {
-                    ERROR(sp, E0000, StringView("Attempting to match over a pointer"));
-                }
-                case HIRType::TAG_NamedFunction: {
-                    ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-                }
-                case HIRType::TAG_Function: {
-                    ERROR(sp, E0000, StringView("Attempting to match over a functon pointer"));
-                }
-                case HIRType::TAG_NodeType: {
-                    ERROR(sp, E0000, StringView("Attempting to match over a magic type"));
                 }
             }
         }
@@ -3875,9 +3842,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     }
 
     switch ((*ty).tag()) {
-        case HIRType::TAG_Infer: {
-            BUG(sp, StringView("Ivar for in match type"));
-        }
+        default:
+            BUG(sp, StringView("Invalid type for pattern ") << pat << StringView(" - ") << ty);
         case HIRType::TAG_Diverge: {
             this->pushRule(PatternRule::make_Any({}));
             break;
@@ -3924,9 +3890,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 }
             }
             break;
-        }
-        case HIRType::TAG_Pattern: {
-            BUG(sp, StringView("Pattern type was not reduced to its base type"));
         }
         case HIRType::TAG_Tuple: {
             auto& e = (*ty).as_Tuple();
@@ -4257,9 +4220,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             ASSERT_BUG(sp, pat.data.is_Any(), StringView("Match not allowed, ") << ty << StringView(" with ") << pat);
             break;
         }
-        case HIRType::TAG_ErasedType: {
-            BUG(sp, StringView("Opaque type was not revealed for pattern ") << pat << StringView(" - ") << ty);
-        }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
             if (!e.size.is_Known()) {
@@ -4456,9 +4416,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             }
             fieldPath.pop_back();
             break;
-        }
-        case HIRType::TAG_NodeType: {
-            BUG(sp, StringView("Unextracted anonymous type in match - ") << ty);
         }
     }
     for (size_t i = 0; i < pat.implicitDerefCount; i++) {
