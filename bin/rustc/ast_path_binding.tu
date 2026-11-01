@@ -77,14 +77,6 @@ generate(
     output=True,
     variants=[
         v("Unbound"),
-        v("ProcMacroDerive", fields=[
-            ("const ASTExternCrate*", "crate_"),
-            ("RcString", "macName"),
-        ]),
-        v("ProcMacroAttribute", fields=[
-            ("const ASTExternCrate*", "crate_"),
-            ("RcString", "macName"),
-        ]),
         v("ProcMacro", fields=[
             ("const ASTExternCrate*", "crate_"),
             ("RcString", "macName"),

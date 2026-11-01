@@ -3645,12 +3645,6 @@ namespace {
                             _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
                             break;
                         }
-                        case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
-                            TODO(sp, StringView("ProcMacroAttribute import"));
-                        }
-                        case ASTPathBindingMacro::TAG_ProcMacroDerive: {
-                            TODO(sp, StringView("ProcMacroDerive import"));
-                        }
                     }
                 } else {
                     if (i.vis.ty() != ASTVisibility::Ty::Private) {
@@ -6241,7 +6235,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             const auto& imp = item->as_Import();
                             truePath = &imp.path;
 
-                            auto itemPath = spToAp(imp.path) + resolvedItemName;
+                            itemPath = spToAp(imp.path);
                             if (imp.isVariant) {
                                 const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
                                 bindings.value.set(itemPath, ASTPathBindingValue::make_EnumVar({nullptr, imp.idx, &enm}));
@@ -6253,12 +6247,28 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                         switch ((*item).tag()) {
                             default:
                                 TODO(sp, StringView("Bind value '") << name << StringView("' for module path ") << mp << StringView(" : ") << item->tagStr());
+                            case HIRValueItem::TAG_Constant: {
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr, nullptr}));
+                                break;
+                            }
                             case HIRValueItem::TAG_Function: {
                                 bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
                                 break;
                             }
                             case HIRValueItem::TAG_Static: {
-                                bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr, item->as_Static()}));
+                                break;
+                            }
+                            case HIRValueItem::TAG_StructConstant: {
+                                const auto& constructor = item->as_StructConstant();
+                                const auto& structure = crate.externCrates.at(constructor.ty.crateName()).hir->getTypeitemByPath(sp, constructor.ty, true).as_Struct();
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_Struct({nullptr, &structure}));
+                                break;
+                            }
+                            case HIRValueItem::TAG_StructConstructor: {
+                                const auto& constructor = item->as_StructConstructor();
+                                const auto& structure = crate.externCrates.at(constructor.ty.crateName()).hir->getTypeitemByPath(sp, constructor.ty, true).as_Struct();
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_Struct({nullptr, &structure}));
                                 break;
                             }
                         }
@@ -6276,7 +6286,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             const auto& imp = item->as_Import();
                             truePath = &imp.path;
 
-                            auto itemPath = spToAp(imp.path) + resolvedItemName;
+                            itemPath = spToAp(imp.path);
                             if (imp.isVariant) {
                                 const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
                                 bindings.type.set(itemPath, ASTPathBindingType::make_EnumVar({nullptr, imp.idx, &enm}));
@@ -6290,11 +6300,11 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                                 TODO(sp, StringView("Bind type/mod '") << name << StringView("' for module path ") << mp << StringView(" : ") << item->tagStr());
                             case HIRTypeItem::TAG_Module: {
                                 auto& e = (*item).as_Module();
-                                bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}}));
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&crate.externCrates.at(itemPath.crate), &e}}));
                                 break;
                             }
                             case HIRTypeItem::TAG_Trait: {
-                                bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr, &item->as_Trait()}));
                                 break;
                             }
                             case HIRTypeItem::TAG_TypeAlias: {
@@ -6302,15 +6312,15 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                                 break;
                             }
                             case HIRTypeItem::TAG_Struct: {
-                                bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr, &item->as_Struct()}));
                                 break;
                             }
                             case HIRTypeItem::TAG_Enum: {
-                                bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr, &item->as_Enum()}));
                                 break;
                             }
                             case HIRTypeItem::TAG_Union: {
-                                bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr, &item->as_Union()}));
                                 break;
                             }
                         }
