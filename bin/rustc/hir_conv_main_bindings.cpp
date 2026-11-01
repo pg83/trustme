@@ -2691,8 +2691,8 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
         resizeParams(gp2.params, enm.params.types.size(), enm.params.values.size());
 
         auto idx = enm.findVariant(name);
-        if (idx == ~0u) {
-            TODO(sp, StringView("Variant ") << name << StringView(" not found in ") << gp);
+        if (idx == SIZE_MAX) {
+            ERROR(sp, E0000, StringView("Variant ") << name << StringView(" not found in ") << gp);
         }
         path = std::move(gp2);
         return HIRPattern::PathBinding::make_Enum({&enm, static_cast<unsigned>(idx)});
@@ -4695,7 +4695,7 @@ auto UfcsVisitor::resolvePatternBinding(const Span& sp, HIRPath& path, HIRPatter
     if (const auto* gp = path.data.opt_Generic(); gp && gp->path.components().size() > 1) {
         if (const auto* enm = crate.getTypeitemByPath(sp, gp->path, false, true).opt_Enum()) {
             const auto idx = enm->findVariant(gp->path.components().back());
-            if (idx == ~0u) {
+            if (idx == SIZE_MAX) {
                 ERROR(sp, E0000, StringView("No variant `") << gp->path.components().back() << StringView("` in ") << gp->path);
             }
             binding = HIRPattern::PathBinding::make_Enum({enm, static_cast<unsigned>(idx)});

@@ -5670,11 +5670,11 @@ namespace {
                     if (e.hir) {
                         const auto& enum_ = *e.hir;
                         size_t idx = enum_.findVariant(variantName);
-                        if (idx == ~0u && variantName != node2.name()) {
+                        if (idx == SIZE_MAX && variantName != node2.name()) {
                             variantName = node2.name();
                             idx = enum_.findVariant(variantName);
                         }
-                        if (idx == ~0u) {
+                        if (idx == SIZE_MAX) {
                             ERROR(span, E0000, StringView("Unknown enum variant ") << path);
                         }
                         variantIndex = static_cast<unsigned>(idx);

@@ -206,13 +206,9 @@ namespace {
 
         void addAstPath(HIRTraitPath path, const ASTPathBindingType& binding);
 
-        void addHirPath(HIRTraitPath path);
-
         void expandAstAlias(HIRTraitPath aliasPath, const ASTPathBindingType::Data_TraitAlias& binding);
 
         void expandHirAliasContents(const HIRTraitPath& aliasPath, const HIRTraitAlias& alias);
-
-        void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias);
 
         TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRType::Data_TraitObject& out);
 
@@ -4157,17 +4153,6 @@ auto TraitObjectLowering::addAstPath(HIRTraitPath path, const ASTPathBindingType
     }
 }
 
-auto TraitObjectLowering::addHirPath(HIRTraitPath path) -> void {
-    const auto& item = ctx_.crate->getTypeitemByPath(span_, path.path.path);
-    if (const auto* trait = item.opt_Trait()) {
-        addTrait(mv$(path), trait->isMarker);
-    } else if (const auto* alias = item.opt_TraitAlias()) {
-        expandHirAlias(mv$(path), *alias);
-    } else {
-        BUG(span_, StringView("Trait alias expanded to non-trait path ") << path.path << StringView(" (") << item.tagStr() << StringView(")"));
-    }
-}
-
 auto TraitObjectLowering::expandAstAlias(HIRTraitPath aliasPath, const ASTPathBindingType::Data_TraitAlias& binding) -> void {
     const void* key = binding.trait_ ? static_cast<const void*>(binding.trait_) : static_cast<const void*>(binding.hir);
     ASSERT_BUG(span_, key, StringView("Null trait alias binding for ") << aliasPath.path);
@@ -4195,16 +4180,10 @@ auto TraitObjectLowering::expandHirAliasContents(const HIRTraitPath& aliasPath, 
     auto params = ConvertHIRCompleteAliasParams(ctx_.crate->types, span_, alias.params, aliasPath.path, false);
     auto monomorph = MonomorphStatePtr(ctx_.crate->types, nullptr, &params, nullptr);
     for (const auto& bound : alias.traits) {
-        auto trait = bound.clone();
-        addHirPath(monomorph.monomorphTraitpath(span_, trait, false));
+        auto path = monomorph.monomorphTraitpath(span_, bound, false);
+        const auto& trait = ctx_.crate->getTraitByPath(span_, path.path.path);
+        addTrait(mv$(path), trait.isMarker);
     }
-}
-
-auto TraitObjectLowering::expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias) -> void {
-    auto active = enterAlias(&alias, aliasPath.path);
-    const bool hadPrincipal = hasPrincipal();
-    expandHirAliasContents(aliasPath, alias);
-    applyAliasBounds(aliasPath, hadPrincipal);
 }
 
 TraitObjectLowering::TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRType::Data_TraitObject& out)
