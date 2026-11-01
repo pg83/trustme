@@ -1269,13 +1269,13 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
             }
             case ASTPathParamEnt::TAG_AssociatedTyEqual: {
                 if (!allowAssoc) {
-                    BUG(sp, StringView("Encountered path parameters with associated type bounds where they are not allowed"));
+                    ERROR(sp, E0000, StringView("associated item constraints are not allowed here"));
                 }
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedValueEqual: {
                 if (!allowAssoc) {
-                    BUG(sp, StringView("Encountered path parameters with associated type bounds where they are not allowed"));
+                    ERROR(sp, E0000, StringView("associated item constraints are not allowed here"));
                 }
                 // TODO: `Trait<K = 0>` constrains an associated const. The
 
@@ -1283,7 +1283,7 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
             }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {
                 if (!allowAssoc) {
-                    BUG(sp, StringView("Encountered path parameters with associated type bounds where they are not allowed"));
+                    ERROR(sp, E0000, StringView("associated item constraints are not allowed here"));
                 }
                 break;
             }

@@ -4540,9 +4540,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
             std::optional<const HIRType*> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
                 std::optional<const HIRType*> possibleType;
                 switch (pattern.data.tag()) {
-                    case HIRPatternData::TAG_Any: {
-                        break;
-                    }
+                    default:
+                        UNREACHABLE();
                     case HIRPatternData::TAG_Value: {
                         auto& pe = pattern.data.as_Value();
                         possibleType = getPossibleTypeVal(context, pe.val);
@@ -4569,9 +4568,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     case HIRPatternData::TAG_Deref: {
                         break;
-                    }
-                    case HIRPatternData::TAG_Ref: {
-                        BUG(sp, StringView("Match ergonomics - & pattern"));
                     }
                     case HIRPatternData::TAG_Tuple: {
                         auto& e = pattern.data.as_Tuple();
@@ -4689,9 +4685,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                             }
                         }
                         break;
-                    }
-                    case HIRPatternData::TAG_Or: {
-                        BUG(sp, StringView("Or-pattern alternatives must be visited before type guessing"));
                     }
                 }
                 return possibleType;

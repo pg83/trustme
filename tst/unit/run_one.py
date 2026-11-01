@@ -205,6 +205,15 @@ def main() -> int:
                                     stderr=subprocess.PIPE, check=False)
             if result.returncode == 0:
                 raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
+            internal_failure = re.search(
+                rb"(?m)^(?:<null>|MACRO<[^\n]+>|[^\n]*:\d+(?::\d+)?(?:-\d+(?::\d+)?)?) (?:BUG|TODO):"
+                rb"|^MIR ERROR:|^LLVM ERROR:|^error: (?:internal compiler error|the compiler unexpectedly panicked)",
+                result.stderr,
+            )
+            if internal_failure and not chaos_match:
+                sys.stdout.buffer.write(result.stdout)
+                sys.stderr.buffer.write(result.stderr)
+                raise RuntimeError("compile-fail unit hit an internal compiler failure")
             expected = compile_fail_match.group(1).encode() if compile_fail_match else b""
             if expected and not system_rustc and expected not in result.stderr:
                 sys.stdout.buffer.write(result.stdout)
