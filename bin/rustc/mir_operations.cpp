@@ -6574,6 +6574,33 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
     MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
 
     MirMutator mutator{fcn, 0, 0};
+    struct CleanupOperands: MIRVisitorMut {
+        const MIRTypeResolve& state;
+        MirMutator& mutator;
+
+        CleanupOperands(const MIRTypeResolve& state_, MirMutator& mutator_)
+            : state(state_)
+            , mutator(mutator_)
+        {
+        }
+
+        bool visitLvalue(MIRLValue& value, MIRValUsage) override {
+            MIRCleanupLValue(state, mutator, value);
+            return false;
+        }
+
+        bool visitParam(MIRParam& value, MIRValUsage) override {
+            MIRCleanupParam(state, mutator, value);
+            return false;
+        }
+
+        bool visitConst(MIRConstant&) override {
+            return false;
+        }
+
+        void visitGenericpath(HIRGenericPath&) override {
+        }
+    } cleanupOperands{state, mutator};
     for (auto& block : fcn.blocks) {
         for (auto it = block.statements.begin(); it != block.statements.end(); ++it) {
             mutator.updateState(state);
@@ -6649,40 +6676,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     auto& se = stmt.as_Assign();
                     MIRCleanupLValue(state, mutator, se.dst);
                     switch (se.src.tag()) {
-                        case MIRRValue::TAG_Use: {
-                            auto& re = se.src.as_Use();
-                            MIRCleanupLValue(state, mutator, re);
-                            break;
-                        }
-                        case MIRRValue::TAG_Constant: {
-                            break;
-                        }
-                        case MIRRValue::TAG_SizedArray: {
-                            auto& re = se.src.as_SizedArray();
-                            MIRCleanupParam(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_Borrow: {
-                            auto& re = se.src.as_Borrow();
-                            MIRCleanupLValue(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_Cast: {
-                            auto& re = se.src.as_Cast();
-                            MIRCleanupLValue(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_BinOp: {
-                            auto& re = se.src.as_BinOp();
-                            MIRCleanupParam(state, mutator, re.valL);
-                            MIRCleanupParam(state, mutator, re.valR);
-                            break;
-                        }
-                        case MIRRValue::TAG_UniOp: {
-                            auto& re = se.src.as_UniOp();
-                            MIRCleanupLValue(state, mutator, re.val);
-                            break;
-                        }
                         case MIRRValue::TAG_DstMeta: {
                             auto& re = se.src.as_DstMeta();
                             const auto& ty = state.getLvalueType(re.val);
@@ -6720,43 +6713,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIR_ASSERT(state, cleanedTy->is_Borrow() || cleanedTy->is_Pointer(), StringView("Unexpected input type for DstPtr - ") << cleanedTy);
                             break;
                         }
-                        case MIRRValue::TAG_MakeDst: {
-                            auto& re = se.src.as_MakeDst();
-                            MIRCleanupParam(state, mutator, re.ptrVal);
-                            MIRCleanupParam(state, mutator, re.metaVal);
-                            break;
-                        }
-                        case MIRRValue::TAG_Tuple: {
-                            auto& re = se.src.as_Tuple();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_Array: {
-                            auto& re = se.src.as_Array();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_UnionVariant: {
-                            auto& re = se.src.as_UnionVariant();
-                            MIRCleanupParam(state, mutator, re.val);
-                            break;
-                        }
-                        case MIRRValue::TAG_EnumVariant: {
-                            auto& re = se.src.as_EnumVariant();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
-                            break;
-                        }
-                        case MIRRValue::TAG_Struct: {
-                            auto& re = se.src.as_Struct();
-                            for (auto& lv : re.vals) {
-                                MIRCleanupParam(state, mutator, lv);
-                            }
+                        default: {
+                            cleanupOperands.visitRvalue(se.src);
                             break;
                         }
                     }
