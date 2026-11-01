@@ -3293,6 +3293,7 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
         unwindRegion = true;
     }
 
+    Vector<MIRBasicBlockId> deferredTailCalls;
     for (unsigned i = 0; i < code->blocks.size(); i++) {
         const auto& block = code->blocks[i];
         if (cleanupBlocks.count(i) != 0 || cleanupBlockIsNoOp(i) || blockIsForwarded(i) || blockIsInlinedReturn(i)) {
@@ -3313,7 +3314,12 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
             emitStatement(localMirRes, stmt, 1);
         }
         localMirRes.setCurStmtTerm(i);
-        emitBlockTerminator(localMirRes, block.terminator, i, false, 1);
+        if (unwindRegion && block.terminator.is_TailCall()) {
+            deferredTailCalls.pushBack(i);
+            of << StringView("\tgoto trustme_tail_bb") << i << StringView(";\n");
+        } else {
+            emitBlockTerminator(localMirRes, block.terminator, i, false, 1);
+        }
     }
     fallthroughBlock = ~0u;
     if (unwindRegion) {
@@ -3324,6 +3330,11 @@ auto CodeGeneratorC::emitFunctionCode(const HIRPath& p, const HIRFunction& item,
         of << StringView("\t\t}\n");
         of << StringView("\t\tthrow;\n");
         of << StringView("\t}\n");
+    }
+    for (const auto block : deferredTailCalls) {
+        of << StringView("trustme_tail_bb") << block << StringView(":\n");
+        localMirRes.setCurStmtTerm(block);
+        emitTermTailCall(localMirRes, code->blocks[block].terminator.as_TailCall(), 1);
     }
     of << StringView("}\n\n");
     if (item.linkage.name == "main") {

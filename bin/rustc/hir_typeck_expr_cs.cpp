@@ -173,10 +173,13 @@ namespace {
     struct ExprVisitorApply: public HIRExprVisitorDef {
         Context& context;
         const HMTypeInferrence& ivars;
+        const tArgs* callerArgs;
+        const HIRType* callerReturnType;
+        bool inClosure = false;
         HIRPathParams nopImpl;
         HIRPathParams nopItem;
 
-        ExprVisitorApply(Context& context);
+        ExprVisitorApply(Context& context, const tArgs* callerArgs = nullptr, const HIRType* callerReturnType = nullptr);
 
         void visitNodePtr(HIRExprPtr& nodePtr);
 
@@ -7111,7 +7114,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
 
     {
         DEBUG(StringView("==== VALIDATE ==== (") << count << StringView(" rounds)"));
-        ExprVisitorApply visitor{context};
+        ExprVisitorApply visitor{context, &args, resultType};
         visitor.visitNodePtr(expr);
     }
 
@@ -9063,10 +9066,12 @@ auto ExprVisitorRevisit::noRevisit(HIRExprNode& node) -> void {
     BUG(node.span(), StringView("Node revisit unexpected - ") << typeid(node).name());
 }
 
-ExprVisitorApply::ExprVisitorApply(Context& context)
+ExprVisitorApply::ExprVisitorApply(Context& context, const tArgs* callerArgs, const HIRType* callerReturnType)
     : HIRExprVisitorDef(context.crate.types)
     , context(context)
     , ivars(context.ivars)
+    , callerArgs(callerArgs)
+    , callerReturnType(callerReturnType)
 {
     nopImpl = context.resolve.implGenerics().makeNopParams(context.crate.types, 0);
     nopItem = context.resolve.itemGenerics().makeNopParams(context.crate.types, 1);
@@ -9187,15 +9192,34 @@ auto ExprVisitorApply::visit(HIRExprNodeReturn& node) -> void {
     if (!node.isTailCall) {
         return;
     }
+    if (inClosure) {
+        ERROR(node.span(), E0000, StringView("`become` is not allowed in closures"));
+    }
+    const Vector<const HIRType*>* signature = nullptr;
     if (const auto* call = cast<HIRExprNodeCallPath>(node.value.get())) {
         const auto* ufcs = call->path.data.opt_UfcsKnown();
         if (ufcs && (ufcs->trait.path == context.resolve.langFn() || ufcs->trait.path == context.resolve.langFnMut() || ufcs->trait.path == context.resolve.langFnOnce())) {
             ERROR(node.span(), E0000, StringView("tail calls can only be performed with function definitions or pointers"));
         }
+        signature = &call->cache.argTypes;
     } else if (const auto* call = cast<HIRExprNodeCallValue>(node.value.get())) {
         const auto* type = call->value->resType;
         if (!type->is_Function() && !type->is_NamedFunction()) {
             ERROR(node.span(), E0000, StringView("tail calls can only be performed with function definitions or pointers"));
+        }
+        signature = &call->argTypes;
+    }
+    if (!signature || !callerArgs || !callerReturnType || signature->length() != callerArgs->size() + 1) {
+        ERROR(node.span(), E0000, StringView("mismatched signatures in tail call"));
+    }
+    const auto* returnType = checkTypeResolvedTop(node.span(), callerReturnType);
+    if (!returnType->equalsIgnoringRegions(signature->back())) {
+        ERROR(node.span(), E0000, StringView("mismatched signatures in tail call: return types differ"));
+    }
+    for (size_t i = 0; i < callerArgs->size(); i++) {
+        const auto* argumentType = checkTypeResolvedTop(node.span(), (*callerArgs)[i].second);
+        if (!argumentType->equalsIgnoringRegions((*signature)[i])) {
+            ERROR(node.span(), E0000, StringView("mismatched signatures in tail call: argument ") << i << StringView(" differs"));
         }
     }
 }
@@ -9205,14 +9229,20 @@ auto ExprVisitorApply::visit(HIRExprNodeClosure& node) -> void {
         arg.second = this->checkTypeResolvedTop(node.span(), arg.second);
     }
     node.returnType = this->checkTypeResolvedTop(node.span(), node.returnType);
+    const bool wasInClosure = inClosure;
+    inClosure = true;
     HIRExprVisitorDef::visit(node);
+    inClosure = wasInClosure;
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeGenerator& node) -> void {
     node.returnType = this->checkTypeResolvedTop(node.span(), node.returnType);
     node.yieldTy = this->checkTypeResolvedTop(node.span(), node.yieldTy);
     node.resumeTy = this->checkTypeResolvedTop(node.span(), node.resumeTy);
+    const bool wasInClosure = inClosure;
+    inClosure = true;
     HIRExprVisitorDef::visit(node);
+    inClosure = wasInClosure;
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeAsyncBlock& node) -> void {
@@ -9220,7 +9250,10 @@ auto ExprVisitorApply::visit(HIRExprNodeAsyncBlock& node) -> void {
     if (node.isAsyncGen) {
         node.yieldTy = this->checkTypeResolvedTop(node.span(), node.yieldTy);
     }
+    const bool wasInClosure = inClosure;
+    inClosure = true;
     HIRExprVisitorDef::visit(node);
+    inClosure = wasInClosure;
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeGeneratorWrapper& node) -> void {
