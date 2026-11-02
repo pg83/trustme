@@ -3219,8 +3219,11 @@ namespace {
                 }
                 PUTBACK(tok, lex);
                 return ParseTypePath(lex, {}, allowTraitList);
-            case TOK_DOUBLE_COLON:
             case TOK_RWORD_SELF:
+                if (LOOK_AHEAD(lex) != TOK_DOUBLE_COLON) {
+                    ERROR(lex.pointSpan(), E0000, StringView("self is not a type; use a qualified path"));
+                }
+            case TOK_DOUBLE_COLON:
             case TOK_RWORD_SUPER:
             case TOK_RWORD_CRATE:
             case TOK_INTERPOLATED_PATH:
@@ -3355,33 +3358,8 @@ namespace {
                 GET_TOK(tok, lex);
             }
 
-            // TODO: reject a `self` parameter in a function type.
-            {
-                unsigned selfOfs = 0;
-                if (lex.lookahead(selfOfs) == TOK_AMP) {
-                    selfOfs += 1;
-                    if (lex.lookahead(selfOfs) == TOK_LIFETIME) {
-                        selfOfs += 1;
-                    }
-                }
-                if (lex.lookahead(selfOfs) == TOK_RWORD_MUT) {
-                    selfOfs += 1;
-                }
-                if (lex.lookahead(selfOfs) == TOK_RWORD_SELF) {
-                    for (unsigned i = 0; i <= selfOfs; i++) {
-                        GET_TOK(tok, lex);
-                    }
-                    if (lex.getTokenIf(TOK_COLON)) {
-                        args.pushBack(ParseType(lex));
-                    } else {
-                        args.pushBack(mkType(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
-                    }
-                    if (GET_TOK(tok, lex) != TOK_COMMA) {
-                        PUTBACK(tok, lex);
-                        break;
-                    }
-                    continue;
-                }
+            if (lex.lookahead(0) == TOK_RWORD_SELF && lex.lookahead(1) != TOK_DOUBLE_COLON) {
+                ERROR(lex.pointSpan(), E0000, StringView("self parameter is not allowed in function pointer types"));
             }
             {
                 auto* argTy = ParseType(lex);

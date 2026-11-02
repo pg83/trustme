@@ -3025,10 +3025,8 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                             BUG(sp_, StringView("Opaque function origin is not resolved: ") << li.origin);
                         }
                     }
-                    UNREACHABLE();
                 }
             }
-            UNREACHABLE();
         }
     }
     UNREACHABLE();

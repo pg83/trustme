@@ -77,7 +77,6 @@ namespace {
 
         void fmtPath(const HIRPath& p);
 
-        // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<ASTType*> ...]    TODO: Does this need to include the ATY name?
 
         void fmtType(const HIRType* ty);
     };
@@ -490,6 +489,7 @@ auto Mangler::fmtType(const HIRType* ty) -> void {
                 return a->first.ord(b->first.c_str(), b->first.size()) == OrdLess;
             });
             for (const auto* aty : bounds) {
+                this->fmtName(aty->first);
                 this->fmtType(aty->second.type);
             }
             os << e.markers.size();
