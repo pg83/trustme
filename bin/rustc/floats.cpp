@@ -58,12 +58,17 @@ FloatValue positiveNanFloatValue() {
 }
 
 std::string formatFloatValueForToken(FloatValue value) {
+    if (floatValueIsInfinite(value)) {
+        return value < FloatValue() ? "-1e9999" : "1e9999";
+    }
     std::string rv;
     for (int precision = 1; precision <= 36; precision++) {
         StringBuilder out;
         out << formatFloat128(value, precision);
         rv.assign(static_cast<const char*>(out.data()), out.length());
-        if (parseFloatValue(rv.c_str()) == value) {
+        const bool negative = rv.front() == '-';
+        const auto parsed = parseFloatValue(rv.c_str() + (negative ? 1 : 0));
+        if ((negative ? -parsed : parsed) == value) {
             break;
         }
     }

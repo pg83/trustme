@@ -1088,7 +1088,22 @@ namespace {
                 case TOK_RWORD_SUPER:
                 case TOK_RWORD_CRATE:
                 case TOK_LT:
-                case TOK_DOUBLE_LT:
+                case TOK_DOUBLE_LT: {
+                    bool isBuiltin = false;
+                    if (lex.next() == TOK_IDENT && lex.nextTok().ident().name == "builtin") {
+                        auto ahead = lex.clone();
+                        ahead.consume();
+                        isBuiltin = ahead.next() == TOK_HASH;
+                    }
+                    if (isBuiltin) {
+                        lex.consume();
+                        lex.consume();
+                        if (!lex.consumeIf(TOK_IDENT) || lex.next() != TOK_PAREN_OPEN) {
+                            return false;
+                        }
+                        consumeTt(lex);
+                        break;
+                    }
                     if (!consumePath(lex)) {
                         return false;
                     }
@@ -1101,6 +1116,7 @@ namespace {
                         consumeTt(lex);
                     }
                     break;
+                }
 
                 case TOK_INTERPOLATED_EXPR:
                     lex.consume();

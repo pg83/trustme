@@ -974,12 +974,12 @@ namespace {
                                             } else if (const auto* n = cast<const ASTExprNodeFloat>(expr)) {
                                                 const auto value = n->value;
                                                 if (value < FloatValue() || floatValueIsNan(value) || floatValueIsInfinite(value)) {
-                                                    TODO(lex.pointSpan(), StringView("offset_of - invalid tuple indices ") << *expr);
+                                                    ERROR(lex.pointSpan(), E0000, StringView("invalid tuple field index in offset_of: ") << *expr);
                                                 }
                                                 const auto indexLimit = FloatValue(18446744073709551616.0);
                                                 const auto whole = floatValueTrunc(value);
                                                 if (whole >= indexLimit) {
-                                                    TODO(lex.pointSpan(), StringView("offset_of - tuple index is too large ") << *expr);
+                                                    ERROR(lex.pointSpan(), E0000, StringView("tuple field index is too large in offset_of: ") << *expr);
                                                 }
 
                                                 const auto fraction = value - whole;
@@ -997,7 +997,7 @@ namespace {
                                                     }
                                                 }
                                                 if (!foundFractionalIndex || fractionalIndex >= indexLimit) {
-                                                    TODO(lex.pointSpan(), StringView("offset_of - invalid tuple indices ") << *expr);
+                                                    ERROR(lex.pointSpan(), E0000, StringView("invalid tuple field index in offset_of: ") << *expr);
                                                 }
                                                 exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(fractionalIndex)), CORETYPE_ANY));
                                                 exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(whole)), CORETYPE_ANY));
@@ -1006,7 +1006,7 @@ namespace {
                                                 exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), Ident::Hygiene()));
                                                 expr = &*n->obj;
                                             } else {
-                                                TODO(lex.pointSpan(), StringView("offset_of - ") << *expr);
+                                                ERROR(lex.pointSpan(), E0000, StringView("invalid tuple field index in offset_of: ") << *expr);
                                             }
                                         }
                                         while (!exprArgs.empty()) {
@@ -1046,7 +1046,7 @@ namespace {
                                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                                 return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
                             } else {
-                                TODO(lex.pointSpan(), StringView("`builtin #` support - ") << tok.ident());
+                                ERROR(lex.pointSpan(), E0000, StringView("unknown builtin expression ") << tok.ident());
                             }
                         }
                     default:
