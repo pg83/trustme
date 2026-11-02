@@ -3276,21 +3276,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 }
             }
 
-            /* Pointer LUB is the coercion lattice, not a restrictiveness
-             * ranking.  For one jointly-unifiable pointee T its form chains are
-             *
-             *     &mut T <= &T <= *const T
-             *     &mut T <= *mut T <= *const T
-             *
-             * All source forms must be on one chain.  In particular, &T and
-             * *mut T are incomparable here and leave the ivar ambiguous.
-             * Pointees are unified independently.  If they do not unify as
-             * written, each borrow pointee has one directed coercion chain
-             * through proven Deref::Target steps (including [T; N] <= [T]).
-             * The pointee LUB is the unique minimal common member of those
-             * chains.  No common member, or incomparable minimal common
-             * members, is ambiguity.  This applies source-autoderef effects
-             * before the form LUB; it does not order arbitrary types. */
             if (finalPhase || (!hasInferenceBarrier && nSrcIvars == 0)) {
                 struct PointerLubSource {
                     PointerCoercionShape shape;
@@ -3376,26 +3361,25 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     ThinVector<CommonPointee> commonPointees;
                     if (isPointerChain) {
                         for (const auto& proposedBy : sourcePointers) {
-                            for (const auto* proposed : proposedBy.pointeeChain) {
-                                if (std::any_of(commonPointees.begin(), commonPointees.end(), [&](const auto& existing) {
-                                    return pointeesRelate(existing.type, proposed);
-                                })) {
-                                    continue;
+                            const auto* proposed = proposedBy.pointeeChain.front();
+                            if (std::any_of(commonPointees.begin(), commonPointees.end(), [&](const auto& existing) {
+                                return pointeesRelate(existing.type, proposed);
+                            })) {
+                                continue;
+                            }
+                            CommonPointee common{proposed};
+                            for (const auto& source : sourcePointers) {
+                                const auto found = std::find_if(source.pointeeChain.begin(), source.pointeeChain.end(), [&](const auto* reachable) {
+                                    return pointeesRelate(reachable, proposed);
+                                });
+                                if (found == source.pointeeChain.end()) {
+                                    common.positions.clear();
+                                    break;
                                 }
-                                CommonPointee common{proposed};
-                                for (const auto& source : sourcePointers) {
-                                    const auto found = std::find_if(source.pointeeChain.begin(), source.pointeeChain.end(), [&](const auto* reachable) {
-                                        return pointeesRelate(reachable, proposed);
-                                    });
-                                    if (found == source.pointeeChain.end()) {
-                                        common.positions.clear();
-                                        break;
-                                    }
-                                    common.positions.pushBack(static_cast<size_t>(found - source.pointeeChain.begin()));
-                                }
-                                if (!common.positions.empty()) {
-                                    commonPointees.push_back(std::move(common));
-                                }
+                                common.positions.pushBack(static_cast<size_t>(found - source.pointeeChain.begin()));
+                            }
+                            if (!common.positions.empty()) {
+                                commonPointees.push_back(std::move(common));
                             }
                         }
                     }
