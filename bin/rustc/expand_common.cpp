@@ -1694,9 +1694,6 @@ namespace {
                     Expand_ImplDef(es, modpath, mod, e);
                     break;
                 }
-                case ASTItem::TAG_Module: {
-                    UNREACHABLE();
-                }
                 case ASTItem::TAG_Crate: {
                     auto& e = dat.as_Crate();
                     if (modpath.nodes.empty()) {

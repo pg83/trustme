@@ -2981,7 +2981,7 @@ void State::printExprKind(PExpr e, Kind kind, Fixup fixup) {
                 this->printExprStruct(n->path, n->values, n->baseValue, n->baseValue != nullptr);
             } else {
                 const auto* p = cast<const ASTExprNodeStructLiteralPattern>(node);
-                this->printExprStruct(p->path, p->values, nullptr, false);
+                this->printExprStruct(p->path, p->values, nullptr, true);
             }
             break;
         case Kind::Tup: {
