@@ -1548,6 +1548,10 @@ namespace {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 binding = ASTPatternBinding(tok.ident(), bindingType, false);
                 binding.edition = lex.getEdition();
+            } else if (tok.type() == TOK_RWORD_MUT && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_AT && lex.lookahead(2) == TOK_DOUBLE_DOT) {
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                binding = ASTPatternBinding(tok.ident(), ASTPatternBinding::Type::MOVE, true);
+                binding.edition = lex.getEdition();
             } else if (tok.type() == TOK_IDENT && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
                 binding = ASTPatternBinding(tok.ident(), ASTPatternBinding::Type::MOVE, false);
             } else if (tok.type() == TOK_UNDERSCORE && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {
