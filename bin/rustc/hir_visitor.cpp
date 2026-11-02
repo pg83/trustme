@@ -1061,12 +1061,7 @@ const HIRType* HIRVisitor::visitType(const HIRType* ty) {
 
 void HIRVisitor::visitTypeDataChildren(HIRType& data) {
     switch (data.tag()) {
-        case HIRType::TAG_Infer:
-        case HIRType::TAG_Diverge:
-        case HIRType::TAG_Primitive:
-        case HIRType::TAG_Generic:
-        case HIRType::TAG_NodeType:
-            break;
+        default: UNREACHABLE();
         case HIRType::TAG_Path: {
             auto& e = data.as_Path();
             this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
@@ -1111,10 +1106,6 @@ void HIRVisitor::visitTypeDataChildren(HIRType& data) {
             }
             break;
         }
-        case HIRType::TAG_Slice: {
-            data.as_Slice().inner = visitType(data.as_Slice().inner);
-            break;
-        }
         case HIRType::TAG_Pattern: {
             auto& e = data.as_Pattern();
             e.inner = visitType(e.inner);
@@ -1128,32 +1119,9 @@ void HIRVisitor::visitTypeDataChildren(HIRType& data) {
             }
             break;
         }
-        case HIRType::TAG_Tuple: {
-            auto& tuple = data.as_Tuple();
-            for (auto& type : mutRange(tuple)) {
-                type = visitType(type);
-            }
-            break;
-        }
-        case HIRType::TAG_Borrow: {
-            data.as_Borrow().inner = visitType(data.as_Borrow().inner);
-            break;
-        }
-        case HIRType::TAG_Pointer: {
-            data.as_Pointer().inner = visitType(data.as_Pointer().inner);
-            break;
-        }
         case HIRType::TAG_NamedFunction: {
             auto& e = data.as_NamedFunction();
             this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
-            break;
-        }
-        case HIRType::TAG_Function: {
-            auto& e = data.as_Function();
-            for (auto& type : mutRange(e.argTypes)) {
-                type = visitType(type);
-            }
-            e.rettype = visitType(e.rettype);
             break;
         }
     }

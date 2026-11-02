@@ -617,6 +617,19 @@ namespace {
         return true;
     }
 
+    bool consumeTypeBoundConstness(TokenStreamRO& lex) {
+        if (lex.consumeIf(TOK_TILDE)) {
+            return lex.consumeIf(TOK_RWORD_CONST);
+        }
+        if (lex.consumeIf(TOK_RWORD_CONST)) {
+            return true;
+        }
+        if (lex.consumeIf(TOK_SQUARE_OPEN)) {
+            return lex.consumeIf(TOK_RWORD_CONST) && lex.consumeIf(TOK_SQUARE_CLOSE);
+        }
+        return true;
+    }
+
     bool consumeTypeTraitList(TokenStreamRO& lex) {
         do {
             if (lex.consumeIf(TOK_RWORD_USE)) {
@@ -632,11 +645,18 @@ namespace {
                 return false;
             }
             lex.consumeIf(TOK_QMARK);
+            if (!consumeTypeBoundConstness(lex)) {
+                return false;
+            }
             if (lex.consumeIf(TOK_RWORD_FOR)) {
                 if (!opensAngle(lex.next()) || !consumeTtAngle(lex)) {
                     return false;
                 }
             }
+            if (!consumeTypeBoundConstness(lex)) {
+                return false;
+            }
+            lex.consumeIf(TOK_RWORD_ASYNC);
             if (!consumePath(lex, true)) {
                 return false;
             }
@@ -695,6 +715,15 @@ namespace {
             case TOK_DOUBLE_AMP:
                 lex.consume();
                 lex.consumeIf(TOK_LIFETIME);
+                if (lex.next() == TOK_IDENT && lex.nextTok().ident().name == "pin") {
+                    auto afterPin = lex.clone();
+                    afterPin.consume();
+                    if (afterPin.next() == TOK_RWORD_MUT || afterPin.next() == TOK_RWORD_CONST) {
+                        lex.consume();
+                        lex.consume();
+                        return consumeType(lex);
+                    }
+                }
                 lex.consumeIf(TOK_RWORD_MUT);
                 return consumeType(lex);
             case TOK_STAR:
