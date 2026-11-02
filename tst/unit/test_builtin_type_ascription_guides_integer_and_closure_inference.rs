@@ -1,4 +1,4 @@
-//@ compile-fail: type mismatch
+//@ compile-fail: mismatch
 #![feature(type_ascription, builtin_syntax)]
 fn main() {
     let small = builtin # type_ascribe(250, u8);

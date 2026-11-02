@@ -896,7 +896,7 @@ NODE(ASTExprNodeIndex, { os << StringView("(") << *obj << StringView(")[") << *i
 NODE(ASTExprNodeDeref, { os << StringView("*(") << *value << StringView(")"); }, { return NEWNODE(ASTExprNodeDeref, value->clone()); });
 
 NODE(ASTExprNodeCast, { os << StringView("(") << *value << StringView(" as ") << type << StringView(")"); }, { return NEWNODE(ASTExprNodeCast, value->clone(), type->clone()); })
-NODE(ASTExprNodeTypeAnnotation, { os << StringView("(") << *value << StringView(": ") << type << StringView(")"); }, { return NEWNODE(ASTExprNodeTypeAnnotation, value->clone(), type->clone()); })
+NODE(ASTExprNodeTypeAnnotation, { os << StringView("(") << *value << StringView(": ") << type << StringView(")"); }, { return NEWNODE(ASTExprNodeTypeAnnotation, value->clone(), type->clone(), isTypeAscription); })
 
 NODE(
     ASTExprNodeBinOp,
@@ -1468,9 +1468,10 @@ ASTExprNodeCast::ASTExprNodeCast(ASTExprNode* value, ASTType*&& dstType)
 {
 }
 
-ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNode* value, ASTType*&& dstType)
+ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNode* value, ASTType*&& dstType, bool isTypeAscription)
     : value(value)
     , type(std::move(dstType))
+    , isTypeAscription(isTypeAscription)
 {
 }
 

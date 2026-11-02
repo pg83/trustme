@@ -964,10 +964,11 @@ HIRExprNodeCast::HIRExprNodeCast(Span sp, HIRExprNodeP value, const HIRType* dst
 {
 }
 
-HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRType* dstType)
+HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRType* dstType, bool isTypeAscription)
     : HIRExprNode(mv$(sp))
     , value(mv$(value))
     , dstType(mv$(dstType))
+    , isTypeAscription(isTypeAscription)
 {
 }
 

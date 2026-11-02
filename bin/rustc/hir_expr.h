@@ -360,8 +360,9 @@ struct HIRExprNodeUnsize: public HIRExprNode {
     HIRExprNodeP value;
     const HIRType* dstType;
     bool isArrayToSliceAdjustment = false;
+    bool isTypeAscription;
 
-    HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRType* dstType);
+    HIRExprNodeUnsize(Span sp, HIRExprNodeP value, const HIRType* dstType, bool isTypeAscription = false);
 
     static constexpr unsigned int kind = 18;
     unsigned int nodeKind() const override;

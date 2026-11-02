@@ -4863,9 +4863,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeCast& v) -> void {
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeTypeAnnotation& v) -> void {
-    // TODO: Create a proper node for this
-
-    rv.reset(ctx.crate->pool->make<HIRExprNodeUnsize>(v.span(), lower(v.value), ctx.LowerHIRType(v.type)));
+    rv.reset(ctx.crate->pool->make<HIRExprNodeUnsize>(v.span(), lower(v.value), ctx.LowerHIRType(v.type), v.isTypeAscription));
 }
 
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeCallPath& v) -> void {

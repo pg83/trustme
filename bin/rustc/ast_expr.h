@@ -690,8 +690,9 @@ struct ASTExprNodeCast: public ASTExprNode {
 struct ASTExprNodeTypeAnnotation: public ASTExprNode {
     ASTExprNode* value = nullptr;
     ASTType* type;
+    bool isTypeAscription;
 
-    ASTExprNodeTypeAnnotation(ASTExprNode* value, ASTType*&& dstType);
+    ASTExprNodeTypeAnnotation(ASTExprNode* value, ASTType*&& dstType, bool isTypeAscription = false);
 
     static constexpr unsigned int kind = 36;
     unsigned int nodeKind() const override;

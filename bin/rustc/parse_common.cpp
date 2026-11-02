@@ -1044,7 +1044,7 @@ namespace {
                                 GET_CHECK_TOK(tok, lex, TOK_COMMA);
                                 auto ty = ParseType(lex);
                                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-                                return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
+                                return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty), true);
                             } else {
                                 ERROR(lex.pointSpan(), E0000, StringView("unknown builtin expression ") << tok.ident());
                             }

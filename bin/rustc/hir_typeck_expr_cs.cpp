@@ -8147,8 +8147,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
                         bad_cast(sp, srcTy, tgtTy, "fcn src");
                     }
                     if (this->isFallback) {
-                        this->context.equateTypes(sp, srcTy, tgtTy);
-                        this->completed = true;
+                        ERROR(sp, E0000, StringView("type annotations needed: cannot infer the source type of a function pointer cast"));
                     }
                     break;
                 }
@@ -11414,7 +11413,11 @@ auto ExprVisitorEnum::visit(HIRExprNodeUnsize& node) -> void {
     this->visitChild(*node.value);
     this->inheritDivergence(node, *node.value);
 
-    this->context.equateTypesCoerce(node.value->span(), node.dstType, node.value);
+    if (node.isTypeAscription) {
+        this->context.equateTypesInner(node.value->span(), node.dstType, node.value->resType);
+    } else {
+        this->context.equateTypesCoerce(node.value->span(), node.dstType, node.value);
+    }
     this->context.equateTypes(node.span(), node.resType, node.dstType);
 }
 
