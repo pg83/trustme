@@ -9420,14 +9420,30 @@ auto ExprVisitorApply::visit(HIRExprNodeCast& node) -> void {
     HIRExprVisitorDef::visit(node);
     const auto* source = node.value->resType->opt_Path();
     const auto* target = node.dstType->opt_Primitive();
-    if (source && source->binding.is_Enum() && target && !isInteger(*target)) {
-        ERROR(node.span(), E0000, StringView("Invalid cast from enum ") << node.value->resType << StringView(" to ") << node.dstType);
-    }
-    if (target && isFloat(*target)) {
+    if (target && !node.value->resType->is_Diverge()) {
         const auto* primitive = node.value->resType->opt_Primitive();
-        if (!primitive || (!isInteger(*primitive) && !isFloat(*primitive))) {
+        bool valid = false;
+        if (primitive && *primitive == *target && *target != HIRCoreType::Str) {
+            valid = true;
+        } else if (*target == HIRCoreType::Char) {
+            valid = primitive && *primitive == HIRCoreType::U8;
+        } else if (isFloat(*target)) {
+            valid = primitive && (isInteger(*primitive) || isFloat(*primitive));
+        } else if (isInteger(*target)) {
+            valid = (primitive && *primitive != HIRCoreType::Str)
+                || (source && source->binding.is_Enum())
+                || node.value->resType->is_Pointer()
+                || node.value->resType->is_Function()
+                || node.value->resType->is_NamedFunction();
+        }
+        if (!valid) {
             ERROR(node.span(), E0000, StringView("Invalid cast from ") << node.value->resType << StringView(" to ") << node.dstType);
         }
+    }
+    if (const auto* pointer = node.dstType->opt_Pointer();
+        pointer && (node.value->resType->is_Function() || node.value->resType->is_NamedFunction())
+            && context.resolve.typeIsSized(node.span(), pointer->inner) != SolverCertainty::Proven) {
+        ERROR(node.span(), E0000, StringView("Invalid cast from ") << node.value->resType << StringView(" to ") << node.dstType);
     }
 }
 

@@ -9984,74 +9984,16 @@ auto ExprVisitorConv::visit(HIRExprNodeCast& node) -> void {
             }
             case HIRType::TAG_Pointer: {
                 auto& de = (*tyOut).as_Pointer();
-                if (tyIn->is_Primitive()) {
-                    const auto& ie = tyIn->as_Primitive();
-                    switch (ie) {
-                        case HIRCoreType::Bool:
-                        case HIRCoreType::Char:
-                        case HIRCoreType::Str:
-                        case HIRCoreType::F32:
-                        case HIRCoreType::F64:
-                            BUG(node.span(), StringView("Cannot cast to pointer from ") << tyIn);
-                        default:
-                            break;
-                    }
-                    // TODO: Only valid if T: Sized in *{const/mut/move} T
-                } else if (const auto* se = tyIn->opt_Borrow()) {
-                    if (de.inner != se->inner && !de.inner->equalsIgnoringRegions(se->inner)) {
-                        BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                    }
-                } else if (tyIn->is_Function() || tyIn->is_NamedFunction()) {
-                    if (!builder.resolve().typeIsSized(node.span(), de.inner)) {
-                        BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                    }
-                } else if (const auto* se = tyIn->opt_Pointer()) {
-                    if (se->inner == de.inner) {
-                    } else if (builder.resolve().canUnsize(node.span(), de.inner, se->inner)) {
+                if (const auto* se = tyIn->opt_Pointer()) {
+                    if (se->inner != de.inner && builder.resolve().canUnsize(node.span(), de.inner, se->inner)) {
                         builder.setResult(node.span(), MIRRValue::make_MakeDst({mv$(val), MIRConstant::make_ItemAddr({})}));
                         auto tmpTy = builder.resolve().crate.types.pointer(se->type, de.inner);
                         val = builder.getResultInLvalue(node.value->span(), tmpTy);
                     }
-                } else {
-                    BUG(node.span(), StringView("Cannot cast to pointer from ") << tyIn);
                 }
                 break;
             }
             case HIRType::TAG_Primitive: {
-                auto& de = (*tyOut).as_Primitive();
-                switch (de) {
-                    case HIRCoreType::Str:
-                        BUG(node.span(), StringView("Cannot cast to str"));
-                    case HIRCoreType::Char:
-                        if (tyIn->is_Primitive() && tyIn->as_Primitive() == HIRCoreType::U8) {
-                        } else {
-                            BUG(node.span(), StringView("Cannot cast to char from ") << tyIn);
-                        }
-                        break;
-                    case HIRCoreType::Bool:
-                        BUG(node.span(), StringView("Cannot cast to bool"));
-                    case HIRCoreType::F32:
-                    case HIRCoreType::F64:
-                        if (!tyIn->is_Primitive()) {
-                            BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                        }
-                        break;
-                    default:
-                        if (tyIn->opt_Primitive()) {
-                        } else if (const auto* se = tyIn->opt_Path()) {
-                            if (se->binding.is_Enum()) {
-                                // TODO: Check if it's a repr(ty/C) enum - and if the type matches
-                            } else {
-                                BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                            }
-                        } else if (tyIn->is_Pointer()) {
-                            // TODO: Only valid for T: Sized?
-                        } else if (tyIn->is_Function() || tyIn->is_NamedFunction()) {
-                        } else {
-                            BUG(node.span(), StringView("Cannot cast to ") << tyOut << StringView(" from ") << tyIn);
-                        }
-                        break;
-                }
                 break;
             }
         }
