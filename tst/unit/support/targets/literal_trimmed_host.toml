@@ -1,0 +1,11 @@
+[target]
+family = '''
+unix'''
+os-name = 'linux'
+env-name = '''
+musl'''
+arch = '''
+x86_64'''
+[backend.c]
+emulate-i128 = false
+# the final comment is intentionally not terminated by a newline

@@ -447,8 +447,15 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                 c = is.get();
                 if (c != '\'') {
                     str = "";
+                    if (c != EOF) {
+                        is.putback((char)c);
+                    }
                 } else {
                     c = is.get();
+                    if (c == '\r' && is.peek() == '\n') {
+                        is.get();
+                        c = '\n';
+                    }
                     if (c == '\n') {
                         line++;
                         c = is.get();
@@ -459,6 +466,9 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                             if (c == '\'') {
                                 c = is.get();
                                 if (c == '\'') {
+                                    for (unsigned extra = 0; extra < 2 && is.peek() == '\''; extra++) {
+                                        str += (char)is.get();
+                                    }
                                     break;
                                 }
                                 str += '\'';
@@ -471,6 +481,7 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                         if (c == EOF) {
                             throw std::runtime_error("Unexpected EOF in triple-quoted string");
                         }
+                        str += (char)c;
                         c = is.get();
                     }
                 }
@@ -479,8 +490,8 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                     if (c == EOF) {
                         throw std::runtime_error("Unexpected EOF in single-quoted string");
                     }
-                    if (c == '\n') {
-                        line++;
+                    if (c == '\n' || c == '\r') {
+                        throw std::runtime_error("Unexpected newline in single-line string");
                     }
                     str += (char)c;
                     c = is.get();
@@ -496,6 +507,10 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                     return TomlToken{Type::String, ""};
                 } else {
                     c = is.get();
+                    if (c == '\r' && is.peek() == '\n') {
+                        is.get();
+                        c = '\n';
+                    }
                     if (c == '\n') {
                         line++;
                         c = is.get();
@@ -506,6 +521,9 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                             if (c == '"') {
                                 c = is.get();
                                 if (c == '"') {
+                                    for (unsigned extra = 0; extra < 2 && is.peek() == '"'; extra++) {
+                                        str += (char)is.get();
+                                    }
                                     break;
                                 }
                                 str += '"';
@@ -536,8 +554,8 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                         c = is.get();
                         continue;
                     }
-                    if (c == '\n') {
-                        line++;
+                    if (c == '\n' || c == '\r') {
+                        throw std::runtime_error("Unexpected newline in single-line string");
                     }
                     str += (char)c;
                     c = is.get();
@@ -596,6 +614,7 @@ TomlLexer::TomlToken TomlLexer::TomlToken::lexFromInner(std::ifstream& is, unsig
                             val += c - '0';
                         }
                     } else {
+                        isAllDigit = false;
                     }
                 } else {
                     for (; i < str.size(); i++) {

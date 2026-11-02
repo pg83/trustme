@@ -959,9 +959,6 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
             auto& e = v.as_StructConstructor();
             return e.s;
         }
-        case TypeckValuePtr::TAG_StructConstant: {
-            TODO(sp, StringView("Handle StructConstant - ") << path);
-        }
     }
     UNREACHABLE();
 }
@@ -6091,9 +6088,6 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                     }
                     case TypeckValuePtr::TAG_StructConstructor: {
                         TODO(sp, StringView("Handle StructConstructor - ") << p);
-                    }
-                    case TypeckValuePtr::TAG_StructConstant: {
-                        TODO(sp, StringView("Handle StructConstant - ") << p);
                     }
                 }
                 break;

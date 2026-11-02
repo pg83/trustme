@@ -1,0 +1,16 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "musl"
+arch = "x86_64"
+[arch.alignments]
+u16 = 2
+u32 = 4
+u64 = 8
+ptr = 8
+0xG0 = 2
+0o89 = 4
+0b102 = 8
+0z12 = 16
+[backend.c]
+emulate-i128 = false

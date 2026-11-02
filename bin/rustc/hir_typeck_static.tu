@@ -22,9 +22,5 @@ generate(
             ("const HIRSimplePath*", "p"),
             ("const HIRStruct*", "s"),
         ]),
-        v("StructConstant", fields=[
-            ("const HIRSimplePath*", "p"),
-            ("const HIRStruct*", "s"),
-        ]),
     ],
 )

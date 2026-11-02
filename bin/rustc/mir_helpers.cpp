@@ -867,9 +867,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                     rv = resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
-                case TypeckValuePtr::TAG_StructConstant: {
-                    MIR_BUG(*this, c << StringView(" pointing to a struct constant"));
-                }
                 case TypeckValuePtr::TAG_StructConstructor: {
                     auto& ve = v.as_StructConstructor();
                     auto rv = crate.types.function((HIRType::Data_NamedFunction{e->clone(), ve.s}).decay(crate.types, this->sp));
