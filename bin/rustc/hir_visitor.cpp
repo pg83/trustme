@@ -405,10 +405,6 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         DEBUG(StringView("const ") << ent.first);
         this->visitConstant(p + ent.first, ent.second.data);
     }
-    for (auto& ent : impl.statics) {
-        DEBUG(StringView("static ") << ent.first);
-        this->visitStatic(p + ent.first, ent.second.data);
-    }
     for (auto& ent : impl.types) {
         TRACE_FUNCTION_F(StringView("type ") << ent.first << StringView(" = ") << ent.second.data);
         ent.second.data = visitTraitImplType(ent.second.data);

@@ -2134,13 +2134,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         }
                     }
                     if (thisRv.is_NotFound()) {
-                        auto it = ti.statics.find(pe.item);
-                        if (it != ti.statics.end()) {
-                            isSpec = it->second.isSpecialisable;
-                            thisRv = &it->second.data;
-                        }
-                    }
-                    if (thisRv.is_NotFound()) {
                         auto it = ti.methods.find(pe.item);
                         if (it != ti.methods.end()) {
                             isSpec = it->second.isSpecialisable;

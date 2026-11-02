@@ -14822,7 +14822,7 @@ auto NextTraitGoalEvaluator::implDefinesValue(const SolverImpl& impl, const char
         return false;
     }
     const auto name = RcString::newInterned(valueName);
-    return impl.traitImpl->constants.count(name) || impl.traitImpl->statics.count(name) || impl.traitImpl->methods.count(name);
+    return impl.traitImpl->constants.count(name) || impl.traitImpl->methods.count(name);
 }
 
 auto NextTraitGoalEvaluator::specializationValueSource(const Candidate* selected, const char* valueName) -> const Candidate* {

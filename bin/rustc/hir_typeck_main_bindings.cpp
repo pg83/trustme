@@ -777,14 +777,6 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             const auto& implConst = e.second.data;
             const auto& traitConst = vi.as_Constant();
         }
-        for (const auto& e : impl.statics) {
-            const auto& vi = trait.values.at(e.first);
-            if (!vi.is_Static()) {
-                ERROR(sp, E0000, StringView("Trait ") << traitPath << StringView(" doesn't have a static named ") << e.first);
-            }
-            const auto& implStatic = e.second.data;
-            const auto& traitStatic = vi.as_Static();
-        }
         for (const auto& e : trait.types) {
             const auto& traitType = trait.types.at(e.first);
             const auto& implType = e.second;

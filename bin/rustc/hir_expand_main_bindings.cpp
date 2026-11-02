@@ -3563,20 +3563,20 @@ auto H::makeFnfree(HIRTypeInterner& types, HIRGenericParams params, const HIRTyp
 auto H::makeFnonce(HIRGenericParams params, HIRPathParams traitParams, const HIRType* closureType, std::pair<HIRPattern, const HIRType*> argsArgent, const HIRType* retTy, HIRExprPtr code) -> HIRTraitImpl {
     auto tyOfSelf = closureType;
     fixFnParams(code, tyOfSelf, argsArgent.second);
-    return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call_once"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::Value, HIRGenericParams{}, makeVec2(std::make_pair(HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, makeMap1(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<const HIRType*>{false, mv$(retTy)}), HIRSimplePath()};
+    return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call_once"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::Value, HIRGenericParams{}, makeVec2(std::make_pair(HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, makeMap1(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<const HIRType*>{false, mv$(retTy)}), HIRSimplePath()};
 }
 
 auto H::makeFnmut(HIRTypeInterner& types, HIRGenericParams params, HIRPathParams traitParams, const HIRType* closureType, std::pair<HIRPattern, const HIRType*> argsArgent, const HIRType* retTy, HIRExprPtr code) -> HIRTraitImpl {
     HIRGenericParams fcnParams;
     auto tyOfSelf = types.borrow(HIRBorrowType::Unique, closureType);
     fixFnParams(code, tyOfSelf, argsArgent.second);
-    return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call_mut"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowUnique, mv$(fcnParams), makeVec2(std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
+    return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call_mut"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowUnique, mv$(fcnParams), makeVec2(std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, HIRSimplePath()};
 }
 
 auto H::makeFn(HIRTypeInterner& types, HIRGenericParams params, HIRPathParams traitParams, const HIRType* closureType, std::pair<HIRPattern, const HIRType*> argsArgent, const HIRType* retTy, HIRExprPtr code) -> HIRTraitImpl {
     auto tyOfSelf = types.borrow(HIRBorrowType::Shared, closureType);
     fixFnParams(code, tyOfSelf, argsArgent.second);
-    return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowShared, HIRGenericParams{}, makeVec2(std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
+    return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowShared, HIRGenericParams{}, makeVec2(std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, HIRSimplePath()};
 }
 
 ClosureExprVisitorExtract::ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const HIRType* selfType, const Vector<const HIRType*>& varTypes, const HIRExprPtr& exprPtr, OutState& out, const char* newTypeSuffix, bool isAsyncDropIntrinsic)
@@ -3889,7 +3889,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 params.clone(),
                 {},
                 closureType,
-                {},
                 {},
                 {},
                 {},

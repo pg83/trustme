@@ -607,7 +607,6 @@ public:
 
     std::map<RcString, ImplEnt<HIRFunction>> methods;
     std::map<RcString, ImplEnt<HIRConstant>> constants;
-    std::map<RcString, ImplEnt<HIRStatic>> statics;
 
     std::map<RcString, ImplEnt<const HIRType*>> types;
 

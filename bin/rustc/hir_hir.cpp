@@ -123,9 +123,6 @@ namespace {
                 for (auto& pair : impl.constants) {
                     cache.constants.insert(&pair.second.data, &pair.second.data);
                 }
-                for (auto& pair : impl.statics) {
-                    cache.statics.insert(&pair.second.data, &pair.second.data);
-                }
             });
         }
     }

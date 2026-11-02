@@ -1735,12 +1735,8 @@ auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
         DEBUG((isSpec ? "default " : "") << StringView("const ") << name);
         rv.constants.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRConstant>{isSpec, deserialiseConstant()}));
     }
-    size_t staticCount = in.readCount();
-    for (size_t i = 0; i < staticCount; i++) {
-        auto name = in.readIstring();
-        auto isSpec = in.readBool();
-        DEBUG((isSpec ? "default " : "") << StringView("static ") << name);
-        rv.statics.insert(std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRStatic>{isSpec, deserialiseStatic()}));
+    if (in.readCount() != 0) {
+        ERROR(Span(), E0000, StringView("associated static items are not allowed in crate metadata"));
     }
     size_t typeCount = in.readCount();
     for (size_t i = 0; i < typeCount; i++) {
@@ -3753,13 +3749,7 @@ auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
-    out.writeCount(impl.statics.size());
-    for (const auto& v : impl.statics) {
-        DEBUG(StringView("static ") << v.first);
-        out.writeString(v.first);
-        out.writeBool(v.second.isSpecialisable);
-        serialise(v.second.data);
-    }
+    out.writeCount(0);
     out.writeCount(impl.types.size());
     for (const auto& v : impl.types) {
         DEBUG(StringView("type ") << v.first);

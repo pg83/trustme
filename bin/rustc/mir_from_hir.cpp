@@ -7388,6 +7388,11 @@ void MirBuilder::writeLoopHeadWhole(const Span& sp, const MIRLValue& lv, unsigne
 
 void MirBuilder::movedLvalue(const Span& sp, const MIRLValue& lv) {
     if (!lvalueIsCopy(sp, lv)) {
+        for (const auto& wrapper : lv.wrappers) {
+            if ((wrapper.is_Field() || wrapper.is_Index()) && valType(sp, lv, &wrapper)->is_Slice()) {
+                ERROR(sp, E0000, StringView("cannot move out of a non-Copy slice: ") << lv);
+            }
+        }
         auto* vsP = getValStateMutP(sp, lv);
         if (!vsP) {
             ERROR(sp, E0000, StringView("Attempting to move out of invalid slot - ") << lv);
