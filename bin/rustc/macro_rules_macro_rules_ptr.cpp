@@ -13,12 +13,7 @@ MacroRulesPtr::MacroRulesPtr(MacroRules* p)
 {
 }
 
-MacroRulesPtr::~MacroRulesPtr() {
-    if (ptr) {
-        delete ptr;
-        ptr = nullptr;
-    }
-}
+MacroRulesPtr::~MacroRulesPtr() = default;
 
 MacroRulesPtr::MacroRulesPtr(MacroRulesPtr&& x)
     : ptr(x.ptr)

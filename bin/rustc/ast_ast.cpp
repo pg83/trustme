@@ -10,6 +10,7 @@
 #include "parse_ttstream.h"
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
+#include "macro_rules_macro_rules.h"
 
 #include <algorithm>
 
@@ -354,7 +355,7 @@ ASTItem ASTItem::clone() const {
             return ASTItem(as_MacroInv().clone());
         }
         case ASTItem::TAG_Macro: {
-            TODO(Span(), StringView("Clone on Item::Macro"));
+            return ASTItem(as_Macro()->clone());
         }
         case ASTItem::TAG_Use: {
             auto& e = (*this).as_Use();

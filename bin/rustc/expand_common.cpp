@@ -1636,6 +1636,10 @@ namespace {
                 case ASTItem::TAG_Macro: {
                     auto& e = dat.as_Macro();
                     ASSERT_BUG(i.span, e, StringView("Null macro - ") << i.name);
+                    Ident::ModPath definitionModule;
+                    definitionModule.crate = mod.path().crate;
+                    definitionModule.ents = mod.path().nodes;
+                    e->hygiene.setModPath(*es.wb.pool, mv$(definitionModule));
                     mod.addMacro(i.vis.isGlobal(), i.name, mv$(e));
                     dat = ASTItem::make_None({});
                     break;

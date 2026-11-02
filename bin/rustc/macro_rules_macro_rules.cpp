@@ -15,6 +15,7 @@
 #include "parse_interpolated_fragment.h"
 
 #include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
 
 #include <sstream>
 #include <limits.h>
@@ -1546,6 +1547,15 @@ namespace {
         }
         DEBUG(StringView("Check item: ") << lex.nextTok());
         switch (lex.next()) {
+            case TOK_RWORD_MACRO:
+                lex.consume();
+                if (!lex.consumeIf(TOK_IDENT)) {
+                    return false;
+                }
+                if (lex.next() == TOK_PAREN_OPEN && !consumeTt(lex)) {
+                    return false;
+                }
+                return lex.next() == TOK_BRACE_OPEN && consumeTt(lex);
             case TOK_RWORD_USE:
                 while (lex.next() != TOK_SEMICOLON) {
                     lex.consume();
@@ -2635,7 +2645,7 @@ namespace {
 
     MacroRulesPtr makeMrPtr(TokenStream& lex) {
         auto s = lex.pointSpan();
-        auto rv = MacroRulesPtr(new MacroRules(lex.parseState().wb->id, s.dollarCrateName(), lex.getEdition()));
+        auto rv = MacroRulesPtr(lex.typePool().make<MacroRules>(lex.parseState().wb->id, lex.typePool(), s.dollarCrateName(), lex.getEdition()));
         rv->hygiene = lex.getHygiene();
         return rv;
     }
@@ -3876,11 +3886,36 @@ MacroRulesArm::MacroRulesArm(std::vector<SimplePatEnt> pattern, std::vector<Macr
 {
 }
 
-MacroRules::MacroRules(u32& id, RcString sourceCrate, ASTEdition edition)
-    : definitionId(++id)
+MacroRules::MacroRules(u32& id, ObjPool& pool, RcString sourceCrate, ASTEdition edition)
+    : nextDefinitionId_(id)
+    , pool_(pool)
+    , definitionId(++id)
     , sourceCrate(std::move(sourceCrate))
     , edition(edition)
 {
+}
+
+auto MacroRules::clone() const -> MacroRulesPtr {
+    auto result = MacroRulesPtr(pool_.make<MacroRules>(nextDefinitionId_, pool_, sourceCrate, edition));
+    result->exported = exported;
+    result->isMacroItem = isMacroItem;
+    result->transparent = transparent;
+    result->localInnerMacros = localInnerMacros;
+    result->hygiene = hygiene;
+    result->definitionHygiene = definitionHygiene;
+    result->definitionSpan = definitionSpan;
+    for (const auto& arm : rules) {
+        auto& cloned = result->rules.emplace_back();
+        cloned.paramNames = arm.paramNames;
+        cloned.tokenCaptures = arm.tokenCaptures;
+        for (const auto& entry : arm.pattern) {
+            cloned.pattern.push_back(entry.clone());
+        }
+        for (const auto& entry : arm.contents) {
+            cloned.contents.push_back(entry.clone());
+        }
+    }
+    return result;
 }
 
 #include "macro_rules_capture_tu.cpp"

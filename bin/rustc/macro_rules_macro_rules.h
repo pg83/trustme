@@ -128,6 +128,9 @@ struct MacroRulesArm {
 };
 
 class MacroRules {
+    u32& nextDefinitionId_;
+    stl::ObjPool& pool_;
+
 public:
     unsigned int definitionId;
 
@@ -150,7 +153,9 @@ public:
 
     std::vector<MacroRulesArm> rules;
 
-    MacroRules(u32& id, RcString sourceCrate, ASTEdition edition);
+    MacroRules(u32& id, stl::ObjPool& pool, RcString sourceCrate, ASTEdition edition);
+
+    auto clone() const -> MacroRulesPtr;
 
     virtual ~MacroRules();
     MacroRules(MacroRules&&) = default;

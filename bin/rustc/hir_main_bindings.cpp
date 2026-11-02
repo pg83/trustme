@@ -1780,13 +1780,13 @@ auto HirDeserialiser::deserialiseHygine() -> Ident::Hygiene {
 }
 
 auto HirDeserialiser::deserialiseMacrorulesptr() -> ::MacroRulesPtr {
-    return ::MacroRulesPtr(new MacroRules(deserialiseMacrorules()));
+    return ::MacroRulesPtr(pool.make<MacroRules>(deserialiseMacrorules()));
 }
 
 auto HirDeserialiser::deserialiseMacrorules() -> ::MacroRules {
     auto crateName = in.readIstring();
     auto edition = static_cast<ASTEdition>(in.readTag());
-    ::MacroRules rv(id, crateName, edition);
+    ::MacroRules rv(id, pool, crateName, edition);
     rv.isMacroItem = in.readBool();
     rv.transparent = in.readBool();
     rv.localInnerMacros = in.readBool();
