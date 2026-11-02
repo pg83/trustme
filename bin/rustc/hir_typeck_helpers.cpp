@@ -6514,12 +6514,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
     if ((destination->is_Infer() && destination->as_Infer().isLit()) || destination->is_Diverge() || (source->is_Infer() && source->as_Infer().isLit())) {
         return relateEquality(destination, source);
     }
-    /* Two projections with nothing left to infer relate as upstream relates two
-       aliases: `coerce` finds no unsizing for them and ends in `unify`, which holds
-       for the same item over the same inputs and fails otherwise - after either has
-       been normalized as far as it goes.  `T::Type1` is not reached from `T::Type2`;
-       waiting for a normalization that cannot come left a method with a route per
-       bound undecided. */
+    bool distinctRigidProjections = false;
     const auto rigidProjection = [&](const HIRType* type) {
         const auto* path = type->opt_Path();
         return path && (path->binding.is_Unbound() || path->binding.is_Opaque()) && path->path.data.is_UfcsKnown() && !ivars.typeContainsIvars(type);
@@ -6530,7 +6525,10 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         const auto outcome = distinct.unify(destination, source);
         ivars.rollbackTo(snapshot);
         if (outcome == Unifier::Outcome::Mismatch) {
-            return SolverCertainty::NoSolution;
+            if (destination->as_Path().binding.is_Unbound() || source->as_Path().binding.is_Unbound()) {
+                return SolverCertainty::NoSolution;
+            }
+            distinctRigidProjections = true;
         }
     }
     if (destination->is_Infer() || source->is_Infer() || (destination->is_Path() && destination->as_Path().binding.is_Unbound()) || (source->is_Path() && source->as_Path().binding.is_Unbound())) {
@@ -6555,6 +6553,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         if (result != SolverCertainty::NoSolution) {
             return result;
         }
+    }
+    if (distinctRigidProjections) {
+        return SolverCertainty::NoSolution;
     }
 
     const auto relateValues = [&](const HIRParamsList<HIRConstGeneric>& left, const HIRParamsList<HIRConstGeneric>& right) {

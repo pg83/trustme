@@ -924,6 +924,13 @@ namespace {
         if (dstTy == srcTy) {
             return MIRRValue::make_Use(mv$(value));
         }
+        const auto deferred = [](const HIRType* type) {
+            const auto* path = type->opt_Path();
+            return type->is_Generic() || (path && path->binding.is_Opaque());
+        };
+        if (deferred(dstTy) || deferred(srcTy)) {
+            return MIRRValue::make_MakeDst({mv$(value), MIRConstant::make_ItemAddr({})});
+        }
 
         if (dstTy->is_Path()) {
             MIR_ASSERT(state, srcTy->is_Path(), StringView("CoerceUnsized to Path must have a Path source - ") << srcTy << StringView(" to ") << dstTy);
@@ -1013,18 +1020,18 @@ namespace {
         }
 
         if (dstTy->is_Pointer()) {
-            MIR_ASSERT(state, srcTy->is_Pointer(), StringView("CoerceUnsized to Pointer must have a Pointer source - ") << srcTy << StringView(" to ") << dstTy);
             const auto& dte = dstTy->as_Pointer();
+            if (const auto* source = srcTy->opt_Borrow()) {
+                MIR_ASSERT(state, dte.type <= source->type, StringView("CoerceUnsize attempting to raise pointer type"));
+                return MIRCleanupUnsize(state, mutator, dstTy, source->inner, mv$(value));
+            }
+            MIR_ASSERT(state, srcTy->is_Pointer(), StringView("CoerceUnsized to Pointer must have a Pointer source - ") << srcTy << StringView(" to ") << dstTy);
             const auto& ste = srcTy->as_Pointer();
-
-            if (dte.type == ste.type) {
-                return MIRCleanupUnsize(state, mutator, dstTy, ste.inner, mv$(value));
-            } else {
-                MIR_ASSERT(state, dte.inner == ste.inner, StringView("TODO: Can pointer CoerceUnsized unsize? ") << srcTy << StringView(" to ") << dstTy);
-                MIR_ASSERT(state, dte.type < ste.type, StringView("CoerceUnsize attempting to raise pointer type"));
-
+            MIR_ASSERT(state, dte.type <= ste.type, StringView("CoerceUnsize attempting to raise pointer type"));
+            if (dte.inner == ste.inner) {
                 return MIRRValue::make_Cast({mv$(value), dstTy});
             }
+            return MIRCleanupUnsize(state, mutator, dstTy, ste.inner, mv$(value));
         }
 
         MIR_BUG(state, StringView("Unknown CoerceUnsized target ") << dstTy << StringView(" from ") << srcTy);
@@ -6994,9 +7001,10 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         // TODO: Check the validity?
 
-                        const HIRType* tmp;
+                        const HIRType* tmp, tmp2;
                         const auto& srcTy = state.getParamType(e->ptrVal);
-                        MIR_ASSERT(state, monomorphiseTypeNeeded(srcTy), StringView("MakeDst Unsize with known source - ") << srcTy);
+                        const auto& dstTy = state.getLvalueType(se.dst);
+                        MIR_ASSERT(state, monomorphiseTypeNeeded(srcTy) || monomorphiseTypeNeeded(dstTy), StringView("MakeDst Unsize with known source and destination - ") << srcTy << StringView(" to ") << dstTy);
                     }
                 }
             }

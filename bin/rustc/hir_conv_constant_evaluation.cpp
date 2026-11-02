@@ -1442,6 +1442,54 @@ static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalVa
     }
 }
 
+static void writeCtfeCoercion(MIREvalCallStackEntry& localState, MIREvalValueRef dst, MIREvalValueRef src, const HIRType* dstTy, const HIRType* srcTy) {
+    const auto& state = localState.state;
+    if (const auto* target = dstTy->opt_Path()) {
+        const auto* source = srcTy->opt_Path();
+        MIR_ASSERT(state, target->binding.is_Struct() && source && source->binding.is_Struct() && source->binding.as_Struct() == target->binding.as_Struct(), StringView("Const coercion between different struct definitions"));
+        const auto& definition = *target->binding.as_Struct();
+        const auto fieldIndex = definition.structMarkings.coerceUnsizedIndex;
+        const auto* targetRepr = localState.reprOfOrBug(dstTy);
+        const auto* sourceRepr = localState.reprOfOrBug(srcTy);
+        MIR_ASSERT(state, fieldIndex < targetRepr->fields.size() && targetRepr->fields.size() == sourceRepr->fields.size(), StringView("Invalid const coercion field index"));
+        for (size_t i = 0; i < targetRepr->fields.size(); i++) {
+            const auto& targetField = targetRepr->fields[i];
+            const auto& sourceField = sourceRepr->fields[i];
+            auto targetValue = dst.slice(targetField.offset, localState.sizeOfOrBug(targetField.ty));
+            auto sourceValue = src.slice(sourceField.offset, localState.sizeOfOrBug(sourceField.ty));
+            if (i == fieldIndex) {
+                writeCtfeCoercion(localState, targetValue, sourceValue, targetField.ty, sourceField.ty);
+            } else {
+                targetValue.copyFrom(state, sourceValue);
+            }
+        }
+        return;
+    }
+    const HIRType* targetInner;
+    const HIRType* sourceInner;
+    if (const auto* target = dstTy->opt_Borrow()) {
+        const auto* source = srcTy->opt_Borrow();
+        MIR_ASSERT(state, source, StringView("Const reference coercion from ") << srcTy);
+        targetInner = target->inner;
+        sourceInner = source->inner;
+    } else {
+        const auto* pointerTarget = dstTy->opt_Pointer();
+        const auto* source = srcTy->opt_Pointer();
+        const auto* referenceSource = srcTy->opt_Borrow();
+        MIR_ASSERT(state, pointerTarget && (source || referenceSource), StringView("Const pointer coercion from ") << srcTy << StringView(" to ") << dstTy);
+        targetInner = pointerTarget->inner;
+        sourceInner = source ? source->inner : referenceSource->inner;
+    }
+    const auto ptrSize = TargetGetPointerBits() / 8;
+    dst.slice(0, ptrSize).copyFrom(state, src.slice(0, ptrSize));
+    if (dst.getLen() > ptrSize) {
+        if (src.getLen() > ptrSize) {
+            dst.slice(ptrSize).copyFrom(state, src.slice(ptrSize));
+        }
+        writeCtfeUnsizeMetadata(localState, dst, targetInner, sourceInner);
+    }
+}
+
 template <typename WriteField>
 static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRType* ty, size_t index, size_t valueCount, WriteField&& writeField) {
     const auto& state = localState.state;
@@ -2066,68 +2114,15 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     break;
                 }
 
-                switch ((*dstTy).tag()) {
-                    default:
-                        MIR_TODO(state, StringView("RValue::MakeDst Coerce to ") << dstTy);
-                        break;
-                    case HIRType::TAG_Path: {
-                        auto& te = (*dstTy).as_Path();
-                        bool done = false;
-                        if (te.binding.is_Struct()) {
-                            const HIRStruct& str = *te.binding.as_Struct();
-                            if (srcTy->is_Path() && srcTy->as_Path().binding.is_Struct() && srcTy->as_Path().binding.as_Struct() == &str) {
-                                const auto& markings = str.structMarkings;
-                                if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
-                                    done = true;
-                                }
-                                if (markings.coerceUnsized == HIRStructMarkings::Coerce::Pointer && markings.coerceParam != ~0u) {
-                                    const auto& paramsD = te.path.data.as_Generic().params;
-                                    const auto& paramsS = srcTy->as_Path().path.data.as_Generic().params;
-                                    writeCtfeUnsizeMetadata(localState, dst, paramsD.types.at(markings.coerceParam), paramsS.types.at(markings.coerceParam));
-                                }
-                            }
-                        }
-                        if (!done) {
-                            MIR_TODO(state, StringView("RValue::MakeDst Coerce to ") << dstTy);
-                        }
-                        break;
-                    }
-                    case HIRType::TAG_Borrow: {
-                        auto& te = (*dstTy).as_Borrow();
-                        MIR_ASSERT(state, srcTy->is_Borrow(), StringView("RValue::MakeDst from ") << srcTy << StringView(" to ") << dstTy);
-                        const auto srcInner = srcTy->as_Borrow().inner;
-                        const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
-                        if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
-                            localState.writeParam(dst, e.ptrVal);
-                        }
-                        if (srcMetadata != MetadataType::Slice) {
-                            writeCtfeUnsizeMetadata(localState, dst, te.inner, srcInner);
-                        }
-                        break;
-                    }
-                    case HIRType::TAG_Pointer: {
-                        auto& te = (*dstTy).as_Pointer();
-                        MIR_ASSERT(state, srcTy->is_Pointer(), StringView("RValue::MakeDst from ") << srcTy << StringView(" to ") << dstTy);
-                        const auto srcInner = srcTy->as_Pointer().inner;
-                        const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
-                        if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
-                            localState.writeParam(dst, e.ptrVal);
-                        }
-                        if (srcMetadata != MetadataType::Slice) {
-                            writeCtfeUnsizeMetadata(localState, dst, te.inner, srcInner);
-                        }
-                        break;
-                    }
-                }
-
-                if (const auto* p = e.ptrVal.opt_Borrow()) {
-                    localState.writeBorrow(dst, p->type, p->val);
-                } else if (const auto* c = e.ptrVal.opt_Constant()) {
-                    localState.writeConst(dst, *c);
+                MIREvalValueRef source;
+                if (const auto* place = e.ptrVal.opt_LValue()) {
+                    source = localState.getLval(*place);
                 } else {
-                    auto inval = localState.getLval(e.ptrVal.as_LValue());
-                    dst.slice(0, TargetGetPointerBits() / 8).copyFrom(state, inval);
+                    auto storage = MIREvalAllocationPtr::allocate(localState.valuePool, localState.rootResolve, state, srcTy);
+                    source = MIREvalValueRef(storage);
+                    localState.writeParam(source, e.ptrVal);
                 }
+                writeCtfeCoercion(localState, dst, source, dstTy, srcTy);
             } else {
                 size_t ptrSize = TargetGetPointerBits() / 8;
                 localState.writeParam(dst.slice(0, ptrSize), e.ptrVal);
