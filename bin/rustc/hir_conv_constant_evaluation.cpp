@@ -603,9 +603,12 @@ namespace {
 
     struct PendingNodeLayout {};
 
-    void deferUnloweredLayout(const HIRType* type) {
+    void deferUnloweredLayout(const Span& sp, const HIRType* type) {
         if (visitTyWith(type, [](const HIRType* inner) { return inner->is_NodeType(); })) {
             throw PendingNodeLayout{};
+        }
+        if (!typeIsConcrete(type)) {
+            ERROR(sp, E0000, StringView("constant layout depends on generic parameters: ") << type);
         }
     }
 
@@ -1530,8 +1533,9 @@ MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data,
 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRType* ty) {
     size_t len;
-    if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
-        BUG(Span(), StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
+    if (!TargetGetSizeOf(state.sp, resolve, ty, len)) {
+        deferUnloweredLayout(state.sp, ty);
+        BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
     }
     auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
@@ -2397,7 +2401,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (TargetGetSizeOf(state.sp, this->resolve, ty, sizeVal)) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
                     } else {
-                        deferUnloweredLayout(ty);
+                        deferUnloweredLayout(state.sp, ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << ty);
                     }
                 } else if (te->name == "size_of_val") {
@@ -2419,7 +2423,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         size_t size;
                         size_t align;
                         if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, type, size, align)) {
-                            deferUnloweredLayout(type);
+                            deferUnloweredLayout(state.sp, type);
                             BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("size/align of ") << type);
                         }
                         if (size != SIZE_MAX) {
@@ -2458,10 +2462,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
-                        deferUnloweredLayout(ty);
-                        if (!typeIsConcrete(ty)) {
-                            ERROR(state.sp, E0000, StringView("constant alignment depends on generic parameters: ") << ty);
-                        }
+                        deferUnloweredLayout(state.sp, ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
@@ -2490,7 +2491,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
-                        deferUnloweredLayout(ty);
+                        deferUnloweredLayout(state.sp, ty);
                         BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("alignof ") << ty);
                     }
                 } else if (te->name == "offset_of") {
@@ -3487,7 +3488,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, HIRExprPtr&
 
         BUG_ASSERT(this->callStack.empty());
         this->numFrames = 0;
-        this->pushStackEntry(ip, *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
+        this->pushStackEntry(ip, *mir, std::move(ms), std::move(exp), {}, {}, expr.state->itemGenerics, expr.state->implGenerics, SourceLocation(this->rootSpan), false);
         auto rvRaw = this->runUntilStackEmpty();
 
         ASSERT_BUG(this->rootSpan, rvRaw, StringView("evaluate_constant_mir returned null allocation"));
@@ -3565,7 +3566,7 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
     HIRItemPath modIp{e.value.state->modPath};
     auto nvs = NewvalState(e.value.state->module, modIp, FMT(StringView("const") << static_cast<const void*>(&e) << StringView("#")), callerResolve.board().itemSerial);
     auto eval = HIREvaluator(e.value.span(), callerResolve.board(), nvs);
-    eval.resolve.setBothGenericsRaw(resolvedImplParams, &e.params);
+    eval.resolve.setBothGenericsRaw(callerResolve.implGenericsPtr(), callerResolve.itemGenericsPtr());
     auto type = resolve.expandAssociatedTypes(e.value.span(), constMs.monomorphType(e.value.span(), e.type));
     auto literal = eval.evaluateConstant(HIRItemPath(path), e.value, std::move(type), std::move(constMs));
     e.monomorphCache.emplace(path.clone(), std::move(literal));

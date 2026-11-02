@@ -1181,6 +1181,9 @@ namespace {
         if (binding->valueState == HIRConstant::ValueState::InProgress) {
             ERROR(sp, E0000, StringView("cycle detected when evaluating constant `") << pve->path << StringView("`"));
         }
+        if (binding->valueState == HIRConstant::ValueState::Generic && monomorphisePathNeeded(pve->path)) {
+            binding->monomorphCache.erase(pve->path);
+        }
         if (binding->valueState == HIRConstant::ValueState::Unknown || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
             ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, resolve.hirCrateMut().findConstantMut(resolve.board(), sp, pve->path, *binding));
         }
