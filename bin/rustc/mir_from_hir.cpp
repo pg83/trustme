@@ -2169,12 +2169,7 @@ namespace {
                             builder.pushStmtSetDropflagVal(sp, ose.outerFlag, true);
                         }
 
-                        const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
-                        if (isBox) {
-                            mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *ose.innerState, *nse.innerState);
-                        } else {
-                            BUG(sp, StringView("Handle MovedOut on non-Box"));
-                        }
+                        mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *ose.innerState, *nse.innerState);
                         return;
                     }
                     case VarState::TAG_Partial: {
@@ -2220,7 +2215,6 @@ namespace {
                         return;
                     }
                 }
-                break;
             case VarState::TAG_Valid:
                 switch (newState.tag()) {
                     case VarState::TAG_Invalid:
@@ -2253,13 +2247,7 @@ namespace {
                         } else {
                         }
 
-                        const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
-
-                        if (isBox) {
-                            mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *ose.innerState, *nse.innerState);
-                        } else {
-                            BUG(sp, StringView("MovedOut on non-Box"));
-                        }
+                        mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *ose.innerState, *nse.innerState);
                         return;
                     }
                     case VarState::TAG_Partial: {
@@ -2312,7 +2300,6 @@ namespace {
                         return;
                     }
                 }
-                break;
             case VarState::TAG_Optional:
                 switch (newState.tag()) {
                     case VarState::TAG_Invalid:
@@ -2334,13 +2321,7 @@ namespace {
                         }
                         oldState = VarState::make_MovedOut({std::make_unique<VarState>(oldState.clone()), oldState.as_Optional()});
 
-                        const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
-
-                        if (isBox) {
-                            mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *oldState.as_MovedOut().innerState, *newState.as_MovedOut().innerState);
-                        } else {
-                            BUG(sp, StringView("MovedOut on non-Box"));
-                        }
+                        mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *oldState.as_MovedOut().innerState, *newState.as_MovedOut().innerState);
                         return;
                     }
                     case VarState::TAG_Partial: {
@@ -2404,13 +2385,8 @@ namespace {
                         return;
                     }
                 }
-                break;
             case VarState::TAG_MovedOut: {
                 auto& ose = oldState.as_MovedOut();
-                const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
-                if (!isBox) {
-                    BUG(sp, StringView("MovedOut on non-Box"));
-                }
                 switch (newState.tag()) {
                     case VarState::TAG_Invalid:
                     case VarState::TAG_Valid: {
@@ -2458,7 +2434,6 @@ namespace {
                     case VarState::TAG_PartialArray:
                         BUG(sp, StringView("MovedOut->Partial not valid"));
                 }
-                break;
             }
             case VarState::TAG_Partial: {
                 auto& ose = oldState.as_Partial();
@@ -2510,7 +2485,7 @@ namespace {
                     }
                         return;
                 }
-            } break;
+            }
             case VarState::TAG_PartialArray: {
                 auto& ose = oldState.as_PartialArray();
                 switch (newState.tag()) {
@@ -2549,9 +2524,8 @@ namespace {
                         return;
                     }
                 }
-            } break;
+            }
         }
-        BUG(sp, StringView("Unhandled combination - ") << oldState.tagStr() << StringView(" and ") << newState.tagStr());
     }
 }
 
@@ -3460,7 +3434,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             TODO(sp, StringView("Match trait object with literal?"));
         }
         case HIRType::TAG_ErasedType: {
-            TODO(sp, StringView("Match erased type with literal?"));
+            ERROR(sp, E0000, StringView("constant of non-structural opaque type in a pattern: ") << ty);
         }
         case HIRType::TAG_Array: {
             auto& e = (*ty).as_Array();
