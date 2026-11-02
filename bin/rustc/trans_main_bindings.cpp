@@ -2391,14 +2391,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         auto& te = (*ty).as_Path();
                         bool hasDrop = false;
                         switch (te.binding.tag()) {
-                            case HIRTypePathBinding::TAG_Unbound: {
+                            default: {
                                 UNREACHABLE();
-                            }
-                            case HIRTypePathBinding::TAG_Opaque: {
-                                UNREACHABLE();
-                            }
-                            case HIRTypePathBinding::TAG_ExternType: {
-                                break;
                             }
                             case HIRTypePathBinding::TAG_Struct: {
                                 const auto pbe = te.binding.as_Struct();

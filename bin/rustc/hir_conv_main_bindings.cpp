@@ -3401,6 +3401,12 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
     if (traitPath == langUnsize_) {
         ERROR(sp, E0000, StringView("Unsize shouldn't be manually implemented"));
     }
+    if (traitPath == langDrop_) {
+        const auto* path = impl.type->opt_Path();
+        if (!path || !path->path.data.is_Generic() || (!path->binding.is_Struct() && !path->binding.is_Enum() && !path->binding.is_Union())) {
+            ERROR(sp, E0000, StringView("Drop can only be implemented for structs, enums, and unions - ") << impl.type);
+        }
+    }
     if (impl.type->is_Path()) {
         const HIRType* implType = impl.type;
         if (!implType->as_Path().path.data.is_Generic()) {
