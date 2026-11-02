@@ -1671,7 +1671,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                 case CORETYPE_INVAL:
                     BUG(ty->span(), StringView("TypeData::Primitive - CORETYPE_INVAL"));
             }
-            break;
         }
         case TypeData::TAG_Tuple: {
             auto& e = ty->data.as_Tuple();
@@ -1742,7 +1741,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             } else {
                 return crate->types.array(inner, HIRConstGeneric::make_Infer({}));
             }
-            break;
         }
         case TypeData::TAG_Slice: {
             auto& e = ty->data.as_Slice();
@@ -1778,7 +1776,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         ERROR(sp, E0000, StringView("byte-string pattern types are not supported"));
                     }
                 }
-                UNREACHABLE();
             };
 
             HIRTypePattern pattern;
@@ -1851,7 +1848,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             } else {
                 return crate->types.path(LowerHIRPath(ty->span(), *e, FromASTPathClass::Type), {});
             }
-            break;
         }
         case TypeData::TAG_TraitObject: {
             auto& e = ty->data.as_TraitObject();
@@ -1883,7 +1879,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                 if (tp.path.path == pathSized) {
                     isSized = false;
                 } else {
-                    TODO(ty->span(), StringView("Optional trait (not Sized) - ") << ty);
+                    ERROR(ty->span(), E0000, StringView("bound modifier `?` can only be applied to `Sized` - ") << tp.path);
                 }
             }
             TypeDataErasedTypeInner inner;
@@ -1927,7 +1923,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             return crate->types.generic(e.name, e.index);
         }
     }
-    UNREACHABLE();
 }
 
 HIRTypeAlias AST2HIR::LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta) {

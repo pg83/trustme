@@ -1055,8 +1055,8 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
 
         auto r = tiR.ty == TypeInfo::Unsigned ? localState.readParamUint(tiR.bits, valR) : localState.readParamSint(tiR.bits, valR).getInner();
         auto amt = r.truncateU64();
-        if (amt > ti.bits) {
-            DEBUG(StringView("Shift out of range - ") << r << StringView(" > ") << ti.bits);
+        if (r >= U128(ti.bits)) {
+            DEBUG(StringView("Shift out of range - ") << r << StringView(" >= ") << ti.bits);
             didOverflow = true;
             amt = 0;
         }
@@ -2681,11 +2681,17 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "unchecked_shl") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
-                    doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHL, e.args.at(1));
+                    bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHL, e.args.at(1));
+                    if (wasOverflow) {
+                        ERROR(state.sp, E0000, StringView("`") << te->name << StringView("` shift count out of range"));
+                    }
                 } else if (te->name == "unchecked_shr") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
-                    doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHR, e.args.at(1));
+                    bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHR, e.args.at(1));
+                    if (wasOverflow) {
+                        ERROR(state.sp, E0000, StringView("`") << te->name << StringView("` shift count out of range"));
+                    }
                 } else if (te->name == "unchecked_rem") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
