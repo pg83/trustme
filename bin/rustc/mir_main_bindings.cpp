@@ -133,6 +133,7 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                     for (const auto& p : e.params) {
                         os << StringView(", ");
                         switch (p.tag()) {
+                            default: UNREACHABLE();
                             case MIRAsmParam::TAG_Const: {
                                 auto& v = p.as_Const();
                                 os << StringView("const ") << v;
@@ -159,11 +160,6 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                                 }
                                 break;
                             }
-                            case MIRAsmParam::TAG_Label: {
-                                auto& v = p.as_Label();
-                                os << StringView("label bb") << v;
-                                break;
-                            }
                         }
                     }
                     if (e.options.any()) {
@@ -177,10 +173,9 @@ auto MirDumper::dumpMir(const MIRFunction& fcn) -> void {
                     os << StringView("df$") << e.idx << StringView(" = ");
                     if (e.other == ~0u) {
                         os << e.newVal;
-                    } else if (!e.newVal) {
-                        os << StringView("df$") << e.other;
                     } else {
-                        os << StringView("! df$") << e.other;
+                        BUG_ASSERT(!e.newVal);
+                        os << StringView("df$") << e.other;
                     }
                     os << StringView(";\n");
                     break;
