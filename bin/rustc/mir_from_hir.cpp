@@ -10543,40 +10543,22 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
             if (name == "slice_get_unchecked") {
                 MIRLValue slot;
                 {
-                    auto& tuMatch = values[0];
-                    switch (tuMatch.tag()) {
-                        case MIRParam::TAG_LValue: {
-                            auto& lv = tuMatch.as_LValue();
-                            slot = MIRLValue::newDeref(std::move(lv));
-                            break;
-                        }
-                        case MIRParam::TAG_Constant: {
-                            TODO(node.span(), StringView(""));
-                        }
-                        case MIRParam::TAG_Borrow: {
-                            auto& v = tuMatch.as_Borrow();
-                            slot = std::move(v.val);
-                            break;
-                        }
+                    auto& value = values[0];
+                    if (auto* lv = value.opt_LValue()) {
+                        slot = MIRLValue::newDeref(std::move(*lv));
+                    } else {
+                        auto pointer = builder.newTemporary(node.args[0]->resType);
+                        builder.pushStmtAssign(node.span(), pointer.clone(), std::move(value.as_Constant()));
+                        slot = MIRLValue::newDeref(std::move(pointer));
                     }
                 }
                 MIRLValue indexLv = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
                 {
-                    auto& tuMatch = values[1];
-                    switch (tuMatch.tag()) {
-                        case MIRParam::TAG_LValue: {
-                            auto& lv = tuMatch.as_LValue();
-                            builder.pushStmtAssign(node.span(), indexLv.clone(), std::move(lv));
-                            break;
-                        }
-                        case MIRParam::TAG_Constant: {
-                            auto& c = tuMatch.as_Constant();
-                            builder.pushStmtAssign(node.span(), indexLv.clone(), std::move(c));
-                            break;
-                        }
-                        case MIRParam::TAG_Borrow: {
-                            TODO(node.span(), StringView("Borrow index?"));
-                        }
+                    auto& value = values[1];
+                    if (auto* lv = value.opt_LValue()) {
+                        builder.pushStmtAssign(node.span(), indexLv.clone(), std::move(*lv));
+                    } else {
+                        builder.pushStmtAssign(node.span(), indexLv.clone(), std::move(value.as_Constant()));
                     }
                 }
                 const auto& ptrTy = gpath.params.types.at(0);
