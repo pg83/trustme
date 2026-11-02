@@ -1999,19 +1999,12 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                     outParams.ppImpl = &pe.params;
                     auto idx = e->findVariant(pe.path.components().back());
-                    if (e->data.is_Data()) {
-                        if (e->data.as_Data()[idx].type != crate.types.unit()) {
-                            return ValuePtr::Data_EnumConstructor{e, idx};
-                        }
-                    }
-                    return ValuePtr::Data_EnumValue{e, idx};
+                    ASSERT_BUG(sp, e->data.is_Data() && e->data.as_Data()[idx].type != crate.types.unit(), StringView("Unit enum value did not lower before value resolution: ") << pe.path);
+                    return ValuePtr::Data_EnumConstructor{e, idx};
                 }
             }
             const auto& v = crate.getValitemByPath(sp, pe.path);
             switch (v.tag()) {
-                case HIRValueItem::TAG_Import: {
-                    BUG(sp, StringView("Module Import"));
-                }
                 case HIRValueItem::TAG_Constant: {
                     outParams.ppMethod = &pe.params;
                     return v.as_Constant();
@@ -2024,10 +2017,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     outParams.ppMethod = &pe.params;
                     return v.as_Function();
                 }
-                case HIRValueItem::TAG_StructConstant: {
-                    outParams.ppImpl = &pe.params;
-                    TODO(sp, StringView("StructConstant - ") << p);
-                }
                 case HIRValueItem::TAG_StructConstructor: {
                     auto& ve = v.as_StructConstructor();
                     outParams.ppImpl = &pe.params;
@@ -2037,8 +2026,10 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                     return ValuePtr::Data_StructConstructor{&ve.ty, &str};
                 }
+                default: {
+                    BUG(sp, StringView("Value path did not lower to a resolvable item: ") << p);
+                }
             }
-            UNREACHABLE();
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& pe = p.data.as_UfcsKnown();
@@ -2258,11 +2249,10 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             outParams.ppImpl = &outParams.ppImplData;
             return value;
         }
-        case HIRPathData::TAG_UfcsUnknown: {
+        default: {
             BUG(sp, StringView("UfcsUnknown - ") << p);
         }
     }
-    UNREACHABLE();
 }
 
 StaticTraitResolve::StaticTraitResolve(const WireBoard& wb, OpaqueReveal reveal)

@@ -858,9 +858,6 @@ const HIRType* MIRTypeResolve::getConstTypeInBody(const MIRConstant& c) const {
                     rv = resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
-                case TypeckValuePtr::TAG_EnumValue: {
-                    MIR_BUG(*this, StringView("get_const_type - ItemAddr points to an enum value - ") << c);
-                }
                 case TypeckValuePtr::TAG_EnumConstructor: {
                     auto& ve = v.as_EnumConstructor();
                     auto rv = crate.types.function((HIRType::Data_NamedFunction{e->clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}).decay(crate.types, this->sp));

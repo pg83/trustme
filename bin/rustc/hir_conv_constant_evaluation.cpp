@@ -952,9 +952,6 @@ static EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve
             auto& e = v.as_EnumConstructor();
             return EntPtr::Data_Enum{e.e, e.v};
         }
-        case TypeckValuePtr::TAG_EnumValue: {
-            TODO(sp, StringView("Handle EnumValue - ") << path);
-        }
         case TypeckValuePtr::TAG_StructConstructor: {
             auto& e = v.as_StructConstructor();
             return e.s;
@@ -6082,9 +6079,6 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                     }
                     case TypeckValuePtr::TAG_EnumConstructor: {
                         TODO(sp, StringView("Handle EnumConstructor - ") << p);
-                    }
-                    case TypeckValuePtr::TAG_EnumValue: {
-                        TODO(sp, StringView("Handle EnumValue - ") << p);
                     }
                     case TypeckValuePtr::TAG_StructConstructor: {
                         TODO(sp, StringView("Handle StructConstructor - ") << p);

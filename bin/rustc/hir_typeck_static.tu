@@ -14,10 +14,6 @@ generate(
             ("const HIREnum*", "e"),
             ("size_t", "v"),
         ]),
-        v("EnumValue", fields=[
-            ("const HIREnum*", "e"),
-            ("size_t", "v"),
-        ]),
         v("StructConstructor", fields=[
             ("const HIRSimplePath*", "p"),
             ("const HIRStruct*", "s"),
