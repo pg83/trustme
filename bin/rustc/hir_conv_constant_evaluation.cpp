@@ -2029,16 +2029,10 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     break;
                 }
                 case TypeInfo::Float: {
-                    switch (e.op) {
-                        case MIRUniOp::INV:
-                            MIR_BUG(state, StringView("Invalid invert of Float"));
-                        case MIRUniOp::NEG: {
-                            auto bits = localState.getLval(e.val).readUint(state, ti.bits);
-                            bits = bits ^ (U128(1) << (ti.bits - 1));
-                            dst.writeUint(state, ti.bits, bits);
-                            break;
-                        }
-                    }
+                    MIR_ASSERT(state, e.op == MIRUniOp::NEG, StringView("Invalid float unary operation"));
+                    auto bits = localState.getLval(e.val).readUint(state, ti.bits);
+                    bits = bits ^ (U128(1) << (ti.bits - 1));
+                    dst.writeUint(state, ti.bits, bits);
                     break;
                 }
                 case TypeInfo::Other:

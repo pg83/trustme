@@ -7215,7 +7215,7 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeUniOp& node) -> void {
     BUG_ASSERT(langitem);
     BUG_ASSERT(method);
 
-    if (tyVal->is_Diverge()) {
+    if (node.op == HIRExprNodeUniOp::Op::Invert && tyVal->is_Diverge()) {
         return;
     }
     if (isBuiltinOperator(sp, operatorKind, langitem, tyVal)) {

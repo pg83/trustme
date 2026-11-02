@@ -9882,44 +9882,9 @@ auto ExprVisitorConv::visit(HIRExprNodeUniOp& node) -> void {
     MIRRValue res;
     switch (node.op) {
         case HIRExprNodeUniOp::Op::Invert:
-            if (tyVal->is_Primitive()) {
-                switch (tyVal->as_Primitive()) {
-                    case HIRCoreType::Str:
-                    case HIRCoreType::Char:
-                    case HIRCoreType::F32:
-                    case HIRCoreType::F64:
-                        BUG(node.span(), StringView("`!` operator on invalid type - ") << tyVal);
-                        break;
-                    default:
-                        break;
-                }
-            } else {
-                BUG(node.span(), StringView("`!` operator on invalid type - ") << tyVal);
-            }
             res = MIRRValue::make_UniOp({mv$(val), MIRUniOp::INV});
             break;
         case HIRExprNodeUniOp::Op::Negate:
-            if (tyVal->is_Primitive()) {
-                switch (tyVal->as_Primitive()) {
-                    case HIRCoreType::Str:
-                    case HIRCoreType::Char:
-                    case HIRCoreType::Bool:
-                        BUG(node.span(), StringView("`-` operator on invalid type - ") << tyVal);
-                        break;
-                    case HIRCoreType::U8:
-                    case HIRCoreType::U16:
-                    case HIRCoreType::U32:
-                    case HIRCoreType::U64:
-                    case HIRCoreType::U128:
-                    case HIRCoreType::Usize:
-                        BUG(node.span(), StringView("`-` operator on unsigned integer - ") << tyVal);
-                        break;
-                    default:
-                        break;
-                }
-            } else {
-                BUG(node.span(), StringView("`!` operator on invalid type - ") << tyVal);
-            }
             if (builder.resolve().wb.settings->overflowChecks && tyVal->is_Primitive() && isSignedInteger(tyVal->as_Primitive())) {
                 const auto type = tyVal->as_Primitive();
                 auto overflows = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));

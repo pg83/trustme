@@ -2375,7 +2375,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
         const bool operatorTypesAreResolved = !context.ivars.typeContainsIvars(v.implTy) && !context.ivars.pathparamsContainIvars(v.params, /*only_unbound=*/false) && (v.name == "" || !context.ivars.typeContainsIvars(v.leftTy));
 
-        if (v.isOperator && v.params.types.empty() && context.getType(v.implTy)->is_Diverge() && H::unaryCanUseExpected(v.operatorKind, context.getType(v.leftTy))) {
+        if (v.isOperator && v.operatorKind == TypeckPrimitiveOperator::Not && v.params.types.empty() && context.getType(v.implTy)->is_Diverge() && H::unaryCanUseExpected(v.operatorKind, context.getType(v.leftTy))) {
             return AssociatedCheckResult::Complete;
         }
 
@@ -11336,7 +11336,10 @@ auto ExprVisitorEnum::visit(HIRExprNodeUniOp& node) -> void {
     }
     BUG_ASSERT(itemName);
     const HIRType* inputType = node.value->resType;
-    if (this->context.getType(inputType)->is_Diverge()) {
+    if (!this->context.crate.isNoCore && node.op == HIRExprNodeUniOp::Op::Negate && this->context.getType(inputType)->is_Diverge()) {
+        ERROR(node.span(), E0000, StringView("cannot apply unary operator `-` to type `!`"));
+    }
+    if (node.op == HIRExprNodeUniOp::Op::Invert && this->context.getType(inputType)->is_Diverge()) {
         const HIRType* expectedType = node.resType;
         expectedType = this->context.getType(expectedType);
         if ((!expectedType->is_Infer() || expectedType->as_Infer().isLit()) && !expectedType->is_Diverge()) {
