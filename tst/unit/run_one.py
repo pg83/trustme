@@ -229,7 +229,7 @@ def main() -> int:
                 raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
             internal_failure = re.search(
                 rb"(?m)^(?:<null>|MACRO<[^\n]+>|[^\n]*:\d+(?::\d+)?(?:-\d+(?::\d+)?)?) (?:BUG|TODO):"
-                rb"|^MIR ERROR:|^LLVM ERROR:|^error: (?:internal compiler error|the compiler unexpectedly panicked)",
+                rb"|^MIR (?:BUG|TODO|ERROR):|^LLVM ERROR:|^error: (?:internal compiler error|the compiler unexpectedly panicked)",
                 result.stderr,
             )
             if internal_failure and not chaos_match:

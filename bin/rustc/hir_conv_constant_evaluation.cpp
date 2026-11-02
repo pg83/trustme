@@ -850,7 +850,7 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     bool valueReachableFromReturn(MIREvalValueRef value) const;
 
-    bool valueNeedsNonConstDrop(const HIRType* ty, MIREvalValueRef value) const;
+    bool valueNeedsNonConstDrop(const HIRType* ty, MIREvalValueRef value, MIREvalValueRef metadata = {}) const;
 
     MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, const HIRType** outTy = nullptr);
 
@@ -2330,9 +2330,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 
             const HIRType* tmp;
             const auto& ty = state.getLvalueType(e.slot);
-            auto value = localState.getLval(e.slot);
+            MIREvalValueRef metadata;
+            auto value = localState.getLval(e.slot, &metadata);
             if (!localState.valueReachableFromReturn(value)) {
-                if (localState.valueNeedsNonConstDrop(ty, value)) {
+                if (localState.valueNeedsNonConstDrop(ty, value, metadata)) {
                     ERROR(this->rootSpan, E0000, StringView("destructor of `") << ty << StringView("` cannot be evaluated at compile-time"));
                 }
                 if (e.kind == MIRDropKind::DEEP) {
@@ -2709,6 +2710,24 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), StringView("`") << te->name << StringView("` with non-primitive ") << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::SUB, e.args.at(1), true);
+                } else if (te->name == "drop_in_place") {
+                    const auto* type = localState.monomorphExpand(te->params.types.at(0));
+                    const auto* pointerType = resolve.hirCrate().types.pointer(HIRBorrowType::Unique, type);
+                    const auto index = static_cast<unsigned>(localState.locals.size());
+                    localState.localTypes.pushBack(pointerType);
+                    localState.locals.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, pointerType));
+                    STD_DEFER {
+                        localState.locals.pop_back();
+                        localState.localTypes.popBack();
+                    };
+                    localState.writeParam(MIREvalValueRef(localState.locals.back()), e.args.at(0));
+                    auto slot = MIRLValue::newDeref(MIRLValue::newLocal(index));
+                    MIREvalValueRef metadata;
+                    auto value = localState.getLval(slot, &metadata);
+                    if (localState.valueNeedsNonConstDrop(type, value, metadata)) {
+                        ERROR(this->rootSpan, E0000, StringView("destructor of `") << type << StringView("` cannot be evaluated at compile-time"));
+                    }
+                    this->runConstDrop(localState, type, slot);
                 } else if (te->name == "transmute" || te->name == "transmute_unchecked" || te->name == "unlikely" || te->name == "black_box") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "init") {
@@ -3251,7 +3270,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         if (!fcn.code && !fcn.code.mir) {
             if (fcn.linkage.name == "") {
             } else if (fcn.linkage.name == "panic_impl") {
-                MIR_TODO(state, StringView("panic in constant evaluation"));
+                ERROR(this->rootSpan, E0000, StringView("evaluation panicked during constant evaluation"));
             } else {
                 MIR_TODO(state, StringView("Call extern function `") << fcn.linkage.name << StringView("` (") << *fcnPath << StringView(")"));
             }
@@ -3390,6 +3409,15 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, const HIRType
             }
             for (size_t i = 0; i < te.size.as_Known(); i++) {
                 this->runConstDrop(localState, te.inner, MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
+            }
+            break;
+        }
+        case HIRType::TAG_Slice: {
+            MIREvalValueRef metadata;
+            localState.getLval(slot, &metadata);
+            const auto count = metadata.readUsize(state);
+            for (size_t i = 0; i < count; i++) {
+                this->runConstDrop(localState, ty->as_Slice().inner, MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
             }
             break;
         }
@@ -4787,10 +4815,16 @@ auto MIREvalCallStackEntry::valueReachableFromReturn(MIREvalValueRef value) cons
     return allocationReachableFrom(retval.operator->(), target, visited);
 }
 
-auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalValueRef value) const -> bool {
+auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalValueRef value, MIREvalValueRef metadata) const -> bool {
     if (!rootResolve.typeNeedsDropGlue(state.sp, ty)) {
         return false;
     }
+
+    const auto fieldValue = [&](const auto& field) {
+        size_t size, align;
+        MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, rootResolve, field.ty, size, align), StringView("No layout for drop field ") << field.ty);
+        return size == SIZE_MAX ? value.slice(field.offset) : value.slice(field.offset, size);
+    };
 
     switch ((*ty).tag()) {
         default:
@@ -4807,7 +4841,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
         }
         case HIRType::TAG_Pattern: {
             auto& te = (*ty).as_Pattern();
-            return valueNeedsNonConstDrop(te.inner, value);
+            return valueNeedsNonConstDrop(te.inner, value, metadata);
         }
         case HIRType::TAG_Borrow: {
             MIR_BUG(state, StringView("Owned references cannot be dropped during constant evaluation: ") << ty);
@@ -4835,8 +4869,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
                     auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                     MIR_ASSERT(state, repr, StringView("No representation for struct ") << ty);
                     for (const auto& field : repr->fields) {
-                        auto size = sizeOfOrBug(field.ty);
-                        if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
+                        if (valueNeedsNonConstDrop(field.ty, fieldValue(field), metadata)) {
                             return true;
                         }
                     }
@@ -4872,7 +4905,15 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
             return false;
         }
         case HIRType::TAG_Slice: {
-            return true;
+            const auto* inner = ty->as_Slice().inner;
+            const auto count = metadata.readUsize(state);
+            const auto size = sizeOfOrBug(inner);
+            for (size_t i = 0; i < count; i++) {
+                if (valueNeedsNonConstDrop(inner, value.slice(i * size, size))) {
+                    return true;
+                }
+            }
+            return false;
         }
         case HIRType::TAG_TraitObject: {
             return true;
@@ -4881,8 +4922,7 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
             auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
             MIR_ASSERT(state, repr, StringView("No representation for tuple ") << ty);
             for (const auto& field : repr->fields) {
-                auto size = sizeOfOrBug(field.ty);
-                if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
+                if (valueNeedsNonConstDrop(field.ty, fieldValue(field), metadata)) {
                     return true;
                 }
             }
