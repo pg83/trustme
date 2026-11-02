@@ -309,6 +309,7 @@ NODE(
         }
         auto* rv = NEWNODE(ASTExprNodeBlock, blockType, mv$(newNodes), localMod);
         static_cast<ASTExprNodeBlock&>(*rv).label = label;
+        static_cast<ASTExprNodeBlock&>(*rv).cloneLocalMod = localMod != nullptr;
         return rv;
     }
 )

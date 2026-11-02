@@ -2564,13 +2564,27 @@ auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
 
 auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     this->inAssignLhs = false;
-    if (node.localMod && node.localMod->fragmentOrigin && expandState.modstack.item && expandState.modstack.item->isFragmentCopy) {
-        const auto* origin = node.localMod->fragmentOrigin;
-        for (const auto& module : expandState.modstack.item->anonMods()) {
-            if (module->fragmentOrigin == origin) {
-                node.localMod = module;
-                break;
+    if (node.localMod && (node.cloneLocalMod || !node.localMod->blockExpanded)) {
+        if (node.localMod->fragmentOrigin && expandState.modstack.item && expandState.modstack.item->isFragmentCopy) {
+            const auto* origin = node.localMod->fragmentOrigin;
+            for (const auto& module : expandState.modstack.item->anonMods()) {
+                if (module->fragmentOrigin == origin && module->isFragmentCopy) {
+                    node.cloneLocalMod = true;
+                    if (!module->blockExpanded) {
+                        node.localMod = module;
+                        node.cloneLocalMod = false;
+                        break;
+                    }
+                }
             }
+        }
+        if (node.cloneLocalMod) {
+            auto module = expandState.modstack.item->addAnon();
+            auto path = module->path();
+            *module = node.localMod->clone();
+            module->rebasePath(mv$(path));
+            node.localMod = mv$(module);
+            node.cloneLocalMod = false;
         }
     }
     unsigned int modItemCount = 0;
@@ -2588,6 +2602,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     // TODO: macro_rules! invocations within the expression list influence this.
 
     if (node.localMod) {
+        node.localMod->blockExpanded = true;
         ExpandMod(this->expandState, node.localMod->path(), *node.localMod);
         modItemCount = node.localMod->items.size();
     }

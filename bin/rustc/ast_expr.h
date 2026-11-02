@@ -84,6 +84,7 @@ struct ASTExprNodeBlock: public ASTExprNode {
     Type blockType;
     Ident label;
     std::shared_ptr<ASTModule> localMod;
+    bool cloneLocalMod = false;
 
     struct Line {
         bool hasSemicolon;

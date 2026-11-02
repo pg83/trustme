@@ -278,7 +278,7 @@ ASTModule& ASTModule::operator=(ASTModule&&) = default;
 auto ASTModule::clone() const -> ASTModule {
     /* Item fragments are copied before expansion. Resolution indexes belong
      * to the destination module and are rebuilt there. */
-    ASSERT_BUG(Span(), indexPopulated == 0 && macros_.empty() && macroImports.empty() && itemImports.empty(), StringView("Cloning an expanded module"));
+    ASSERT_BUG(Span(), !blockExpanded && indexPopulated == 0 && macros_.empty() && macroImports.empty() && itemImports.empty(), StringView("Cloning an expanded module"));
     auto result = ASTModule(myPath);
     result.fileInfo = fileInfo;
     result.insertPrelude = insertPrelude;

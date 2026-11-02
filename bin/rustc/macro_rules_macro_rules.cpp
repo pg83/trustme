@@ -742,6 +742,12 @@ namespace {
 
             case TOK_RWORD_UNSAFE:
                 lex.consume();
+                if (opensAngle(lex.next())) {
+                    if (!consumeTtAngle(lex)) {
+                        return false;
+                    }
+                    return consumeType(lex);
+                }
                 if (lex.next() == TOK_RWORD_EXTERN) {
                     case TOK_RWORD_EXTERN:
                         lex.consume();

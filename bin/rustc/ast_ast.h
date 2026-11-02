@@ -796,6 +796,7 @@ public:
      * of temporary macro item modules. Copies use it as a stable identity. */
     const ASTExprNode* fragmentOrigin = nullptr;
     bool isFragmentCopy = false;
+    bool blockExpanded = false;
 
     LintLevelOverrides lintLevels;
 
