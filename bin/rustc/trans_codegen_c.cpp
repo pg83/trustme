@@ -9343,15 +9343,10 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitParam(e.args.at(0));
             of << StringView("; for(int i = 0; i < ") << info.count << StringView("; i++) ");
             if (info.ty == SimdInfo::Float) {
-                of << StringView("((");
-                info.emitValTy(*this);
-                of << StringView("*)&");
+                const auto signByte = TargetGetCurSpec(wb_).arch.bigEndian ? 0u : info.itemSize - 1;
+                of << StringView("((u8*)&");
                 emitLvalue(e.retVal);
-                of << StringView(")[i] = -((");
-                info.emitValTy(*this);
-                of << StringView("*)&");
-                emitParam(e.args.at(0));
-                of << StringView(")[i]");
+                of << StringView(")[i * ") << info.itemSize << StringView(" + ") << signByte << StringView("] ^= 128");
             } else {
                 of << StringView("((u") << (info.itemSize * 8) << StringView("*)&");
                 emitLvalue(e.retVal);
@@ -9375,8 +9370,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             simdArith("&");
         } else if (nameStrip == "simd_or") {
             simdArith("|");
-        } else if (nameStrip == "simd_xor") {
-            simdArith("^");
         } else if (nameStrip == "simd_xor") {
             simdArith("^");
         } else if (nameStrip == "simd_shr") {
