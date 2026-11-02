@@ -5946,7 +5946,6 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                         return crate.getStructByPath(sp, e.ty).params;
                     }
                 }
-                break;
             }
             case HIRVisitor::PathContext::TYPE:
             case HIRVisitor::PathContext::TRAIT: {
@@ -5984,10 +5983,8 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                         BUG(sp, StringView("extern type - ") << p);
                     }
                 }
-                break;
             }
         }
-        TODO(sp, StringView("visit_generic_path[m_get_params] - ") << p);
     });
     getParams = &callback;
     HIRVisitor::visitGenericPath(p, pc);

@@ -5354,7 +5354,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                     if (it->data.is_Struct()) {
                         ERROR(v.span(), E0000, StringView("Named value referring to an enum that isn't tuple-like or unit-like - ") << v.path);
                     }
-                    isTupleConstructor = it->data.is_Tuple() && it->data.as_Tuple().items.size() > 0;
+                    isTupleConstructor = it->data.is_Tuple();
                 } else {
                     const auto& enm = *e.hir;
                     auto idx = enm.findVariant(varName);

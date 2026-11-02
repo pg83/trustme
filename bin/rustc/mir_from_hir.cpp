@@ -10880,14 +10880,10 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
     switch (node.path.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& pe = node.path.data.as_Generic();
-            if (node.target == HIRExprNodePathValue::ENUM_VAR_CONSTR) {
-                BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-            }
             const auto& vi = builder.crate().getValitemByPath(node.span(), pe.path);
             switch (vi.tag()) {
-                case HIRValueItem::TAG_Import: {
-                    BUG(sp, StringView("All references via imports should be replaced"));
-                }
+                default:
+                    BUG(sp, StringView("Expected a constant or static after function-item lowering: ") << node.path);
                 case HIRValueItem::TAG_Constant: {
                     const auto& e = *vi.as_Constant();
                     auto ty = MonomorphStatePtr(builder.resolve().crate.types, nullptr, nullptr, &pe.params).monomorphType(sp, e.type);
@@ -10900,37 +10896,11 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
                     builder.setResult(node.span(), MIRLValue::newStatic(node.path.clone()));
                     break;
                 }
-                case HIRValueItem::TAG_StructConstant: {
-                    // TODO: Why is this still a PathValue?
-                    builder.setResult(node.span(), MIRRValue::make_Struct({pe.clone(), {}}));
-                    break;
-                }
-                case HIRValueItem::TAG_Function: {
-                    BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-                }
-                case HIRValueItem::TAG_StructConstructor: {
-                    BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-                }
             }
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
-            auto& pe = node.path.data.as_UfcsKnown();
-            const auto& tr = builder.crate().getTraitByPath(sp, pe.trait.path);
-            auto it = tr.values.find(pe.item);
-            ASSERT_BUG(sp, it != tr.values.end(), StringView("Cannot find trait item for ") << node.path);
-            switch (it->second.tag()) {
-                case HIRTraitValueItem::TAG_Constant: {
-                    builder.setResult(sp, MIRConstant::make_Const({box$(node.path.clone())}));
-                    break;
-                }
-                case HIRTraitValueItem::TAG_Static: {
-                    TODO(sp, StringView("Associated statics (non-rustc) - ") << node.path);
-                }
-                case HIRTraitValueItem::TAG_Function: {
-                    BUG(node.span(), StringView("Should have produced a NamedFunction type and have been handled above"));
-                }
-            }
+            builder.setResult(sp, MIRConstant::make_Const({box$(node.path.clone())}));
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
@@ -10940,13 +10910,6 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
             auto& pe = node.path.data.as_UfcsInherent();
             auto rv = builder.crate().findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
                 DEBUG(StringView("- impl") << impl.params.fmtArgs() << StringView(" ") << impl.type);
-                {
-                    auto it = impl.methods.find(pe.item);
-                    if (it != impl.methods.end()) {
-                        builder.setResult(sp, MIRConstant::make_ItemAddr({box$(node.path.clone())}));
-                        return true;
-                    }
-                }
                 {
                     auto it = impl.constants.find(pe.item);
                     if (it != impl.constants.end()) {
