@@ -131,9 +131,6 @@ namespace {
 
     const char* fragmentName(Ent::Type type) {
         switch (type) {
-            case Ent::PAT_TOKEN:
-            case Ent::PAT_LOOP:
-                return "";
             case Ent::PAT_TT:
                 return "tt";
             case Ent::PAT_PAT:
@@ -162,8 +159,9 @@ namespace {
                 return "lifetime";
             case Ent::PAT_LITERAL:
                 return "literal";
+            default:
+                return "";
         }
-        return "";
     }
 
     bool isRestricted(Ent::Type type) {
