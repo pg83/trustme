@@ -24,6 +24,7 @@ public:
         ConstEval,
         TypecheckRequest,
         Typecheck,
+        PostTypecheckRequest,
         PostTypecheck,
         SbcRequest,
         Sbc,
@@ -55,6 +56,7 @@ public:
     /* An anonymous constant (an array length, a const argument) is an item of its
        own with the enclosing item's generics and none of its where-clauses. */
     bool anonymousConst = false;
+    bool isItemInitializer = false;
 
     HIRExprState(HIRTypeInterner& types, HIRModule& modPtr, HIRSimplePath modPath);
 };

@@ -1292,7 +1292,6 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                             return InteriorMutability::No;
                         }
                     }
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
                     const auto pbe = e.binding.as_Enum();
@@ -1316,7 +1315,6 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                             return InteriorMutability::No;
                         }
                     }
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
                     const auto pbe = e.binding.as_Union();
@@ -1333,7 +1331,6 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     return InteriorMutability::No;
                 }
             }
-            break;
         }
         case HIRType::TAG_Generic: {
             return InteriorMutability::Unknown;
@@ -1395,7 +1392,6 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
                     return capturesInteriorMutability(e.as_Async()->avuCache.captureTypes);
                 }
             }
-            break;
         }
         case HIRType::TAG_Borrow: {
             return InteriorMutability::No;
@@ -1410,7 +1406,7 @@ InteriorMutability StaticTraitResolve::typeIsInteriorMutable(const Span& sp, con
             return InteriorMutability::No;
         }
     }
-    return InteriorMutability::Unknown;
+    UNREACHABLE();
 }
 
 MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty, bool errOnUnknown /*=false*/) const {

@@ -1137,13 +1137,23 @@ namespace {
         return HIRExprNodeP(en);
     }
 
+    bool promotedValueHasMutInterior(const StaticTraitResolve& resolve, const HIRExprNode& node, unsigned depth);
+
     static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
         HIRExprNode* node = &root;
-        while (auto* block = cast<HIRExprNodeBlock>(node)) {
-            if (!block->valueNode) {
-                return;
+        for (;;) {
+            if (auto* block = cast<HIRExprNodeBlock>(node)) {
+                if (!block->valueNode) {
+                    return;
+                }
+                node = &*block->valueNode;
+                continue;
             }
-            node = &*block->valueNode;
+            if (auto* unsize = cast<HIRExprNodeUnsize>(node)) {
+                node = &*unsize->value;
+                continue;
+            }
+            break;
         }
         auto* borrow = cast<HIRExprNodeBorrow>(node);
         if (!borrow) {
@@ -1165,7 +1175,7 @@ namespace {
         if (isMutable) {
             ERROR(borrow->span(), E0000, StringView("A mutable reference is not allowed in the final value of a constant"));
         }
-        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == InteriorMutability::Yes) {
+        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == InteriorMutability::Yes && promotedValueHasMutInterior(resolve, *held, 0)) {
             ERROR(borrow->span(), E0000, StringView("A constant may not refer to interior mutable data - ") << held->resType);
         }
     }
@@ -1449,6 +1459,10 @@ void HIRExpandReborrows(const WireBoard& wb, HIRCrate& crate) {
 void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     StaticTraitResolve resolve(wb);
+    resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
+    if (exp.state->isItemInitializer) {
+        checkConstFinalBorrow(resolve, *exp);
+    }
 
     // TODO: Get `Self` type
     StaticBorrowExprVisitorMark evm(resolve, nullptr, exp);
@@ -5619,8 +5633,18 @@ namespace {
             if (!monomorphisePathNeeded(e->path) && !e->path.data.is_UfcsKnown() && !e->path.data.is_UfcsUnknown()) {
                 MonomorphState ms(resolve.hirCrate().types);
                 auto value = resolve.getValue(node.span(), e->path, ms, /*signature_only*/ true);
+                if (value.is_Static()) {
+                    return false;
+                }
                 if (const auto* constant = value.opt_Constant()) {
-                    const auto& body = (*constant)->value;
+                    auto& item = resolve.hirCrateMut().findConstantMut(resolve.board(), node.span(), e->path, **constant);
+                    if (item.valueState == HIRConstant::ValueState::InProgress) {
+                        ERROR(node.span(), E0000, StringView("cycle detected when evaluating constant `") << e->path << StringView("`"));
+                    }
+                    if (item.value && !item.value.mir) {
+                        resolve.hirCrateMut().getOrGenMir(resolve.board(), HIRItemPath(e->path), item.value, item.type);
+                    }
+                    const auto& body = item.value;
                     const bool typed = body && body->resType && !visitTyWith(body->resType, [](const HIRType* t) {
                         return t->is_Infer();
                     });

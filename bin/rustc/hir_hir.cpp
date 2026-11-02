@@ -1106,8 +1106,13 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                 ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, StringView("Typecheck_Code didn't set stage"));
             }
             if (ep.state->stage < HIRExprState::Stage::PostTypecheck) {
+                if (ep.state->stage == HIRExprState::Stage::PostTypecheckRequest) {
+                    ERROR(ep.span(), E0000, StringView("cycle detected while preparing constant expression `") << ip << StringView("`"));
+                }
+                ep.state->stage = HIRExprState::Stage::PostTypecheckRequest;
                 HIRExpandAnnotateUsageExpr(wb, *this, ip, ep);
                 HIRExpandStaticBorrowConstantsMarkExpr(wb, *this, ip, ep);
+                ep.state->stage = HIRExprState::Stage::PostTypecheck;
             }
             if (ep.state->stage < HIRExprState::Stage::Sbc) {
                 if (ep.state->stage == HIRExprState::Stage::SbcRequest) {

@@ -1809,12 +1809,18 @@ auto BindVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
 
 auto BindVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
     HIRVisitor::visitStatic(p, item);
+    if (item.value.state) {
+        item.value.state->isItemInitializer = true;
+    }
     visitLiteral(Span(), item.valueRes);
 }
 
 auto BindVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     auto _ = this->ms.setItemGenerics(item.params);
     HIRVisitor::visitConstant(p, item);
+    if (item.value.state) {
+        item.value.state->isItemInitializer = true;
+    }
     visitLiteral(Span(), item.valueRes);
 }
 

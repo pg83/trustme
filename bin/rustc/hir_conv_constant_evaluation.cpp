@@ -5009,14 +5009,17 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool 
         auto& item = rootResolve.hirCrateMut().findStaticMut(rootResolve.board(), state.sp, p, *ent.as_Static());
         const auto& s = item;
         auto staticTy = rootResolve.expandAssociatedTypes(state.sp, constMs.monomorphType(state.sp, s.type));
+        if (outTy) {
+            *outTy = staticTy;
+        }
+        const auto* pathTy = staticTy->opt_Path();
+        if (pathTy && pathTy->binding.is_ExternType() && !s.value && !s.value.mir) {
+            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
+        }
         size_t staticSize;
         if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
             BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << staticTy);
         }
-        if (outTy) {
-            *outTy = staticTy;
-        }
-
         if (!s.valueGenerated) {
             if (!s.value && !s.value.mir) {
                 DEBUG(StringView("No value and no mir"));
@@ -5042,6 +5045,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool 
                 switch (item.value.state->stage) {
                     case HIRExprState::Stage::ConstEvalRequest:
                     case HIRExprState::Stage::TypecheckRequest:
+                    case HIRExprState::Stage::PostTypecheckRequest:
                     case HIRExprState::Stage::SbcRequest:
                     case HIRExprState::Stage::ExpandRequest:
                     case HIRExprState::Stage::MirRequest:
