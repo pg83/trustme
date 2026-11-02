@@ -7284,10 +7284,6 @@ void MirBuilder::writeLoopHeadState(const Span& sp, const MIRLValue& lv, const V
             }
             break;
         }
-        case VarState::TAG_Invalid:
-        case VarState::TAG_Valid: {
-            BUG(sp, StringView("Loop head state of ") << lv << StringView(" has no drop flag"));
-        }
     }
 }
 
