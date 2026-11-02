@@ -293,6 +293,7 @@ namespace {
         void visitParams(const ASTGenericParams& params);
 
         void visitBounds(const ASTGenericParams& params);
+        void visitSelfBounds(const ASTGenericParams& params);
 
         void visitNode(const ASTExprNode& e);
 
@@ -2340,6 +2341,36 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
     }
 }
 
+auto ProcMacroVisitor::visitSelfBounds(const ASTGenericParams& params) -> void {
+    bool firstBound = true;
+    for (const auto& bound : params.bounds) {
+        switch (bound.tag()) {
+            case ASTGenericBound::TAG_IsTrait: {
+                const auto& be = bound.as_IsTrait();
+                pmi.sendSymbol(firstBound ? ":" : "+");
+                this->visitHrbs(be.innerHrbs);
+                this->visitBoundConstness(be.constness);
+                this->visitPath(be.trait);
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                pmi.sendSymbol(firstBound ? ":" : "+");
+                pmi.sendSymbol("?");
+                this->visitPath(bound.as_MaybeTrait().trait);
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                pmi.sendSymbol(firstBound ? ":" : "+");
+                pmi.sendLifetime(bound.as_TypeLifetime().bound.name().name.c_str());
+                break;
+            }
+            default:
+                TODO(sp, StringView("visit_trait - associated type bound - ") << bound);
+        }
+        firstBound = false;
+    }
+}
+
 auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     DEBUG(StringView("NODE: ") << e);
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
@@ -2901,33 +2932,8 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
                 pmi.sendRword("type");
                 pmi.sendIdent(i.name.c_str());
                 this->visitParams(e.params_);
-                bool firstBound = true;
-                for (const auto& bound : e.selfBounds.bounds) {
-                    switch (bound.tag()) {
-                        case ASTGenericBound::TAG_IsTrait: {
-                            const auto& be = bound.as_IsTrait();
-                            pmi.sendSymbol(firstBound ? ":" : "+");
-                            this->visitHrbs(be.innerHrbs);
-                            this->visitBoundConstness(be.constness);
-                            this->visitPath(be.trait);
-                            break;
-                        }
-                        case ASTGenericBound::TAG_MaybeTrait: {
-                            pmi.sendSymbol(firstBound ? ":" : "+");
-                            pmi.sendSymbol("?");
-                            this->visitPath(bound.as_MaybeTrait().trait);
-                            break;
-                        }
-                        case ASTGenericBound::TAG_TypeLifetime: {
-                            pmi.sendSymbol(firstBound ? ":" : "+");
-                            pmi.sendLifetime(bound.as_TypeLifetime().bound.name().name.c_str());
-                            break;
-                        }
-                        default:
-                            TODO(i.span, StringView("visit_trait - associated type bound - ") << bound);
-                    }
-                    firstBound = false;
-                }
+                this->visitSelfBounds(e.selfBounds);
+                this->visitBounds(e.params_);
                 if (e.type_->isValid()) {
                     pmi.sendSymbol("=");
                     this->visitType(e.type_);
@@ -3012,6 +3018,7 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
             pmi.sendRword("type");
             pmi.sendIdent(name.c_str());
             this->visitParams(e.params_);
+            this->visitSelfBounds(e.selfBounds);
             this->visitBounds(e.params_);
             if (e.type_->isValid() && !e.type_->isUnbounded()) {
                 pmi.sendSymbol("=");

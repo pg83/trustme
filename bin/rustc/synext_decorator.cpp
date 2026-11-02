@@ -1929,6 +1929,10 @@ void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireB
     unexpected(sp, mi, "trait item");
 }
 
+void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, size_t itemIndex, slice<const ASTAttribute> attrs, ASTItem& i) const {
+    handle(sp, mi, wb, crate, path, trait, attrs, i);
+}
+
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const {
     unexpected(sp, mi, "struct item");
 }

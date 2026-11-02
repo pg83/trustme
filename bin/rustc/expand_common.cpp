@@ -433,6 +433,26 @@ namespace {
                         }
                     }
 
+                    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, size_t itemIndex, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+                        if (!i.is_None()) {
+                            auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr, attrs, ASTVisibility::makeBarePrivate(), path.nodes.back(), i);
+                            if (lex) {
+                                i = ASTItem::make_None({});
+                                BUG_ASSERT(currentMod);
+                                lex->parseState().module = currentMod;
+                                size_t insertPos = itemIndex + 1;
+                                while (lex->lookahead(0) != TOK_EOF) {
+                                    auto output = ParseTraitItem(*lex);
+                                    auto& items = trait.items();
+                                    items.insert(items.begin() + insertPos, mv$(output));
+                                    insertPos++;
+                                }
+                            } else {
+                                ERROR(sp, E0000, StringView("proc_macro expansion failed"));
+                            }
+                        }
+                    }
+
                     ASTModule* currentMod = nullptr;
                 } d;
 
@@ -609,10 +629,10 @@ namespace {
         }), &item);
     }
 
-    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, ASTItem& item) {
+    bool ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, size_t itemIndex, ASTItem& item) {
         return ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
             if (!item.is_None()) {
-                d.handle(sp, a, es.wb, es.crate, path, trait, getAttrsAfter(attrs, a), item);
+                d.handle(sp, a, es.wb, es.crate, path, trait, itemIndex, getAttrsAfter(attrs, a), item);
             }
         }), &item);
     }
@@ -1818,13 +1838,15 @@ namespace {
                     }
                     auto& traitItems = e.items();
                     for (size_t idx = 0; idx < traitItems.size(); idx++) {
-                        auto& ti = traitItems[idx];
+                        auto ti = mv$(traitItems[idx]);
+                        traitItems[idx].data = ASTItem::make_None({});
                         DEBUG(StringView(" - ") << ti.name << StringView(" ") << ti.data.tagStr());
                         auto attrs = mv$(ti.attrs);
                         auto tiPath = path + ti.name;
                         CfgExpandAttrs(es.wb, attrs);
-                        if (ExpandAttrs(es, attrs, AttrStage::Pre, tiPath, mod, e, ti.data)) {
+                        if (ExpandAttrs(es, attrs, AttrStage::Pre, tiPath, mod, e, idx, ti.data)) {
                             ti.attrs = std::move(attrs);
+                            traitItems[idx] = mv$(ti);
                             continue;
                         }
 
@@ -1849,9 +1871,9 @@ namespace {
                                             traitItems.insert(traitItems.begin() + insertPos, mv$(i));
                                             insertPos++;
                                         }
-                                        traitItems[idx].data = ASTItem::make_None({});
+                                        ti.data = ASTItem::make_None({});
                                     } else {
-                                        traitItems[idx].data.as_MacroInv() = mv$(miOwned);
+                                        ti.data.as_MacroInv() = mv$(miOwned);
                                     }
                                 }
                                 break;
@@ -1875,14 +1897,11 @@ namespace {
                             }
                         }
 
-                        {
-                            auto& ti = traitItems[idx];
-
-                            ExpandAttrs(es, attrs, AttrStage::Post, tiPath, mod, e, ti.data);
-                            if (ti.attrs.items.size() == 0) {
-                                ti.attrs = mv$(attrs);
-                            }
+                        ExpandAttrs(es, attrs, AttrStage::Post, tiPath, mod, e, idx, ti.data);
+                        if (ti.attrs.items.size() == 0) {
+                            ti.attrs = mv$(attrs);
                         }
+                        traitItems[idx] = mv$(ti);
                     }
                     break;
                 }
