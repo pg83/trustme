@@ -3,6 +3,7 @@
 #include "output.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
+#include "hir_encoded_literal.h"
 #include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
@@ -2707,17 +2708,65 @@ namespace {
 
     ASTType* HIRTypeToAST(Context& context, const Span& span, const HIRType* type);
 
-    ASTPathParams HIRPathParamsToAST(Context& context, const Span& span, const HIRPathParams& params) {
-        ASTPathParams rv;
-        for (const auto& type : params.types) {
-            rv.entries.push_back(HIRTypeToAST(context, span, type));
+    ASTExprNode* HIRConstToAST(Context& context, const Span& span, const HIRConstGeneric& value, const HIRType* type) {
+        auto& pool = context.typePool();
+        if (const auto* generic = value.opt_Generic()) {
+            ASTPath path(generic->name);
+            path.bindings.value.set({}, ASTPathBindingValue::make_Generic({generic->binding}));
+            return makeAstExprNode<ASTExprNodeNamedValue>(pool, mv$(path));
         }
-        ASSERT_BUG(span, params.values.empty(), StringView("Const generics in an external delegation signature"));
+        if (const auto* evaluated = value.opt_Evaluated()) {
+            ASSERT_BUG(span, type && type->is_Primitive(), StringView("Non-scalar const in an external delegation signature: ") << type);
+            const auto primitive = type->as_Primitive();
+            const auto literal = EncodedLiteralSlice(**evaluated);
+            if (primitive == HIRCoreType::Bool) {
+                return makeAstExprNode<ASTExprNodeBool>(pool, literal.readUint() != U128(0));
+            }
+            const bool signedInteger = primitive == HIRCoreType::Isize || primitive == HIRCoreType::I8 || primitive == HIRCoreType::I16 || primitive == HIRCoreType::I32 || primitive == HIRCoreType::I64 || primitive == HIRCoreType::I128;
+            const auto bits = signedInteger ? literal.readSint().getInner() : literal.readUint();
+            return makeAstExprNode<ASTExprNodeInteger>(pool, bits, HIRCoreTypeToAST(primitive));
+        }
+        TODO(span, StringView("Unevaluated const in an external delegation signature: ") << value);
+    }
+
+    const HIRGenericParams& HIRPathGenericParams(Context& context, const Span& span, const HIRSimplePath& path) {
+        const auto& item = context.crate.externCrates.at(path.crateName()).hir->getTypeitemByPath(span, path, true);
+        switch (item.tag()) {
+            case HIRTypeItem::TAG_Struct: return item.as_Struct().params;
+            case HIRTypeItem::TAG_Enum: return item.as_Enum().params;
+            case HIRTypeItem::TAG_Union: return item.as_Union().params;
+            case HIRTypeItem::TAG_Trait: return item.as_Trait().params;
+            case HIRTypeItem::TAG_TypeAlias: return item.as_TypeAlias().params;
+            case HIRTypeItem::TAG_TraitAlias: return item.as_TraitAlias().params;
+            default: BUG(span, StringView("No generic parameters for external delegation path: ") << path);
+        }
+    }
+
+    ASTPathParams HIRPathParamsToAST(Context& context, const Span& span, const HIRPathParams& params, const HIRGenericParams* definitions = nullptr) {
+        ASTPathParams rv;
+        if (params.values.empty()) {
+            for (const auto& type : params.types) {
+                rv.entries.push_back(HIRTypeToAST(context, span, type));
+            }
+        } else {
+            ASSERT_BUG(span, definitions && definitions->types.size() == params.types.size() && definitions->values.size() == params.values.size(), StringView("Const argument definitions in an external delegation signature"));
+            size_t typeIndex = 0;
+            size_t valueIndex = 0;
+            for (size_t i = 0; i < definitions->paramCount(); i++) {
+                if (definitions->paramKindAt(i) == HIRGenericParamKind::Type) {
+                    rv.entries.push_back(HIRTypeToAST(context, span, params.types[typeIndex++]));
+                } else {
+                    rv.entries.push_back(HIRConstToAST(context, span, params.values[valueIndex], definitions->values[valueIndex].type));
+                    valueIndex++;
+                }
+            }
+        }
         return rv;
     }
 
     ASTPath HIRGenericPathToAST(Context& context, const Span& span, const HIRGenericPath& path) {
-        return ASTPath(spToAp(path.path), HIRPathParamsToAST(context, span, path.params));
+        const auto* definitions = path.params.values.empty() ? nullptr : &HIRPathGenericParams(context, span, path.path);
+        return ASTPath(spToAp(path.path), HIRPathParamsToAST(context, span, path.params, definitions));
     }
 
     ASTPath HIRTraitPathToAST(Context& context, const Span& span, const HIRTraitPath& trait) {
@@ -2801,7 +2850,29 @@ namespace {
                 return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner));
             }
             case HIRType::TAG_Pattern: {
-                BUG(span, StringView("Pattern type in an external delegation signature"));
+                const auto& pattern = type->as_Pattern();
+                ASTPattern* ranges = nullptr;
+                if (!pattern.pattern.notNull) {
+                    auto alternatives = ASTPatternData::make_Or({});
+                    const auto endpoint = [&](const HIRConstGeneric& value) {
+                        auto* expression = HIRConstToAST(context, span, value, pattern.inner);
+                        if (const auto* integer = cast<ASTExprNodeInteger>(expression)) {
+                            return ASTPatternValue::make_Integer({integer->datatype, integer->value});
+                        }
+                        const auto* named = cast<ASTExprNodeNamedValue>(expression);
+                        ASSERT_BUG(span, named, StringView("Invalid external pattern endpoint"));
+                        return ASTPatternValue::make_Named(named->path);
+                    };
+                    for (const auto& range : pattern.pattern.alternatives) {
+                        auto start = range.hasStart ? endpoint(range.start) : ASTPatternValue();
+                        auto end = range.hasEnd ? endpoint(range.end) : ASTPatternValue();
+                        auto data = range.endInclusive ? ASTPatternData::make_Value({mv$(start), mv$(end)}) : ASTPatternData::make_ValueLeftInc({mv$(start), mv$(end)});
+                        alternatives.as_Or().push_back(ASTPattern(span, mv$(data)));
+                    }
+                    auto& values = alternatives.as_Or();
+                    ranges = values.size() == 1 ? pool.make<ASTPattern>(mv$(values.front())) : pool.make<ASTPattern>(span, mv$(alternatives));
+                }
+                return mkType(pool, span, TypeData::make_Pattern({HIRTypeToAST(context, span, pattern.inner), ranges, pattern.pattern.notNull}));
             }
             case HIRType::TAG_Tuple: {
                 auto& e = (*type).as_Tuple();
