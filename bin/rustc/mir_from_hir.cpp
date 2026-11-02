@@ -3276,8 +3276,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             BUG(sp, StringView("Ivar for in match type"));
         }
         case HIRType::TAG_Diverge: {
-            this->pushRule(PatternRule::make_Any({}));
-            break;
+            ERROR(sp, E0000, StringView("uninhabited value in constant pattern: ") << ty);
         }
         case HIRType::TAG_Primitive: {
             auto& e = (*ty).as_Primitive();
@@ -3389,6 +3388,9 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     ERROR(sp, E0000, StringView("Union constants cannot be used in patterns"));
                 }
                 case HIRTypePathBinding::TAG_Enum: {
+                    if (resolve.typeIsImpossible(sp, ty)) {
+                        ERROR(sp, E0000, StringView("uninhabited value in constant pattern: ") << ty);
+                    }
                     auto* enmRepr = TargetGetTypeRepr(sp, resolve, ty);
                     ASSERT_BUG(sp, enmRepr, StringView("Matching with generic constant type not valid - ") << ty);
 
