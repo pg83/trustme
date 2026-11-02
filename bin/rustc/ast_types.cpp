@@ -79,7 +79,7 @@ ASTType* ASTType::clone() const {
         _COPY(Primitive)
         _COPY(Function)
         _CLONE(Tuple, {H::cloneTyVec(old.innerTypes)})
-        _CLONE(Borrow, {ASTLifetimeRef(old.lifetime), old.isMut, old.inner->clone()})
+        _CLONE(Borrow, {ASTLifetimeRef(old.lifetime), old.isMut, old.inner->clone(), old.isPin})
         _CLONE(Pointer, {old.isMut, old.inner->clone()})
         _CLONE(Array, {old.inner->clone(), old.size ? old.size->clone() : nullptr})
         _CLONE(Slice, {old.inner->clone()})

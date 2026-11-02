@@ -9827,6 +9827,24 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
             const HIRType* tmp;
             auto inner = val.innerRef();
             const auto& ty = mirRes->getLvalueType(inner);
+            const auto& fieldTy = mirRes->getLvalueType(val);
+            if (this->metadataType(fieldTy) == MetadataType::Zero) {
+                const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
+                MIR_ASSERT(*mirRes, repr && fieldIndex < repr->fields.size(), StringView("Invalid extern DST field ") << fieldIndex << StringView(" on ") << ty);
+                of << StringView("(*(");
+                emitCtype(fieldTy);
+                of << StringView("*)(");
+                if (repr->fields[fieldIndex].offset == 0) {
+                    of << StringView("(void*)&");
+                    emitLvalue(inner);
+                } else {
+                    of << StringView("[]() -> void* ");
+                    emitExternTypeLayoutPanic(getInnerUnsizedType(fieldTy));
+                    of << StringView("()");
+                }
+                of << StringView("))");
+                break;
+            }
             if (ty->is_Slice()) {
                 if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
                     of << StringView("((");
@@ -9846,8 +9864,7 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
                 emitLvalue(inner);
                 of << StringView(".DATA[") << fieldIndex << StringView("]");
             } else if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
-                auto dstType = metadataType(ty);
-                if (dstType != MetadataType::None) {
+                if (this->isDst(ty)) {
                     of << StringView("((");
                     emitCtype(ty);
                     of << StringView("*)");
@@ -9871,8 +9888,7 @@ auto CodeGeneratorC::emitLvalue(const MIRLValue::CRef& val) -> void {
             auto inner = val.innerRef();
             const HIRType* tmp;
             const auto& ty = mirRes->getLvalueType(val);
-            auto dstType = metadataType(ty);
-            if (dstType != MetadataType::None) {
+            if (this->isDst(ty)) {
                 of << StringView("(*(");
                 emitCtype(ty);
                 of << StringView("*)");
