@@ -1882,7 +1882,10 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             auto& te = ty->data.as_Borrow();
             pmi.sendSymbol("&");
             this->visitLifetime(te.lifetime);
-            if (te.isMut) {
+            if (te.isPin) {
+                pmi.sendIdent("pin");
+                pmi.sendRword(te.isMut ? "mut" : "const");
+            } else if (te.isMut) {
                 pmi.sendRword("mut");
             }
             this->visitTypeBehindPointer(te.inner);
