@@ -5954,7 +5954,11 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                         BUG(sp, StringView("Module Import"));
                     }
                     case HIRValueItem::TAG_Static: {
-                        BUG(sp, StringView("Getting params definition for Static - ") << p);
+                        const auto& e = *vi.as_Static();
+                        if (!e.isPromoted) {
+                            ERROR(sp, E0000, StringView("generic arguments are not allowed on static ") << p.path);
+                        }
+                        return e.params;
                     }
                     case HIRValueItem::TAG_Constant: {
                         const auto& e = *vi.as_Constant();
@@ -6007,12 +6011,15 @@ auto Expander::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) -
                         return e.params;
                     }
                     case HIRTypeItem::TAG_ExternType: {
-                        BUG(sp, StringView("extern type - ") << p);
+                        ERROR(sp, E0000, StringView("generic arguments are not allowed on extern type ") << p.path);
                     }
                 }
             }
         }
     });
+    if (!p.params.values.empty() || (pc == HIRVisitor::PathContext::VALUE && !p.params.types.empty())) {
+        callback.get(Span());
+    }
     getParams = &callback;
     HIRVisitor::visitGenericPath(p, pc);
     getParams = saved;
