@@ -2551,9 +2551,13 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writeUint(state, 32, U128(ti.bits - rv));
                 } else if (te->name == "bswap") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Primitive(), StringView("bswap with non-primitive ") << ty);
+                    if (!ty->is_Primitive()) {
+                        ERROR(state.sp, E0000, StringView("`bswap` requires an integer operand, got ") << ty);
+                    }
                     auto ti = TypeInfo::forType(ty);
-                    MIR_ASSERT(state, ti.ty == TypeInfo::Signed || ti.ty == TypeInfo::Unsigned, StringView("bswap with non-integer ") << ty);
+                    if (ti.ty != TypeInfo::Signed && ti.ty != TypeInfo::Unsigned) {
+                        ERROR(state.sp, E0000, StringView("`bswap` requires an integer operand, got ") << ty);
+                    }
                     auto val = localState.readParamUint(ti.bits, e.args.at(0));
 
                     struct H {
@@ -2592,7 +2596,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                             rv = H::bswap128(val);
                             break;
                         default:
-                            MIR_TODO(state, StringView("Handle bswap with ") << ty);
+                            ERROR(state.sp, E0000, StringView("`bswap` requires a supported integer operand, got ") << ty);
                     }
                     dst.writeUint(state, ti.bits, rv);
                 } else if (te->name == "bitreverse") {
@@ -2784,7 +2788,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         auto rhs = localState.readParamUint(ti.bits, e.args.at(1));
                         result = lhs == rhs ? 0 : lhs < rhs ? -1 : 1;
                     } else {
-                        MIR_BUG(state, StringView("`three_way_compare` with unsupported type ") << state.getParamType(e.args.at(0)));
+                        ERROR(state.sp, E0000, StringView("`three_way_compare` requires integer or character operands, got ") << state.getParamType(e.args.at(0)));
                     }
                     dst.writeSint(state, dst.getLen() * 8, S128(result));
                 } else if (te->name == "assume") {
