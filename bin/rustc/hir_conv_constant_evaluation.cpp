@@ -3595,6 +3595,9 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRType* ty, HIRConstGeneric& cg) {
     if (auto* cgeP = cg.opt_Unevaluated()) {
         const auto& cge = *cgeP;
+        if (!cge->expr->state) {
+            return;
+        }
         translateConstExprBody(sp, wb, crate, ty, *cge);
         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *cge);
         if (!predicted && !wb.ctfe->capsOracle()) {
@@ -3656,6 +3659,9 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
             continue;
         }
         const auto& ue = *v.as_Unevaluated();
+        if (!ue.expr->state) {
+            continue;
+        }
         ASSERT_BUG(sp, paramsDef, StringView("Missing generic parameter definitions for ") << params);
         ASSERT_BUG(sp, idx < paramsDef->values.size(), StringView(""));
         const HIRType* ty = paramsDef->values[idx].type;
