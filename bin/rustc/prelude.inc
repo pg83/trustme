@@ -758,6 +758,54 @@ static inline f128 f128_encode(f128_native v) {
     return result;
 }
 
+static inline f128 cast_u128_to_f128(uint128_t value) {
+#if TRUSTME_TARGET_EMULATED_I128
+    return f128_encode((f128_native)value.hi * 0x1p64Q + (f128_native)value.lo);
+#else
+    return f128_encode((f128_native)value);
+#endif
+}
+
+static inline f128 cast_i128_to_f128(int128_t value) {
+#if TRUSTME_TARGET_EMULATED_I128
+    return f128_encode((f128_native)(i64)value.hi * 0x1p64Q + (f128_native)value.lo);
+#else
+    return f128_encode((f128_native)value);
+#endif
+}
+
+static inline uint128_t cast_f128_to_u128(f128 value) {
+    const f128_native v = f128_decode(value);
+#if TRUSTME_TARGET_EMULATED_I128
+    if (!(v > 0.0Q)) return make128(0);
+    if (v >= 0x1p128Q) return make128_raw(UINT64_MAX, UINT64_MAX);
+    const u64 hi = (u64)(v / 0x1p64Q);
+    return make128_raw(hi, (u64)(v - (f128_native)hi * 0x1p64Q));
+#else
+    if (!(v > 0.0Q)) return 0;
+    if (v >= 0x1p128Q) return ~(uint128_t)0;
+    return (uint128_t)v;
+#endif
+}
+
+static inline int128_t cast_f128_to_i128(f128 value) {
+    const f128_native v = f128_decode(value);
+#if TRUSTME_TARGET_EMULATED_I128
+    if (v != v) return make128s(0);
+    if (v >= 0x1p127Q) return make128s_raw(INT64_MAX, UINT64_MAX);
+    if (v <= -0x1p127Q) return make128s_raw((u64)INT64_MIN, 0);
+    const bool negative = v < 0.0Q;
+    const uint128_t magnitude = cast_f128_to_u128(f128_encode(negative ? -v : v));
+    const int128_t result = uint128_to_int128(magnitude);
+    return negative ? neg128s(result) : result;
+#else
+    if (v != v) return 0;
+    if (v >= 0x1p127Q) return (int128_t)(~(uint128_t)0 >> 1);
+    if (v <= -0x1p127Q) return (int128_t)((uint128_t)1 << 127);
+    return (int128_t)v;
+#endif
+}
+
 static inline f128 f128_add(f128 a, f128 b) { return f128_encode(f128_decode(a) + f128_decode(b)); }
 static inline f128 f128_sub(f128 a, f128 b) { return f128_encode(f128_decode(a) - f128_decode(b)); }
 static inline f128 f128_mul(f128 a, f128 b) { return f128_encode(f128_decode(a) * f128_decode(b)); }
@@ -882,6 +930,10 @@ static inline f128 f128_powi(f128 base, i32 exponent) {
 typedef long double f128_native;
 static f128_native f128_decode(f128) { abort(); }
 static f128 f128_encode(f128_native) { abort(); }
+static f128 cast_u128_to_f128(uint128_t) { abort(); }
+static f128 cast_i128_to_f128(int128_t) { abort(); }
+static uint128_t cast_f128_to_u128(f128) { abort(); }
+static int128_t cast_f128_to_i128(f128) { abort(); }
 static f128 f128_add(f128, f128) { abort(); }
 static f128 f128_sub(f128, f128) { abort(); }
 static f128 f128_mul(f128, f128) { abort(); }

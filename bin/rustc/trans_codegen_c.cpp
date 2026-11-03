@@ -4954,6 +4954,22 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         return;
     }
 
+    if (ty == HIRCoreType::F128 && (ve.type == HIRCoreType::I128 || ve.type == HIRCoreType::U128)) {
+        emitLvalue(dst);
+        of << StringView(ve.type == HIRCoreType::I128 ? " = cast_f128_to_i128(" : " = cast_f128_to_u128(");
+        emitLvalue(ve.val);
+        of << StringView(")");
+        return;
+    }
+
+    if (ve.type == HIRCoreType::F128 && (ty == HIRCoreType::I128 || ty == HIRCoreType::U128)) {
+        emitLvalue(dst);
+        of << StringView(ty == HIRCoreType::I128 ? " = cast_i128_to_f128(" : " = cast_u128_to_f128(");
+        emitLvalue(ve.val);
+        of << StringView(")");
+        return;
+    }
+
     if (options.emulatedI128 && (ve.type == HIRCoreType::U128 || ve.type == HIRCoreType::I128 || ty == HIRCoreType::U128 || ty == HIRCoreType::I128)) {
         MIR_ASSERT(localMirRes, ve.type->is_Primitive(), StringView("i128/u128 cast to non-primitive - ") << ve.type);
         MIR_ASSERT(localMirRes, ty->is_Primitive() || (ty->is_Path() && ty->as_Path().binding.is_Enum()), StringView("i128/u128 cast from non-primitive - ") << ty);
@@ -5066,8 +5082,6 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
                         MIR_BUG(localMirRes, StringView("Unreachable"));
                 }
                 break;
-            case HIRCoreType::F128:
-                MIR_TODO(localMirRes, StringView("f128 from i128/u128"));
             default:
                 MIR_BUG(localMirRes, StringView("Bad i128/u128 cast - ") << ty << StringView(" to ") << ve.type);
         }
@@ -5080,16 +5094,6 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         of << StringView(")");
         return;
     }
-    if (ty == HIRCoreType::F128) {
-        emitLvalue(dst);
-        of << StringView(" = (");
-        emitCtype(ve.type);
-        of << StringView(")f128_decode(");
-        emitLvalue(ve.val);
-        of << StringView(")");
-        return;
-    }
-
     const HIRType* dstTmp;
     const auto& dstTy = localMirRes.getLvalueType(dst);
     const auto* dstPrimitive = ve.type->opt_Primitive();
@@ -5114,7 +5118,7 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
         return;
     }
 
-    if (dstPrimitive && isInteger(*dstPrimitive) && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
+    if (dstPrimitive && isInteger(*dstPrimitive) && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64 || ty == HIRCoreType::F128)) {
         unsigned bits = 0;
         bool isSigned = false;
         switch (*dstPrimitive) {
@@ -5161,43 +5165,62 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
             emitCtype(dstTy);
             of << StringView(")");
         };
+        const auto emitSource = [&]() {
+            if (ty == HIRCoreType::F128) {
+                of << StringView("f128_decode(");
+            }
+            emitLvalue(ve.val);
+            if (ty == HIRCoreType::F128) {
+                of << StringView(")");
+            }
+        };
         emitLvalue(dst);
         of << StringView(" = ");
         if (isSigned) {
             const u64 maximum = (u64(1) << (bits - 1)) - 1;
             of << StringView("(");
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" != ");
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(") ? ");
             emitTarget();
             of << StringView("0 : (");
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" >= 0x1p") << bits - 1 << StringView(") ? ");
             emitTarget();
             of << maximum << StringView("ULL : (");
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" >= -0x1p") << bits - 1 << StringView(") ? ");
             emitTarget();
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" : ");
             emitTarget();
             of << StringView("(-") << maximum << StringView("LL - 1)");
         } else {
             const u64 maximum = bits == 64 ? ~u64(0) : (u64(1) << bits) - 1;
             of << StringView("(");
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" >= 0x1p") << bits << StringView(") ? ");
             emitTarget();
             of << maximum << StringView("ULL : (");
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" > -1.0) ? ");
             emitTarget();
-            emitLvalue(ve.val);
+            emitSource();
             of << StringView(" : ");
             emitTarget();
             of << StringView("0");
         }
+        return;
+    }
+
+    if (ty == HIRCoreType::F128) {
+        emitLvalue(dst);
+        of << StringView(" = (");
+        emitCtype(ve.type);
+        of << StringView(")f128_decode(");
+        emitLvalue(ve.val);
+        of << StringView(")");
         return;
     }
 
