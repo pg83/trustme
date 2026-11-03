@@ -3438,11 +3438,10 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
                 markings.hasDropImpl = true;
                 markings.hasConstDropImpl = markings.hasConstDropImpl || impl.isConst;
             } else if (traitPath == langCoerceUnsized_) {
-                ASSERT_BUG(sp, typeItem.is_Struct(), StringView("CoerceUnsized impl is not for a struct"));
-                auto& structMarkings = typeItem.as_Struct().structMarkings;
-                if (structMarkings.coerceUnsizedIndex != ~0u) {
-                    ERROR(sp, E0000, StringView("CoerceUnsized can only be implemented once per struct"));
+                if (!typeItem.is_Struct()) {
+                    ERROR(sp, E0000, StringView("Cannot implement CoerceUnsized on non-structs"));
                 }
+                auto& structMarkings = typeItem.as_Struct().structMarkings;
 
                 DEBUG(StringView("Type ") << impl.type << StringView(" can Coerce"));
                 if (impl.traitArgs.types.size() != 1) {
@@ -3514,6 +3513,9 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
                 }
                 if (field == ~0u) {
                     ERROR(sp, E0000, StringView("CoerceUnsized requires a field to differ between source and destination"));
+                }
+                if (structMarkings.coerceUnsizedIndex != ~0u && structMarkings.coerceUnsizedIndex != field) {
+                    ERROR(sp, E0000, StringView("CoerceUnsized implementations selecting different fields are not supported"));
                 }
                 structMarkings.coerceUnsizedIndex = field;
             } else if (traitPath == langDeref_) {
