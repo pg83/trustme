@@ -16,6 +16,7 @@
 #include "hir_main_bindings.h"
 #include "hir_typeck_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
+#include "trans_target.h"
 
 #include <std/rng/mix.h>
 #include <std/alg/defer.h>
@@ -184,6 +185,8 @@ namespace {
         void visitNodePtr(HIRExprPtr& nodePtr);
 
         void visitNodePtr(HIRExprNodeP& nodePtr) override;
+
+        HIRExprNode* foldNegatedMinimumLiteral(HIRExprNode& node);
 
         void visitPattern(const Span& sp, HIRPattern& pat) override;
 
@@ -9060,6 +9063,53 @@ ExprVisitorApply::ExprVisitorApply(Context& context, const tArgs* callerArgs, co
     nopItem = context.resolve.itemGenerics().makeNopParams(context.crate.types, 1);
 }
 
+auto ExprVisitorApply::foldNegatedMinimumLiteral(HIRExprNode& node) -> HIRExprNode* {
+    const auto* unary = cast<HIRExprNodeUniOp>(&node);
+    if (!unary || unary->op != HIRExprNodeUniOp::Op::Negate) {
+        return &node;
+    }
+    const auto* literal = cast<HIRExprNodeLiteral>(unary->value.get());
+    const auto* integer = literal ? literal->data.opt_Integer() : nullptr;
+    if (!integer || integer->type != HIRCoreType::Str || !node.resType->is_Primitive()) {
+        return &node;
+    }
+    const auto type = node.resType->as_Primitive();
+    unsigned bits;
+    switch (type) {
+        case HIRCoreType::I8:
+            bits = 8;
+            break;
+        case HIRCoreType::I16:
+            bits = 16;
+            break;
+        case HIRCoreType::I32:
+            bits = 32;
+            break;
+        case HIRCoreType::I64:
+            bits = 64;
+            break;
+        case HIRCoreType::I128:
+            bits = 128;
+            break;
+        case HIRCoreType::Isize:
+            bits = TargetGetPointerBits();
+            break;
+        default:
+            return &node;
+    }
+    if (integer->value != (U128(1) << (bits - 1))) {
+        return &node;
+    }
+    auto* folded = context.crate.pool->make<HIRExprNodeLiteral>(node.span(), HIRExprLiteral::make_Integer({type, ~U128(0) << (bits - 1)}));
+    folded->resType = node.resType;
+    folded->diverges = node.diverges;
+    folded->usage = node.usage;
+    folded->checkOrder = node.checkOrder;
+    folded->checkOrderEnd = node.checkOrderEnd;
+    folded->lintLevels = node.lintLevels;
+    return folded;
+}
+
 auto ExprVisitorApply::visitNodePtr(HIRExprPtr& nodePtr) -> void {
     auto& node = *nodePtr;
     const char* nodeTy = typeid(node).name();
@@ -9068,6 +9118,7 @@ auto ExprVisitorApply::visitNodePtr(HIRExprPtr& nodePtr) -> void {
     node.resType = this->checkTypeResolvedTop(node.span(), node.resType);
 
     DEBUG(nodeTy << StringView(" : = ") << node.resType);
+    nodePtr.reset(foldNegatedMinimumLiteral(node));
     nodePtr->visit(*this);
 
     for (auto& type : mutRange(nodePtr.bindings)) {
@@ -9107,6 +9158,7 @@ auto ExprVisitorApply::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
     TRACE_FUNCTION_FR(static_cast<const void*>(&nodePtr) << StringView(" ") << static_cast<const void*>(&node) << StringView(" ") << nodeTy << StringView(" : ") << node.resType, static_cast<const void*>(&node) << StringView(" ") << nodeTy);
     node.resType = this->checkTypeResolvedTop(node.span(), node.resType);
     DEBUG(nodeTy << StringView(" : = ") << node.resType);
+    nodePtr.reset(foldNegatedMinimumLiteral(node));
     HIRExprVisitorDef::visitNodePtr(nodePtr);
 }
 
