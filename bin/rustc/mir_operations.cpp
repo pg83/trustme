@@ -5067,25 +5067,8 @@ namespace {
                                             }
                                             case MIRConstant::TAG_Int: {
                                                 auto& ve = val.as_Int();
-                                                auto val = ve.v;
-                                                switch (ve.t) {
-                                                    case HIRCoreType::I8:
-                                                    case HIRCoreType::I16:
-                                                    case HIRCoreType::I32:
-                                                    case HIRCoreType::Isize:
-                                                    case HIRCoreType::I64:
-                                                        val = H::truncateS(ve.t, ~val);
-                                                        replace = true;
-                                                        break;
-                                                    case HIRCoreType::I128:
-                                                        // TODO: Are there any cases where sign extension stops being correct here?
-                                                        val = H::truncateS(ve.t, ~val);
-                                                        replace = true;
-                                                        break;
-                                                    default:
-                                                        MIR_BUG(state, StringView("Invalid signed operand for ! - ") << ve.t);
-                                                }
-                                                newValue = MIRConstant::make_Int({val, ve.t});
+                                                newValue = MIRConstant::make_Int({H::truncateS(ve.t, ~ve.v), ve.t});
+                                                replace = true;
                                                 break;
                                             }
                                             case MIRConstant::TAG_Bool: {
