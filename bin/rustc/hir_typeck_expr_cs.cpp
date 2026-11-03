@@ -8969,9 +8969,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeUnitVariant& node) -> void {
 }
 
 auto ExprVisitorRevisit::visit(HIRExprNodePathValue& node) -> void {
-    if (!node.path.data.is_UfcsInherent()) {
-        noRevisit(node);
-    }
     completed = resolveInherentPathValue(context, node);
 }
 
