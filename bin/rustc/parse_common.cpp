@@ -352,7 +352,7 @@ namespace {
             }
             if (arm.patterns.empty()) {
                 if (tok.type() == TOK_FATARROW) {
-                    (void)ParseStmt(lex);
+                    ERROR(lex.pointSpan(), E0000, StringView("a never pattern is always unreachable"));
                 } else {
                     PUTBACK(tok, lex);
                 }
