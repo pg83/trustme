@@ -274,7 +274,7 @@ namespace {
 
         void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) override;
 
-        void emitBoxDrop(unsigned indentLevel, const HIRType* innerType, const HIRType* boxType, const MIRLValue& slot, bool runDestructor);
+        void emitBoxDrop(unsigned indentLevel, const HIRType* boxType, const MIRLValue& slot);
 
         std::string asmSymbol(const Span& span, const HIRPath& path, bool* functionSymbol = nullptr) const;
 
@@ -1413,13 +1413,8 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
     }
 }
 
-auto CodeGeneratorC::emitBoxDrop(unsigned indentLevel, const HIRType* innerType, const HIRType* boxType, const MIRLValue& slot, bool runDestructor) -> void {
+auto CodeGeneratorC::emitBoxDrop(unsigned indentLevel, const HIRType* boxType, const MIRLValue& slot) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-    if (runDestructor) {
-        auto innerPtr = MIRLValue::newField(MIRLValue::newField(MIRLValue::newField(slot.clone(), 0), 0), 0);
-        emitDestructorCall(MIRLValue::newDeref(mv$(innerPtr)), innerType, /*unsized_valid=*/true, indentLevel);
-    }
-
     auto p = HIRPath(boxType, crate.getLangItemPath(Span(), "drop"), "drop");
     of << indent << TransMangleValue(p) << StringView("(&");
     emitLvalue(slot);
@@ -4225,8 +4220,8 @@ auto CodeGeneratorC::emitDropOperation(const MIRTypeResolve& localMirRes, const 
     }
     switch (e.kind) {
         case MIRDropKind::SHALLOW:
-            if (const auto* ity = resolve_.isTypeOwnedBox(ty)) {
-                emitBoxDrop(indentLevel + (e.flagIdx != ~0u ? 1 : 0), ity, ty, e.slot, false);
+            if (resolve_.isTypeOwnedBox(ty)) {
+                emitBoxDrop(indentLevel + (e.flagIdx != ~0u ? 1 : 0), ty, e.slot);
             } else {
                 MIR_BUG(localMirRes, StringView("Shallow drop on non-Box - ") << ty);
             }
@@ -9648,10 +9643,6 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRType* ty
                         of << StringView("*)&");
                         emitLvalue(v);
                         of << StringView(");\n");
-                    } else if (this->typeIsBadZst(ty) && slot.wrappers.empty()) {
-                        of << indent << TransMangleValue(p) << StringView("((");
-                        emitCtype(ty);
-                        of << StringView("*)&rv);\n");
                     } else if (this->fieldIsUnderaligned(slot, ty)) {
                         of << indent << StringView("{ ");
                         emitCtype(ty, FMT_CB(ss, ss << StringView("trustme_unaligned")));
