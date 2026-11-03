@@ -110,9 +110,6 @@ namespace {
     }
 
     void compose(Vector<u32>& text) {
-        if (text.empty()) {
-            return;
-        }
         size_t starter = 0;
         u8 lastClass = combiningClass(text[0]) == 0 ? 0 : 255;
         size_t out = 1;
@@ -170,24 +167,9 @@ namespace {
                 length = 4;
                 codepoint = lead & 0x07;
             }
-            if (i + length > text.size()) {
-                out.pushBack(lead);
-                i++;
-                continue;
-            }
-            bool valid = true;
             for (size_t j = 1; j < length; j++) {
                 const auto next = static_cast<u8>(text[i + j]);
-                if ((next & 0xC0) != 0x80) {
-                    valid = false;
-                    break;
-                }
                 codepoint = (codepoint << 6) | (next & 0x3F);
-            }
-            if (!valid) {
-                out.pushBack(lead);
-                i++;
-                continue;
             }
             out.pushBack(codepoint);
             i += length;

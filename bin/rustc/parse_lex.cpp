@@ -1197,7 +1197,7 @@ Token Lexer::getTokenInt() {
                                 ch = this->getc();
                             }
                             this->ungetc();
-                            Ident ident(this->realGetHygiene(), RcString::newInterned(str));
+                            Ident ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str)));
                             ident.isRaw = true;
                             return Token(TOK_LIFETIME, std::move(ident));
                         } else if (issym(firstchar.v)) {
@@ -1209,7 +1209,7 @@ Token Lexer::getTokenInt() {
                                 ch = this->getc();
                             }
                             this->ungetc();
-                            return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
+                            return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str))));
                         } else {
                             TODO(this->pointSpan(), StringView("Lex Fail - Expected ' after character constant"));
                         }
