@@ -792,6 +792,9 @@ Token Lexer::getTokenInt() {
         this->ungetc();
 
         const signed int sym = this->getSymbol();
+        if (sym == TOK_BACKSLASH || sym == TOK_BACKTICK) {
+            compileErrorGeneric(*this, "Unknown start of token");
+        }
         if (sym == 0) {
             auto ch = this->getc();
             if (ch.isdigit()) {
