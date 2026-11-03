@@ -277,11 +277,11 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
             }
         }
     } else if (const auto* submodP = i.opt_Module()) {
+        if (!filter.empty()) {
+            ERROR(sp, E0000, StringView("arguments to macro_use are not allowed here"));
+        }
         const auto& submod = *submodP;
         for (const auto& mr : submod.macros()) {
-            if (!filterValid(mr.name)) {
-                continue;
-            }
             DEBUG(StringView("Imported ") << mr.name);
             if (!exists(mr.name, &*mr.data)) {
                 auto path = submod.path();
@@ -291,9 +291,6 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
             }
         }
         for (const auto& mri : submod.macroImports) {
-            if (!filterValid(mri.name)) {
-                continue;
-            }
             DEBUG(mod.path() << StringView(": Imported ") << mri.name << StringView(" (propagate) = ") << mri.path);
             if (!exists(mri.name, mri.ref)) {
                 mod.macroImports.push_back(mri.clone());
