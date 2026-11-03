@@ -882,19 +882,19 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 auto& e = bound.as_MaybeTrait();
                 auto type = LowerHIRType(e.type);
                 if (!type->is_Generic()) {
-                    BUG(bound.span, StringView("MaybeTrait on non-param - ") << type);
+                    ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
                 }
                 const auto& ge = type->as_Generic();
                 unsigned paramIdx;
                 if (ge.binding == 0xFFFF) {
                     if (!selfIsSized) {
-                        BUG(bound.span, StringView("MaybeTrait on parameter on Self when not allowed"));
+                        ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
                     }
                     paramIdx = 0xFFFF;
                 } else {
                     paramIdx = ge.idx();
-                    if (paramIdx >= rv.types.size()) {
-                        BUG(bound.span, StringView("MaybeTrait on parameter not in parameter list (#") << ge.binding << StringView(")"));
+                    if (paramIdx >= rv.types.size() || rv.types[paramIdx].name != (e.type->data.is_Generic() ? e.type->data.as_Generic().name : e.type->data.as_Path()->cls.as_Local().name)) {
+                        ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
                     }
                 }
 
