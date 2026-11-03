@@ -3642,9 +3642,6 @@ namespace {
                             DEBUG(iData.name << StringView(" - Not a type/module"));
                             break;
                         }
-                        case ASTPathBindingType::TAG_TypeParameter: {
-                            BUG(sp, StringView("Import was bound to type parameter"));
-                        }
                         case ASTPathBindingType::TAG_Primitive: {
                             _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                             break;
@@ -3690,12 +3687,6 @@ namespace {
                         case ASTPathBindingValue::TAG_Unbound: {
                             DEBUG(iData.name << StringView(" - Not a value"));
                             break;
-                        }
-                        case ASTPathBindingValue::TAG_Variable: {
-                            BUG(sp, StringView("Import was bound to a variable"));
-                        }
-                        case ASTPathBindingValue::TAG_Generic: {
-                            BUG(sp, StringView("Import was bound to a generic value"));
                         }
                         case ASTPathBindingValue::TAG_Struct: {
                             _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
