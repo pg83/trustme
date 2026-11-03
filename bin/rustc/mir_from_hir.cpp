@@ -9526,20 +9526,6 @@ auto ExprVisitorConv::generateCheckedBinop(const Span& sp, MIRLValue resSlot, MI
         case MIRBinOp::GT:
         case MIRBinOp::GE:
             ASSERT_BUG(sp, tyL == tyR, StringView("Types in comparison operators must be equal - ") << tyL << StringView(" != ") << tyR);
-            switch ((*tyL).tag()) {
-                default:
-                    BUG(sp, StringView("Invalid type in comparison - ") << tyL);
-                case HIRType::TAG_Pointer: {
-                    break;
-                }
-                case HIRType::TAG_Primitive: {
-                    auto& e = (*tyL).as_Primitive();
-                    if (e == HIRCoreType::Str) {
-                        BUG(sp, StringView("Invalid type in comparison - ") << tyL);
-                    }
-                    break;
-                }
-            }
             builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({mv$(valL), op, mv$(valR)}), updateDestState);
             break;
         case MIRBinOp::BIT_XOR:
@@ -9547,15 +9533,6 @@ auto ExprVisitorConv::generateCheckedBinop(const Span& sp, MIRLValue resSlot, MI
         case MIRBinOp::BIT_AND:
             ASSERT_BUG(sp, tyL == tyR, StringView("Types in bitwise operators must be equal - ") << tyL << StringView(" != ") << tyR);
             ASSERT_BUG(sp, tyL->is_Primitive(), StringView("Only primitives allowed in bitwise operators"));
-            switch (tyL->as_Primitive()) {
-                case HIRCoreType::Str:
-                case HIRCoreType::Char:
-                case HIRCoreType::F32:
-                case HIRCoreType::F64:
-                    BUG(sp, StringView("Invalid type for bitwise operator - ") << tyL);
-                default:
-                    break;
-            }
             builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({mv$(valL), op, mv$(valR)}), updateDestState);
             break;
         case MIRBinOp::ADD:
@@ -9565,14 +9542,6 @@ auto ExprVisitorConv::generateCheckedBinop(const Span& sp, MIRLValue resSlot, MI
         case MIRBinOp::MOD:
             ASSERT_BUG(sp, tyL == tyR, StringView("Types in arithmatic operators must be equal - ") << tyL << StringView(" != ") << tyR);
             ASSERT_BUG(sp, tyL->is_Primitive(), StringView("Only primitives allowed in arithmatic operators"));
-            switch (tyL->as_Primitive()) {
-                case HIRCoreType::Str:
-                case HIRCoreType::Char:
-                case HIRCoreType::Bool:
-                    BUG(sp, StringView("Invalid type for arithmatic operator - ") << tyL);
-                default:
-                    break;
-            }
             if (tyL->is_Primitive() && isInteger(tyL->as_Primitive())) {
                 if (op == MIRBinOp::DIV || op == MIRBinOp::MOD) {
                     generateDivisionChecks(sp, op, valL, tyL->as_Primitive(), valR);
@@ -9598,24 +9567,6 @@ auto ExprVisitorConv::generateCheckedBinop(const Span& sp, MIRLValue resSlot, MI
         case MIRBinOp::BIT_SHR:;
             ASSERT_BUG(sp, tyL->is_Primitive(), StringView("Only primitives allowed in arithmatic operators"));
             ASSERT_BUG(sp, tyR->is_Primitive(), StringView("Only primitives allowed in arithmatic operators"));
-            switch (tyL->as_Primitive()) {
-                case HIRCoreType::Str:
-                case HIRCoreType::Char:
-                case HIRCoreType::F32:
-                case HIRCoreType::F64:
-                    BUG(sp, StringView("Invalid type for shift op-assignment - ") << tyL);
-                default:
-                    break;
-            }
-            switch (tyR->as_Primitive()) {
-                case HIRCoreType::Str:
-                case HIRCoreType::Char:
-                case HIRCoreType::F32:
-                case HIRCoreType::F64:
-                    BUG(sp, StringView("Invalid type for shift op-assignment - ") << tyR);
-                default:
-                    break;
-            }
             if (builder.resolve().wb.settings->overflowChecks) {
                 generateShiftCheck(sp, op, tyL, valR, tyR);
             } else {
