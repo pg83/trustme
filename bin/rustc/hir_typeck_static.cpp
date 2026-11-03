@@ -2443,7 +2443,29 @@ auto StaticTraitResolve::NextSolverBridge::normalize(const Span& sp, const HIRGe
     const HIRType* output = nullptr;
     resolve_.solveNormalizesTo(sp, NormalizesTo{projection}, [&](NormalizesToResponse response) {
         if (response.output != nullptr && response.output != projection) {
-            output = std::move(response.output);
+            const auto& effects = response.effects;
+            BUG_ASSERT(effects.slots.typeInputs.size() == effects.slots.types.size());
+            BUG_ASSERT(effects.slots.valueInputs.size() == effects.slots.values.size());
+            Unifier relation(sp, ivars, &resolve_);
+            bool compatible = true;
+            for (size_t i = 0; i < effects.slots.types.size(); i++) {
+                compatible &= relation.unify(effects.slots.typeInputs[i], effects.slots.types[i]) != Unifier::Outcome::Mismatch;
+            }
+            for (const auto& equality : effects.equalities) {
+                compatible &= relation.unify(equality.left, equality.right) != Unifier::Outcome::Mismatch;
+            }
+            for (size_t i = 0; i < effects.slots.values.size(); i++) {
+                compatible &= relation.unifyValues(effects.slots.valueInputs[i], effects.slots.values[i]) != Unifier::Outcome::Mismatch;
+            }
+            for (const auto& equality : effects.valueEqualities) {
+                compatible &= relation.unifyValues(equality.left, equality.right) != Unifier::Outcome::Mismatch;
+            }
+            if (compatible) {
+                const auto* resolved = ivars.expandIvars(response.output);
+                if (!ivars.typeContainsIvars(resolved)) {
+                    output = resolved;
+                }
+            }
         }
         return true;
     });

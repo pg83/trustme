@@ -356,10 +356,14 @@ namespace {
         return false;
     }
 
-    bool typeIsRigidUnknown(const HIRType* type) {
+    bool typeIsRigidUnknown(const HIRType* type, const TraitResolution* resolve) {
         if (const auto* path = type->opt_Path()) {
             if (!path->path.data.is_Generic()) {
                 return true;
+            }
+            if (path->binding.is_Unbound() && resolve) {
+                const auto& definition = resolve->hirCrate().getTypeitemByPath(Span(), path->path.data.as_Generic().path);
+                return !definition.is_Struct() && !definition.is_Enum() && !definition.is_Union() && !definition.is_ExternType();
             }
             return path->binding.is_Unbound() || path->binding.is_Opaque();
         }
@@ -2584,7 +2588,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                 return this->defer(left, right);
             }
         }
-        if (infer->as_Infer().tyClass != HIRInferClass::None && typeIsRigidUnknown(other)) {
+        if (infer->as_Infer().tyClass != HIRInferClass::None && typeIsRigidUnknown(other, resolve_)) {
             return this->defer(left, right);
         }
         if (!literalClassAccepts(table_, infer->as_Infer().tyClass, other)) {
@@ -2615,7 +2619,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         return Outcome::Proven;
     }
     if (left->is_Infer() || right->is_Infer()) {
-        if ((left->is_Infer() && typeIsRigidUnknown(right)) || (right->is_Infer() && typeIsRigidUnknown(left))) {
+        if ((left->is_Infer() && typeIsRigidUnknown(right, resolve_)) || (right->is_Infer() && typeIsRigidUnknown(left, resolve_))) {
             return this->defer(left, right);
         }
         auto rigidInferAccepts = [&](const HIRType* inferType, const HIRType* other) {
@@ -2796,7 +2800,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
             return Outcome::Proven;
         }
     }
-    if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
+    if (typeIsRigidUnknown(left, resolve_) || typeIsRigidUnknown(right, resolve_)) {
         return this->defer(left, right);
     }
 

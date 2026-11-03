@@ -224,6 +224,8 @@ namespace {
         const HIRCrate& crate;
         bool inExpr = false;
         const HIRType* implType = nullptr;
+        const HIRGenericParams* implGenerics = nullptr;
+        const HIRGenericParams* itemGenerics = nullptr;
 
         struct ActiveTypeAlias {
             const HIRTypeAlias* alias;
@@ -269,6 +271,8 @@ namespace {
         void visitExpr(HIRExprPtr& expr) override;
 
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitConstant(HIRItemPath p, HIRConstant& item) override;
 
         void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override;
 
@@ -2727,6 +2731,7 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
     if (path.data.is_UfcsKnown()) {
         auto revealed = crate.types.path(path.clone(), HIRTypePathBinding::make_Opaque({}));
         StaticTraitResolve resolve{wb};
+        resolve.setBothGenericsRaw(implGenerics, itemGenerics);
         revealed = resolve.expandAssociatedTypes(sp, revealed);
         if (!revealed->is_Path() || !revealed->as_Path().path.data.is_Generic()) {
             ERROR(sp, E0000, StringView("Expected a struct behind the associated type in a pattern, got ") << path);
@@ -2875,6 +2880,8 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
 }
 
 auto Expander::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
+    const auto* savedItemGenerics = itemGenerics;
+    itemGenerics = &item.params;
     size_t erasedIndex = item.params.types.size();
     for (const auto& arg : item.args) {
         visitTyWith(arg.second, [&](const HIRType* type) {
@@ -2897,6 +2904,14 @@ auto Expander::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
         ASSERT_BUG(Span(), item.receiverType, StringView("Custom receiver without a receiver type"));
         *item.receiverType = this->visitType(*item.receiverType);
     }
+    itemGenerics = savedItemGenerics;
+}
+
+auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
+    const auto* savedItemGenerics = itemGenerics;
+    itemGenerics = &item.params;
+    HIRVisitor::visitConstant(p, item);
+    itemGenerics = savedItemGenerics;
 }
 
 auto Expander::visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) -> void {
@@ -2908,8 +2923,11 @@ auto Expander::visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) -> void {
 }
 
 auto Expander::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
+    const auto* savedImplGenerics = implGenerics;
+    implGenerics = &item.params;
     expandTraitList(Span(), item.parentTraits);
     HIRVisitor::visitTrait(p, item);
+    implGenerics = savedImplGenerics;
 }
 
 auto Expander::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> void {
@@ -2918,16 +2936,22 @@ auto Expander::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> vo
 }
 
 auto Expander::visitTypeImpl(HIRTypeImpl& impl) -> void {
+    const auto* savedImplGenerics = implGenerics;
+    implGenerics = &impl.params;
     implType = impl.type;
     HIRVisitor::visitTypeImpl(impl);
     implType = nullptr;
+    implGenerics = savedImplGenerics;
 }
 
 auto Expander::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     Span sp;
+    const auto* savedImplGenerics = implGenerics;
+    implGenerics = &impl.params;
     implType = impl.type;
     HIRVisitor::visitTraitImpl(traitPath, impl);
     implType = nullptr;
+    implGenerics = savedImplGenerics;
 }
 
 ExpanderSelf::ExpanderSelf(const HIRCrate& crate, const HIRType* implType)
