@@ -1138,7 +1138,6 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                             return false;
                         }
                     }
-                    break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
                     const auto pbe = e.binding.as_Enum();
@@ -1161,7 +1160,6 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                             return true;
                         }
                     }
-                    TODO(sp, StringView("type_is_impossible for enum ") << ty);
                 }
                 case HIRTypePathBinding::TAG_Union: {
                     /* A union's layout permits uninitialised storage, even
@@ -1172,7 +1170,6 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
                     return false;
                 }
             }
-            return true;
         }
         case HIRType::TAG_Borrow: {
             /* The layout assertion checks the pointer, not its pointee.
@@ -1210,7 +1207,6 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRType* ty) con
             return false;
         }
     }
-    UNREACHABLE();
 }
 
 bool StaticTraitResolve::canUnsize(const Span& sp, const HIRType* dstTy, const HIRType* srcTy) const {
