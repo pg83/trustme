@@ -4741,17 +4741,13 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
 
     auto data = input->cloneData();
     switch (data.tag()) {
+        default:
+            UNREACHABLE();
         case HIRType::TAG_Infer: {
             const auto* ty = this->ivars.getType(input);
             if (ty != input) {
                 return expandAssociatedTypesInplace(sp, ty, effects);
             }
-            break;
-        }
-        case HIRType::TAG_Diverge: {
-            break;
-        }
-        case HIRType::TAG_Primitive: {
             break;
         }
         case HIRType::TAG_Path: {
@@ -4791,9 +4787,6 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                     break;
                 }
             }
-            break;
-        }
-        case HIRType::TAG_Generic: {
             break;
         }
         case HIRType::TAG_TraitObject: {
@@ -4931,9 +4924,6 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                 type = expandAssociatedTypesInplace(sp, type, effects);
             }
             e.rettype = expandAssociatedTypesInplace(sp, e.rettype, effects);
-            break;
-        }
-        case HIRType::TAG_NodeType: {
             break;
         }
     }
