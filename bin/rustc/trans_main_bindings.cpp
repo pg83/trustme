@@ -396,6 +396,7 @@ namespace {
             ASSERT_BUG(sp, te.binding.is_Struct(), StringView(""));
             const auto& tyPath = te.path.data.as_Generic();
             const auto& str = *te.binding.as_Struct();
+            const auto fieldIndex = mutator.state.resolve.coerceUnsizedField(sp, ty);
             const HIRType* tmp;
             auto monomorph = [&](const auto& t) {
                 return MonomorphStatePtr(mutator.state.crate.types, ty, &tyPath.params, nullptr).monomorphType(sp, t);
@@ -409,7 +410,7 @@ namespace {
                     auto& se = str.data.as_Tuple();
                     for (unsigned int i = 0; i < se.size(); i++) {
                         auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
-                        if (i == str.structMarkings.coerceUnsizedIndex) {
+                        if (i == fieldIndex) {
                             vals.push_back(getUnitPtr(sp, mutator, monomorph(se[i].ent), mv$(val), outInnerPtr));
                         } else {
                             vals.push_back(mv$(val));
@@ -421,7 +422,7 @@ namespace {
                     auto& se = str.data.as_Named();
                     for (unsigned int i = 0; i < se.size(); i++) {
                         auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
-                        if (i == str.structMarkings.coerceUnsizedIndex) {
+                        if (i == fieldIndex) {
                             vals.push_back(getUnitPtr(sp, mutator, monomorph(se[i].ty), mv$(val), outInnerPtr));
                         } else {
                             vals.push_back(mv$(val));

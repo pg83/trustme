@@ -3514,10 +3514,7 @@ auto MarkingsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
                 if (field == ~0u) {
                     ERROR(sp, E0000, StringView("CoerceUnsized requires a field to differ between source and destination"));
                 }
-                if (structMarkings.coerceUnsizedIndex != ~0u && structMarkings.coerceUnsizedIndex != field) {
-                    ERROR(sp, E0000, StringView("CoerceUnsized implementations selecting different fields are not supported"));
-                }
-                structMarkings.coerceUnsizedIndex = field;
+                structMarkings.coerceUnsizedIndex = structMarkings.coerceUnsizedIndex == ~0u || structMarkings.coerceUnsizedIndex == field ? field : HIRStructMarkings::MultipleCoerceFields;
             } else if (traitPath == langDeref_) {
                 DEBUG(StringView("Type ") << impl.type << StringView(" can Deref"));
                 markings.hasADeref = true;
@@ -3556,6 +3553,10 @@ auto Visitor2::getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& st
     if (str.structMarkings.coerceUnsizedIndex == ~0u) {
         return HIRStructMarkings::Coerce::None;
     }
+    if (str.structMarkings.coerceUnsizedIndex == HIRStructMarkings::MultipleCoerceFields) {
+        outParamIdx = ~0u;
+        return HIRStructMarkings::Coerce::PerDestination;
+    }
     if (str.structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None) {
         outParamIdx = str.structMarkings.coerceParam;
         return str.structMarkings.coerceUnsized;
@@ -3592,11 +3593,16 @@ tryAgain:
 
         size_t innerIdx = 0;
         auto innerType = getCoerceType(sp, {fieldTy}, *istr, innerIdx);
+        if (innerType == HIRStructMarkings::Coerce::PerDestination) {
+            outParamIdx = ~0u;
+            return innerType;
+        }
         ASSERT_BUG(sp, innerType != HIRStructMarkings::Coerce::None, StringView("CoerceUnsized impl differs on a non-CoerceUnsized type - ") << ip << StringView(" fld=") << fieldTy);
 
         const auto& paramTy = gp.params.types.at(innerIdx);
         switch (innerType) {
             case HIRStructMarkings::Coerce::None:
+            case HIRStructMarkings::Coerce::PerDestination:
                 UNREACHABLE();
             case HIRStructMarkings::Coerce::Passthrough:
                 fieldTy = paramTy;

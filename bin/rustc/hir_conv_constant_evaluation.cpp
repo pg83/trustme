@@ -1447,8 +1447,7 @@ static void writeCtfeCoercion(MIREvalCallStackEntry& localState, MIREvalValueRef
     if (const auto* target = dstTy->opt_Path()) {
         const auto* source = srcTy->opt_Path();
         MIR_ASSERT(state, target->binding.is_Struct() && source && source->binding.is_Struct() && source->binding.as_Struct() == target->binding.as_Struct(), StringView("Const coercion between different struct definitions"));
-        const auto& definition = *target->binding.as_Struct();
-        const auto fieldIndex = definition.structMarkings.coerceUnsizedIndex;
+        const auto fieldIndex = localState.rootResolve.coerceUnsizedField(state.sp, srcTy, dstTy);
         const auto* targetRepr = localState.reprOfOrBug(dstTy);
         const auto* sourceRepr = localState.reprOfOrBug(srcTy);
         MIR_ASSERT(state, fieldIndex < targetRepr->fields.size() && targetRepr->fields.size() == sourceRepr->fields.size(), StringView("Invalid const coercion field index"));

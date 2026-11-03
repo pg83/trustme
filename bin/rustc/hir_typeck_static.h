@@ -239,6 +239,8 @@ public:
     const HIRType* isTypeOwnedBox(const HIRType* ty) const;
     const HIRType* isTypePhantomData(const HIRType* ty) const;
 
+    unsigned int coerceUnsizedField(const Span& sp, const HIRType* source, const HIRType* destination = nullptr) const;
+
     const HIRType* getFieldType(const Span& sp, const HIRType* ty, const RcString& name) const;
 
     using ValuePtr = TypeckValuePtr;

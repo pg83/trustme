@@ -721,6 +721,7 @@ namespace {
                     MIR_ASSERT(state, te.binding.is_Struct(), StringView(""));
                     const auto& tyPath = te.path.data.as_Generic();
                     const auto& str = *te.binding.as_Struct();
+                    const auto fieldIndex = state.resolve.coerceUnsizedField(state.sp, ty);
                     const HIRType* tmp;
                     auto monomorph = [&](const auto& t) {
                         return MonomorphStatePtr(state.crate.types, ty, &tyPath.params, nullptr).monomorphType(state.sp, t);
@@ -734,7 +735,7 @@ namespace {
                             auto& se = str.data.as_Tuple();
                             for (unsigned int i = 0; i < se.size(); i++) {
                                 auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
-                                if (i == str.structMarkings.coerceUnsizedIndex) {
+                                if (i == fieldIndex) {
                                     vals.push_back(H::getUnitPtr(state, mutator, monomorph(se[i].ent), mv$(val), outInnerPtr));
                                 } else {
                                     vals.push_back(mv$(val));
@@ -746,7 +747,7 @@ namespace {
                             auto& se = str.data.as_Named();
                             for (unsigned int i = 0; i < se.size(); i++) {
                                 auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
-                                if (i == str.structMarkings.coerceUnsizedIndex) {
+                                if (i == fieldIndex) {
                                     vals.push_back(H::getUnitPtr(state, mutator, monomorph(se[i].ty), mv$(val), outInnerPtr));
                                 } else {
                                     vals.push_back(mv$(val));
@@ -942,6 +943,7 @@ namespace {
             MIR_ASSERT(state, dte.binding.as_Struct() == ste.binding.as_Struct(), StringView("Note, can't CoerceUnsized mismatched structs - ") << srcTy << StringView(" to ") << dstTy);
             const auto& str = *dte.binding.as_Struct();
             MIR_ASSERT(state, str.structMarkings.coerceUnsizedIndex != ~0u, StringView("Struct ") << srcTy << StringView(" doesn't impl CoerceUnsized"));
+            const auto fieldIndex = state.resolve.coerceUnsizedField(state.sp, srcTy, dstTy);
 
             auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &dte.path.data.as_Generic().params, nullptr);
             auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &ste.path.data.as_Generic().params, nullptr);
@@ -956,7 +958,7 @@ namespace {
                     auto& se = str.data.as_Tuple();
                     ents.reserve(se.size());
                     for (unsigned int i = 0; i < se.size(); i++) {
-                        if (i == str.structMarkings.coerceUnsizedIndex) {
+                        if (i == fieldIndex) {
                             auto tyD = monomorphCbD.monomorphType(state.sp, se[i].ent, false);
                             auto tyS = monomorphCbS.monomorphType(state.sp, se[i].ent, false);
 
@@ -981,7 +983,7 @@ namespace {
                     auto& se = str.data.as_Named();
                     ents.reserve(se.size());
                     for (unsigned int i = 0; i < se.size(); i++) {
-                        if (i == str.structMarkings.coerceUnsizedIndex) {
+                        if (i == fieldIndex) {
                             auto tyD = monomorphCbD.monomorphType(state.sp, se[i].ty, false);
                             auto tyS = monomorphCbS.monomorphType(state.sp, se[i].ty, false);
 

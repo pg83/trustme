@@ -6276,7 +6276,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         const auto* sourcePath = source->opt_Path();
         if (destinationPath && sourcePath && destinationPath->binding.is_Struct() && sourcePath->binding.is_Struct() && destinationPath->binding.as_Struct() == sourcePath->binding.as_Struct()) {
             const auto& markings = sourcePath->binding.as_Struct()->structMarkings;
-            if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
+            if (markings.coerceUnsized != HIRStructMarkings::Coerce::None && markings.coerceUnsized != HIRStructMarkings::Coerce::PerDestination) {
                 const auto& destinationParams = destinationPath->path.data.as_Generic().params;
                 const auto& sourceParams = sourcePath->path.data.as_Generic().params;
                 ASSERT_BUG(sp, markings.coerceParam < destinationParams.types.size() && markings.coerceParam < sourceParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
@@ -6504,7 +6504,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         return SolverCertainty::Ambiguous;
     }
     const auto& langCoerceUnsized = this->langCoerceUnsized();
-    if (!langCoerceUnsized.components().empty() && (typeIsBounded(source) || typeIsBounded(destination))) {
+    const auto* coercionSource = source->opt_Path();
+    const bool perDestination = coercionSource && coercionSource->binding.is_Struct() && coercionSource->binding.as_Struct()->structMarkings.coerceUnsized == HIRStructMarkings::Coerce::PerDestination;
+    if (!langCoerceUnsized.components().empty() && (typeIsBounded(source) || typeIsBounded(destination) || perDestination)) {
         SolverCertainty result = SolverCertainty::NoSolution;
         probeTraitGoalMayApply(sp, langCoerceUnsized, HIRPathParams(destination), source, [&](SolverMayApply probe) {
             const bool selected = probe.candidate != nullptr;
@@ -6516,7 +6518,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             }
             return selected;
         }, {.allowInferInputs = true});
-        if (result != SolverCertainty::NoSolution) {
+        if (result != SolverCertainty::NoSolution || perDestination) {
             return result;
         }
     }
@@ -6551,7 +6553,7 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const auto& sourceParams = sourcePath->path.data.as_Generic().params;
             const auto& destinationParams = destinationPath->path.data.as_Generic().params;
             const auto& markings = sourceStruct->structMarkings;
-            if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
+            if (markings.coerceUnsized != HIRStructMarkings::Coerce::None && markings.coerceUnsized != HIRStructMarkings::Coerce::PerDestination) {
                 ASSERT_BUG(sp, markings.coerceParam < sourceParams.types.size() && sourceParams.types.size() == destinationParams.types.size(), StringView("Malformed CoerceUnsized struct markings"));
                 auto innerConstraint = SolverCoercionConstraint{markings.coerceParam, sourceParams.types[markings.coerceParam], SolverCoercionConstraint::Direction::InputIsDestination, SolverCoercionOp::Coercion};
                 innerConstraint.openStep = constraint.openStep;

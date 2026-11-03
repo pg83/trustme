@@ -301,7 +301,10 @@ struct HIRStructMarkings {
         None,
         Passthrough,
         Pointer,
+        PerDestination,
     } coerceUnsized = Coerce::None;
+
+    static constexpr unsigned int MultipleCoerceFields = ~1u;
 
     unsigned int coerceUnsizedIndex = ~0u;
 

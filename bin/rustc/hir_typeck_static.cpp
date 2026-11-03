@@ -1559,6 +1559,50 @@ bool StaticTraitResolve::typeHasDropImpl(const Span& sp, const HIRType* ty) cons
     });
 }
 
+unsigned int StaticTraitResolve::coerceUnsizedField(const Span& sp, const HIRType* source, const HIRType* destination) const {
+    const auto& sourcePath = source->as_Path();
+    const auto& definition = *sourcePath.binding.as_Struct();
+    auto index = definition.structMarkings.coerceUnsizedIndex;
+    ASSERT_BUG(sp, index != ~0u, StringView("Missing CoerceUnsized field for ") << source);
+    if (index != HIRStructMarkings::MultipleCoerceFields) {
+        return index;
+    }
+    ASSERT_BUG(sp, destination && destination->is_Path() && destination->as_Path().binding.is_Struct() && destination->as_Path().binding.as_Struct() == &definition, StringView("CoerceUnsized requires its destination type for ") << source);
+    const auto& destinationPath = destination->as_Path();
+    const auto sourceMonomorph = MonomorphStatePtr(crate.types, source, &sourcePath.path.data.as_Generic().params, nullptr);
+    const auto destinationMonomorph = MonomorphStatePtr(crate.types, destination, &destinationPath.path.data.as_Generic().params, nullptr);
+    index = ~0u;
+    const auto consider = [&](const HIRType* field, unsigned int fieldIndex) {
+        const auto* from = monomorphExpandOpt(sp, field, sourceMonomorph);
+        const auto* to = monomorphExpandOpt(sp, field, destinationMonomorph);
+        if (from == to || (isTypePhantomData(from) && isTypePhantomData(to))) {
+            return;
+        }
+        ASSERT_BUG(sp, index == ~0u, StringView("Multiple fields differ in CoerceUnsized from ") << source << StringView(" to ") << destination);
+        index = fieldIndex;
+    };
+    switch (definition.data.tag()) {
+        case HIRStructData::TAG_Unit:
+            BUG(sp, StringView("Unit struct has CoerceUnsized fields"));
+        case HIRStructData::TAG_Tuple: {
+            const auto& fields = definition.data.as_Tuple();
+            for (unsigned int i = 0; i < fields.size(); i++) {
+                consider(fields[i].ent, i);
+            }
+            break;
+        }
+        case HIRStructData::TAG_Named: {
+            const auto& fields = definition.data.as_Named();
+            for (unsigned int i = 0; i < fields.size(); i++) {
+                consider(fields[i].ty, i);
+            }
+            break;
+        }
+    }
+    ASSERT_BUG(sp, index != ~0u, StringView("No field differs in CoerceUnsized from ") << source << StringView(" to ") << destination);
+    return index;
+}
+
 bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) const {
     if (langDrop().components().empty()) {
         return false;
