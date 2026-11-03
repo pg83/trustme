@@ -15,6 +15,7 @@
 #include "ast_pprust.h"
 #include "output_file.h"
 #include "main_bindings.h"
+#include "parse_common.h"
 #include "parse_ttstream.h"
 
 #include <std/str/view.h>
@@ -492,6 +493,35 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
         v.visitTopAttrs(attrs);
         v.visitItem(itemName, vis, i);
     }, invoked.name().hygiene);
+}
+
+ASTExprNode* ProcMacroExpandExpr(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const ASTAttribute& invoked, slice<const ASTAttribute> attrs, ASTModule& mod, const ASTExprNode& expr, bool* hasSemicolon) {
+    auto lex = ProcMacroInvoke(sp, wb, crate, macPath, &invoked.data(), StringView("custom attribute panicked"), [&](ProcMacroVisitor& v) {
+        v.invokedAttr = &invoked;
+        v.visitTopAttrs(attrs);
+        v.visitNode(expr);
+        if (hasSemicolon && *hasSemicolon) {
+            v.pmi.sendSymbol(";");
+        }
+    }, invoked.name().hygiene);
+    if (!lex) {
+        ERROR(sp, E0000, StringView("proc_macro expansion failed"));
+    }
+    lex->parseState().module = &mod;
+    if (lex->lookahead(0) == TOK_EOF) {
+        if (hasSemicolon) {
+            return nullptr;
+        }
+        ERROR(sp, E0000, StringView("expected expression from proc macro"));
+    }
+    if (hasSemicolon) {
+        *hasSemicolon = false;
+    }
+    auto* output = hasSemicolon ? ParseExprBlockLine(*lex, hasSemicolon) : ParseExpr0(*lex);
+    if (lex->lookahead(0) != TOK_EOF) {
+        ERROR(sp, E0000, StringView("macro expansion ignores tokens after expression"));
+    }
+    return output;
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const Vector<RcString>& macPath, const TokenTree& tt) {

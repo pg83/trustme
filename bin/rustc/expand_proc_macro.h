@@ -9,8 +9,10 @@ class ASTAttribute;
 struct WireBoard;
 class ASTCrate;
 class ASTEnum;
+class ASTExprNode;
 class ASTImplDef;
 class ASTItem;
+class ASTModule;
 class ASTStruct;
 class ASTUnion;
 class ASTVisibility;
@@ -18,6 +20,8 @@ class ASTVisibility;
 void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate);
 
 void ExpandStopProcMacroServers(const ASTCrate& crate);
+
+ASTExprNode* ProcMacroExpandExpr(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const stl::Vector<RcString>& macPath, const ASTAttribute& invoked, slice<const ASTAttribute> attrs, ASTModule& mod, const ASTExprNode& expr, bool* hasSemicolon);
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const stl::Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTStruct& i, const Ident::Hygiene& callSite);
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const stl::Vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTEnum& i, const Ident::Hygiene& callSite);
