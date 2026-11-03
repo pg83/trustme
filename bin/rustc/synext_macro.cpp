@@ -681,8 +681,7 @@ namespace {
                 if (*s == '}') {
                     s++;
                     if (*s != '}') {
-                        // TODO: Error? Warning?
-                        s--;
+                        ERROR(sp, E0000, StringView("Unmatched closing brace in formatting string"));
                     }
                     curLiteral += '}';
                 } else {
@@ -904,7 +903,7 @@ namespace {
                             traitName = "Debug";
                             s += 2;
                         } else {
-                            TODO(sp, StringView("Parse formatting fragment at \"") << fmtFragStr << StringView("\" (long type) - s=...\"") << s << StringView("\""));
+                            ERROR(sp, E0000, StringView("Unknown formatting type specifier in \"") << fmtFragStr << StringView("\""));
                         }
                     }
                 } else {
