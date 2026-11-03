@@ -6650,11 +6650,11 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
                Normalize the components that can hold one, or the relation defers on an
                unresolved projection and the coercion is never proven. */
             auto sourceFunction = named->decay(crate.types, sp);
-            if (sourceFunction.rettype->mayHaveAssociatedType()) {
+            if (sourceFunction.rettype->needsNormalisation()) {
                 sourceFunction.rettype = expandAssociatedTypes(sp, sourceFunction.rettype);
             }
             for (size_t i = 0; i < sourceFunction.argTypes.length(); i++) {
-                if (sourceFunction.argTypes[i]->mayHaveAssociatedType()) {
+                if (sourceFunction.argTypes[i]->needsNormalisation()) {
                     sourceFunction.argTypes.mut(i) = expandAssociatedTypes(sp, sourceFunction.argTypes[i]);
                 }
             }
@@ -6750,6 +6750,9 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
             const HIRType* current = sourceBorrow->inner;
             ThinVector<const HIRType*> sourceAutoderef;
             for (unsigned depth = 0; depth < board().settings->recursionLimit; depth++) {
+                if (resolveKnown(current)->is_Array()) {
+                    return result;
+                }
                 auto step = autoderefStep(sp, current);
                 switch (step.result) {
                     case AutoderefResult::NoMatch:

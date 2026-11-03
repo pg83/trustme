@@ -796,6 +796,9 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                                         outPath->crate = ecIt->second;
                                         outPath->nodes.clear();
                                     }
+                                    if (ecIt->second == "") {
+                                        return ResolveItemRefType::make_AstRoot(&crate.rootModule_);
+                                    }
                                     crate.markExternCrateUsed(ecIt->second);
                                     return ResolveItemRefType(&*crate.externCrates.at(ecIt->second).hir);
                                 }
