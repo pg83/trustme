@@ -1245,7 +1245,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                 }
             }
             break;
-        case CodegenOutput::Object:
         case CodegenOutput::StaticLibrary:
             break;
     }
@@ -1308,7 +1307,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
     switch (outTy) {
         case CodegenOutput::DynamicLibrary:
         case CodegenOutput::Executable:
-        case CodegenOutput::Object:
             args.push_back(outfilePath.c_str());
             break;
         case CodegenOutput::StaticLibrary:
@@ -1371,7 +1369,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             // TODO: Include the HIR file as a magic object?
             break;
         case CodegenOutput::StaticLibrary:
-        case CodegenOutput::Object:
             args.push_back("-c");
             break;
     }

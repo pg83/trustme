@@ -47,7 +47,6 @@ struct TransOptions {
 };
 
 enum class CodegenOutput {
-    Object,
     StaticLibrary,
     DynamicLibrary,
     Executable, // no suffix, includes main stub (TODO: Can't that just be added earlier?)
