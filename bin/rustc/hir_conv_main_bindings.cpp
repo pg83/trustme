@@ -25,13 +25,6 @@ using namespace stl;
 void ConvertHIRBind(HIRCrate& crate);
 
 namespace {
-    enum class Target {
-        TypeItem,
-        Struct,
-        Enum,
-        EnumVariant,
-    };
-
     struct BindVisitor: public HIRVisitor {
         HIRCrate& crate;
 
@@ -455,38 +448,6 @@ namespace {
 
         void visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPattern::Value& val);
     };
-
-    const void* getTypePointer(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, Target t) {
-        if (t == Target::EnumVariant) {
-            return &crate.getTypeitemByPath(sp, path, /*ignore_crate_name=*/false, /*ignore_last_node=*/true).as_Enum();
-        } else {
-            const auto& ti = crate.getTypeitemByPath(sp, path);
-            switch (t) {
-                case Target::TypeItem:
-                    return &ti;
-                case Target::EnumVariant:
-                    UNREACHABLE();
-
-                case Target::Struct:
-                    if (ti.is_Struct()) {
-                        auto& e2 = ti.as_Struct();
-                        return &e2;
-                    } else {
-                        ERROR(sp, E0000, StringView("Expected a struct at ") << path << StringView(", got a ") << ti.tagStr());
-                    }
-                    break;
-                case Target::Enum:
-                    if (ti.is_Enum()) {
-                        auto& e2 = ti.as_Enum();
-                        return &e2;
-                    } else {
-                        ERROR(sp, E0000, StringView("Expected a enum at ") << path << StringView(", got a ") << ti.tagStr());
-                    }
-                    break;
-            }
-            UNREACHABLE();
-        }
-    }
 
     void fixTypeParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, HIRPathParams& params) {
         HIRPathParamsBuilder next(params);
@@ -1277,7 +1238,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                 if (!doBind) {
                     break;
                 }
-                const auto& item = *reinterpret_cast<const HIRTypeItem*>(getTypePointer(sp, crate, pe.path, Target::TypeItem));
+                const auto& item = crate.getTypeitemByPath(sp, pe.path);
                 switch (item.tag()) {
                     case HIRTypeItem::TAG_TypeAlias: {
                         BUG(sp, StringView("TypeAlias encountered after `Resolve Type Aliases` - ") << ty);
