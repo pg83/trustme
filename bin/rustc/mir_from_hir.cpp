@@ -6330,15 +6330,6 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                     ty = s.type;
                     break;
                 }
-                case HIRPathData::TAG_UfcsKnown: {
-                    TODO(sp, StringView("Static - UfcsKnown - ") << e);
-                }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    BUG(sp, StringView("Encountered UfcsUnknown in Static - ") << e);
-                }
-                case HIRPathData::TAG_UfcsInherent: {
-                    TODO(sp, StringView("Static - UfcsInherent - ") << e);
-                }
             }
             break;
         }
@@ -6364,8 +6355,6 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
             case MIRLValue::Wrapper::TAG_Field: {
                 decltype(w.as_Field()) fieldIndex = w.as_Field();
                 switch ((*currentTy).tag()) {
-                    default:
-                        BUG(sp, StringView("Field access on unexpected type - ") << currentTy);
                     case HIRType::TAG_Array: {
                         auto& te = (*currentTy).as_Array();
                         ty = te.inner;
@@ -6381,9 +6370,6 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                         if (const auto* tep = te.binding.opt_Struct()) {
                             const auto& str = *tep;
                             switch (str.data.tag()) {
-                                case HIRStructData::TAG_Unit: {
-                                    BUG(sp, StringView("Field on unit-like struct - ") << currentTy);
-                                }
                                 case HIRStructData::TAG_Tuple: {
                                     auto& se = str.data.as_Tuple();
                                     ASSERT_BUG(sp, fieldIndex < se.size(), StringView("Field index out of range in tuple-struct ") << currentTy << StringView(" - ") << fieldIndex << StringView(" > ") << se.size());
@@ -6417,8 +6403,6 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
             }
             case MIRLValue::Wrapper::TAG_Deref: {
                 switch ((*currentTy).tag()) {
-                    default:
-                        BUG(sp, StringView("Deref on unexpected type - ") << currentTy);
                     case HIRType::TAG_Path: {
                         if (const auto* inner = this->isTypeOwnedBox(currentTy)) {
                             ty = inner;
@@ -6452,17 +6436,12 @@ const HIRType* MirBuilder::valType(const Span& sp, const MIRLValue& val, const M
                         ty = te.inner;
                         break;
                     }
-                    default: {
-                        BUG(sp, StringView("Index on unexpected type - ") << currentTy);
-                    }
                 }
                 break;
             }
             case MIRLValue::Wrapper::TAG_Downcast: {
                 decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
                 switch ((*currentTy).tag()) {
-                    default:
-                        BUG(sp, StringView("Downcast on unexpected type - ") << currentTy);
                     case HIRType::TAG_Path: {
                         auto& te = (*currentTy).as_Path();
                         if (const auto* pbe = te.binding.opt_Enum()) {
