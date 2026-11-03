@@ -638,13 +638,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
                                 return maybeMonomorph(se[fieldIndex].ty);
                             }
                         }
-                    } else if (const auto* tep = te.binding.opt_Union()) {
-                        const auto& unm = *tep;
-                        auto maybeMonomorph = [&](const HIRType* t) -> const HIRType* {
-                            return resolve.monomorphExpandOpt(sp, t, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
-                        };
-                        MIR_ASSERT(*this, fieldIndex < unm.variants.size(), StringView("Field index out of range for union"));
-                        return maybeMonomorph(unm.variants.at(fieldIndex).ty);
                     } else {
                         MIR_BUG(*this, StringView("Field access on invalid type - ") << ty);
                     }
