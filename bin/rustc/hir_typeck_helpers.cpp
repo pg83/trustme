@@ -1396,21 +1396,11 @@ const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
     };
 
     switch (data.tag()) {
-        case HIRType::TAG_Infer: {
-            break;
-        }
-        case HIRType::TAG_Diverge: {
-            break;
-        }
-        case HIRType::TAG_Primitive: {
-            break;
-        }
+        default:
+            UNREACHABLE();
         case HIRType::TAG_Path: {
             auto& e = data.as_Path();
             H::expandIvarsPath(*this, e.path);
-            break;
-        }
-        case HIRType::TAG_Generic: {
             break;
         }
         case HIRType::TAG_TraitObject: {
@@ -1493,9 +1483,6 @@ const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
             for (auto& type : mutRange(e.argTypes)) {
                 type = this->expandIvars(type);
             }
-            break;
-        }
-        case HIRType::TAG_NodeType: {
             break;
         }
     }
@@ -4474,17 +4461,13 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
     };
 
     switch ((*input).tag()) {
+        default:
+            UNREACHABLE();
         case HIRType::TAG_Infer: {
             const auto& ty = this->ivars.getType(input);
             if (ty != input) {
                 return this->hasAssociatedType(ty);
             }
-            return false;
-        }
-        case HIRType::TAG_Diverge: {
-            return false;
-        }
-        case HIRType::TAG_Primitive: {
             return false;
         }
         case HIRType::TAG_Path: {
@@ -4493,9 +4476,6 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
                 return true;
             }
             return H::checkPath(*this, e.path);
-        }
-        case HIRType::TAG_Generic: {
-            return false;
         }
         case HIRType::TAG_TraitObject: {
             auto& e = (*input).as_TraitObject();
@@ -4565,11 +4545,7 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
         case HIRType::TAG_Function: {
             return false;
         }
-        case HIRType::TAG_NodeType: {
-            return false;
-        }
     }
-    BUG(Span(), StringView("Fell off the end of has_associated_type - input=") << input);
 }
 
 const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, const HIRType* input, SolverResponseCallback* effects) const {
