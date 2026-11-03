@@ -133,6 +133,8 @@ bool ASTTrait::isMarker() const {
 
 ASTTrait ASTTrait::clone() const {
     auto rv = ASTTrait(params_.clone(), supertraits_, lifetimes_);
+    rv.isMarker_ = isMarker_;
+    rv.isUnsafe_ = isUnsafe_;
     rv.isConst_ = isConst_;
     for (const auto& item : items_) {
         rv.items_.push_back(ASTNamed<ASTItem>{item.span, item.attrs.clone(), item.vis, item.name, item.data.clone()});

@@ -2384,6 +2384,9 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
     }
 
     rv.isMarker = f.isMarker();
+    if (rv.isMarker && !f.params().params.empty()) {
+        ERROR(Span(), E0000, StringView("auto traits cannot have generic parameters: ") << traitPath);
+    }
     rv.isCoinductive = rv.isMarker || attrs.has("rustc_coinductive");
     rv.isFundamental = attrs.has("fundamental");
 

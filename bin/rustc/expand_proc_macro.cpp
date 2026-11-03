@@ -2889,6 +2889,9 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
     if (trait.isUnsafe()) {
         pmi.sendRword("unsafe");
     }
+    if (trait.isMarker()) {
+        pmi.sendRword("auto");
+    }
     pmi.sendRword("trait");
     pmi.sendIdent(name.c_str());
     this->visitParams(trait.params());
