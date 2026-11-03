@@ -3737,9 +3737,6 @@ namespace {
                         if (ae.validFlag != be.validFlag) {
                             return false;
                         }
-                        if (ae.invalidTarget != be.invalidTarget) {
-                            return false;
-                        }
                         break;
                     }
                     case MIRTerminator::TAG_SwitchValue: {
