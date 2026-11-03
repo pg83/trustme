@@ -1747,6 +1747,10 @@ auto BindVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
         arg.second = visitType(arg.second);
     }
 
+    if (item.receiverType) {
+        *item.receiverType = visitType(*item.receiverType);
+    }
+
     fcnPath = &p;
     fcnErasedCount = 0;
     {

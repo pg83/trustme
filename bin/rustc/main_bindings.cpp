@@ -558,10 +558,10 @@ namespace {
                 ConvertHIRExpandAliases(wb, *hirCrate);
             }
             {
-                ConvertHIRValidateReceivers(wb, *hirCrate);
+                ConvertHIRBind(wb, *hirCrate);
             }
             {
-                ConvertHIRBind(wb, *hirCrate);
+                ConvertHIRValidateReceivers(wb, *hirCrate);
             }
             {
                 ConvertHIRIndexInherentMethods(wb, *hirCrate);

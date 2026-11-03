@@ -1885,7 +1885,7 @@ void stl::output<ZeroCopyOutput, Codepoint>(ZeroCopyOutput& os, Codepoint cp) {
         os << (char)(0xE0 | ((cp.v >> 12) & 0x0F));
         os << (char)(0x80 | ((cp.v >> 6) & 0x3F));
         os << (char)(0x80 | ((cp.v >> 0) & 0x3F));
-    } else if (cp.v < (0x07 + 1) << (2 * 6)) {
+    } else if (cp.v < (0x07 + 1) << (3 * 6)) {
         os << (char)(0xF0 | ((cp.v >> 18) & 0x07));
         os << (char)(0x80 | ((cp.v >> 12) & 0x3F));
         os << (char)(0x80 | ((cp.v >> 6) & 0x3F));
