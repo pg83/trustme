@@ -2007,13 +2007,20 @@ auto ProcMacroVisitor::visitHrbs(const ASTHigherRankedBounds& hrbs) -> void {
     if (!hrbs.empty()) {
         pmi.sendRword("for");
         pmi.sendSymbol("<");
+        bool first = true;
         for (const auto& v : hrbs.lifetimes) {
+            if (!first) {
+                pmi.sendSymbol(",");
+            }
+            first = false;
             pmi.sendLifetime(v.name().name.c_str());
-            pmi.sendSymbol(",");
         }
         for (const auto& v : hrbs.types) {
+            if (!first) {
+                pmi.sendSymbol(",");
+            }
+            first = false;
             pmi.sendIdent(v.c_str());
-            pmi.sendSymbol(",");
         }
         pmi.sendSymbol(">");
     }
