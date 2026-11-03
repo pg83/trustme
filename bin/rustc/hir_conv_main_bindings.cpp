@@ -3172,6 +3172,9 @@ auto ReceiverValidator::validateFunction(HIRFunction& item) -> void {
         auto receiverType = *item.receiverType;
         if (needsProjectionValidation(item)) {
             auto itemGenerics = resolve.setItemGenerics(item.params);
+            const auto implArgs = resolve.implGenerics().makeNopParams(crate.types, 0);
+            const auto itemArgs = item.params.makeNopParams(crate.types, 1);
+            receiverType = MonomorphStatePtr(crate.types, implType, &implArgs, &itemArgs).monomorphType(Span(), receiverType);
             receiverType = resolve.expandAssociatedTypes(Span(), receiverType);
         }
         const auto* replacedReceiverType = replaceImplTypeWithSelf(receiverType);

@@ -629,7 +629,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             if (implFcn.args.size() != traitFcn.args.size()) {
                 failures.push_back(FMT(StringView("Mismatched argument count (expected ") << traitFcn.args.size() << StringView(", got ") << implFcn.args.size() << StringView(")")));
             }
-            if (implFcn.receiver != traitFcn.receiver) {
+            if ((implFcn.receiver == HIRFunction::Receiver::Free) != (traitFcn.receiver == HIRFunction::Receiver::Free)) {
                 failures.push_back(FMT(StringView("Receiver type")));
             }
             for (size_t i = 0; i < std::min(implFcn.args.size(), traitFcn.args.size()); i++) {
