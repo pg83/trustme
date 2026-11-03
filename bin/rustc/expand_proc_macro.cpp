@@ -1893,7 +1893,8 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             break;
         }
         case TypeData::TAG_Primitive: {
-            TODO(sp, StringView("proc_macro send primitive - ") << ty);
+            this->visitPath(ASTPath(wb.astCrate->extCratenameCore, {ASTPathNode("primitive"), ASTPathNode(coretypeName(ty->data.as_Primitive().coreType))}));
+            break;
         }
         case TypeData::TAG_Function: {
             visitTypeAsText(ty);
