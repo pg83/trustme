@@ -5365,12 +5365,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                                 itemName = RcString::newInterned("self");
                             }
                             break;
-                        case TOK_STRING:
-                            itemData = ASTItem::make_Crate({RcString::newInterned(tok.str())});
-                            GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
-                            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                            itemName = tok.ident().hygienicName();
-                            break;
                         case TOK_IDENT:
                             itemName = tok.ident().hygienicName();
                             if (GET_TOK(tok, lex) == TOK_RWORD_AS) {
@@ -5383,7 +5377,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             }
                             break;
                         default:
-                            parseErrorUnexpected(lex, tok, {TOK_STRING, TOK_IDENT});
+                            parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_RWORD_SELF});
                     }
                     GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
                     break;
