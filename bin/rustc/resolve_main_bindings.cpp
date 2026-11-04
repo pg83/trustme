@@ -4228,13 +4228,7 @@ namespace {
             const auto& ie = it->second;
 
             if (ie.isImport) {
-                auto newPath = ie.path;
-                for (unsigned int j = i + 1; j < info.nodes.size(); j++) {
-                    newPath.nodes().push_back(mv$(info.nodes[j]));
-                }
-                newPath.bindings = path.bindings.clone();
-                path = mv$(newPath);
-                return ResolveIndexModuleNormalisePath(crate, sp, path, loc);
+                BUG(sp, StringView("Non-canonical import prefix in ") << path);
             } else {
                 switch (ie.path.bindings.type.binding.tag()) {
                     default:
