@@ -1218,9 +1218,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             }
             librariesAndDirs.pushBorder();
 
-            for (const auto& path : crate.linkPaths) {
-                librariesAndDirs.pushDir(path.c_str());
-            }
             for (const auto& lib : crate.extLibs) {
                 ASSERT_BUG(Span(), lib.name != "", StringView(""));
                 librariesAndDirs.pushLib(lib.name.c_str());

@@ -710,9 +710,6 @@ namespace {
                 for (const auto& path : params.nativeLibSearchDirs) {
                     manifest << StringView("search\t") << path << StringView("\n");
                 }
-                for (const auto& path : hirCrate->linkPaths) {
-                    manifest << StringView("search\t") << path << StringView("\n");
-                }
                 for (const auto& lib : hirCrate->extLibs) {
                     manifest << StringView("lib\t") << lib.name << StringView("\n");
                 }
