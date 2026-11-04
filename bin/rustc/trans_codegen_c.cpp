@@ -6346,15 +6346,11 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                     of << StringView("%l[bb") << param.as_Label() << StringView("]");
                     continue;
                 }
-                MIR_ASSERT(localMirRes, argMappings[f.index] != UINT_MAX, StringView("Invalid asm operand mapping"));
+                MIR_ASSERT(localMirRes, argMappings[f.index] < UINT_MAX - 1, StringView("Invalid asm operand mapping"));
                 if (emitAttSyntax) {
                     of << StringView("%%");
                 }
                 of << StringView("%");
-                if (argMappings[f.index] == UINT_MAX - 1) {
-                    of << asmParams[f.index].as_Reg().spec.as_Explicit();
-                    continue;
-                }
                 switch (f.modifier) {
                     case '\0': {
                         if (const auto* reg = asmParams[f.index].opt_Reg()) {

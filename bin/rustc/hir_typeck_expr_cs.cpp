@@ -8565,12 +8565,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
                 if (fcnRet == nullptr) {
                     fcnRet = context.crate.types.path(HIRPath(HIRPath::Data::make_UfcsKnown({ty, HIRGenericPath(langFnOnce, HIRPathParams(fcnArgsTup)), "Output", {}})), {});
                 }
-            } else if (const auto* e = ty->opt_Borrow()) {
-                derefCount++;
-                ty = this->context.getType(e->inner);
-                DEBUG(StringView("Deref -> ") << ty);
-                keepLooping = true;
-                continue;
             } else {
                 if (const auto* nextTyP = this->context.resolve.autoderef(node.span(), ty)) {
                     DEBUG(StringView("Deref (autoderef) ") << ty << StringView(" -> ") << nextTyP);

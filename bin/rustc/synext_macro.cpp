@@ -1884,6 +1884,9 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             if (tok.type() == TOK_IDENT) {
                 regSpec = AsmRegisterSpec::make_Class(getRegClass(wb, lex.pointSpan(), tok.ident().name));
             } else if (tok.type() == TOK_STRING) {
+                if (bindingName != RcString()) {
+                    ERROR(sp, E0000, StringView("explicit register arguments cannot have names"));
+                }
                 regSpec = AsmRegisterSpec::make_Explicit(tok.str());
             } else {
                 parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_STRING});
@@ -2120,6 +2123,10 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                         ERROR(sp, E0000, StringView("asm! format string references undefined value - `") << name << StringView("`"));
                     }
                     frag.index = it - names.begin();
+                }
+                const auto& param = params[frag.index];
+                if ((param.is_Reg() && param.as_Reg().spec.is_Explicit()) || (param.is_RegSingle() && param.as_RegSingle().spec.is_Explicit())) {
+                    ERROR(sp, E0000, StringView("explicit register arguments cannot be referenced in asm templates"));
                 }
                 BUG_ASSERT(*c == ':' || *c == '}');
                 if (*c == ':') {
