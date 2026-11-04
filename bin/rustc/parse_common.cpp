@@ -1416,9 +1416,9 @@ namespace {
                             return ASTPattern::Value::make_Float({v->datatype, -v->value});
                         }
                     }
-                    TODO(lex.pointSpan(), StringView("Convert :expr into a pattern value - ") << *e);
+                    ERROR(e->span(), E0000, StringView("arbitrary expressions are not allowed in patterns"));
                 } else {
-                    TODO(lex.pointSpan(), StringView("Convert :expr into a pattern value - ") << *e);
+                    ERROR(e->span(), E0000, StringView("arbitrary expressions are not allowed in patterns"));
                 }
             } break;
             default:
