@@ -196,11 +196,23 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
     } else if (const auto* ecItem = i.opt_Crate()) {
         const auto& ec = crate.externCrates.at(ecItem->name);
 
+        const auto importMacroRef = [&](const RcString& name, ASTAbsolutePath path, MacroRef mr, bool warnPrivate) {
+            if (!exists(name, mr)) {
+                auto mi = ASTModule::MacroImport{false, name, std::move(path), std::move(mr), warnPrivate};
+                DEBUG(StringView("Import macro ") << mi.path);
+                mod.macroImports.push_back(mv$(mi));
+            }
+        };
+        const auto importBuiltin = [&](const RcString& name, const HIRSimplePath& path, bool warnPrivate) {
+            if (auto* builtin = ExpandFindProcMacro(wb, path.components().back())) {
+                importMacroRef(name, ASTAbsolutePath(path.crateName(), path.componentsVec()), MacroRef(builtin), warnPrivate);
+            }
+        };
         const auto importMacro = [&](const RcString& name, const HIRVisEnt<HIRMacroItem>* e, bool warnPrivate) {
             ASTAbsolutePath path = singleNodePath(ecItem->name, name);
             if (const auto* imp = e->ent.opt_Import()) {
                 if (imp->path.crateName() == CRATE_BUILTINS) {
-                    DEBUG(StringView("Importing builtin (skip): ") << name);
+                    importBuiltin(name, imp->path, warnPrivate);
                     return;
                 }
                 if (warnPrivate && !crate.externCrates.count(imp->path.crateName())) {
@@ -216,7 +228,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                 e = &*mod.macroItems.at(imp->path.components().back());
                 if (const auto& imp2 = e->ent.opt_Import()) {
                     if (imp2->path.crateName() == CRATE_BUILTINS) {
-                        DEBUG(StringView("Importing builtin (skip): ") << name);
+                        importBuiltin(name, imp2->path, warnPrivate);
                         return;
                     } else {
                         ASSERT_BUG(sp, !e->ent.is_Import(), StringView("Recursive import - ") << imp->path << StringView(" pointed to ") << imp2->path);
@@ -242,11 +254,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                     break;
                 }
             }
-            if (!exists(name, mr)) {
-                auto mi = ASTModule::MacroImport{false, name, std::move(path), std::move(mr), warnPrivate};
-                DEBUG(StringView("Import macro ") << mi.path);
-                mod.macroImports.push_back(mv$(mi));
-            }
+            importMacroRef(name, std::move(path), std::move(mr), warnPrivate);
         };
 
         DEBUG(ec.hir->exportedMacroNames.length() << StringView(" exported macros"));
