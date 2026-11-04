@@ -2045,6 +2045,9 @@ auto HirDeserialiser::deserialiseTypeitem() -> HIRTypeItem {
     switch (auto tag = in.readTag()) {
         case 0: {
             auto spath = deserialiseSimplepath();
+            if (spath == HIRSimplePath()) {
+                spath = HIRSimplePath(crateName);
+            }
             auto isVariant = in.readBool();
             return HIRTypeItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.readCount())});
         }
