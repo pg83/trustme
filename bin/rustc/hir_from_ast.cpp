@@ -2490,7 +2490,6 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             AST2HIR& ctx;
             const Span& sp;
             const HIRType* realSelfType;
-            std::vector<HIRSimplePath> aliasStack;
 
             Ivcr(AST2HIR& ctx, const Span& sp, const HIRType* realSelfType)
                 : ctx(ctx)
@@ -2526,6 +2525,52 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 return nullptr;
             }
 
+            const HIRType* expandReceiverAliases(const HIRType* type) {
+                struct AliasNormalizer final: HIRVisitor {
+                    Ivcr& owner;
+                    Vector<const HIRType*> applications;
+                    Vector<const HIRTypeAlias*> definitions;
+                    bool failed = false;
+
+                    explicit AliasNormalizer(Ivcr& owner)
+                        : HIRVisitor(nullptr, owner.ctx.crate->types)
+                        , owner(owner)
+                    {
+                    }
+
+                    const HIRType* visitType(const HIRType* type) override {
+                        if (failed) {
+                            return type;
+                        }
+                        const auto* path = type->opt_Path();
+                        const auto* generic = path ? path->path.data.opt_Generic() : nullptr;
+                        const auto* item = generic ? owner.findTypeItem(generic->path) : nullptr;
+                        const auto* alias = item ? item->opt_TypeAlias() : nullptr;
+                        if (!alias) {
+                            return HIRVisitor::visitType(type);
+                        }
+                        if (std::find(definitions.begin(), definitions.end(), alias) != definitions.end() || std::find(applications.begin(), applications.end(), type) != applications.end() || applications.length() >= owner.ctx.wb->settings->recursionLimit) {
+                            failed = true;
+                            return type;
+                        }
+                        applications.pushBack(type);
+                        auto data = type->cloneData();
+                        auto& applied = data.as_Path().path.data.as_Generic();
+                        applied.params = ConvertHIRCompleteAliasParams(owner.ctx.crate->types, owner.sp, alias->params, applied, false);
+                        type = HIRVisitor::visitType(owner.ctx.crate->types.intern(mv$(data)));
+                        if (!failed) {
+                            definitions.pushBack(alias);
+                            type = visitType(ConvertHIRExpandTypeAlias(owner.sp, *owner.ctx.crate, type->as_Path().path.data.as_Generic(), false));
+                            definitions.popBack();
+                        }
+                        applications.popBack();
+                        return type;
+                    }
+                } normalizer(*this);
+                const auto* expanded = normalizer.visitType(type);
+                return normalizer.failed ? nullptr : expanded;
+            }
+
             const HIRType* validCustomReceiver(const HIRType* ty) {
                 if (ty == ctx.crate->types.self()) {
                     return ty;
@@ -2537,17 +2582,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                     if (auto* pe = e.path.data.opt_Generic()) {
                         const auto* item = findTypeItem(pe->path);
                         if (item && item->is_TypeAlias()) {
-                            if (std::find(aliasStack.begin(), aliasStack.end(), pe->path) != aliasStack.end()) {
-                                return nullptr;
-                            }
-                            aliasStack.push_back(pe->path);
-                            auto expanded = ConvertHIRExpandTypeAlias(sp, *ctx.crate, *pe, false);
-                            auto valid = validCustomReceiver(expanded);
-                            aliasStack.pop_back();
-                            if (valid) {
-                                return valid;
-                            }
-                            return nullptr;
+                            const auto* expanded = expandReceiverAliases(ty);
+                            return expanded ? validCustomReceiver(expanded) : nullptr;
                         }
                         if (pe->params.types.size() == 0) {
                             return ty;
