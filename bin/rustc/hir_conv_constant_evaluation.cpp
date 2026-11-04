@@ -5254,11 +5254,16 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                 }
                 MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE && p.second, StringView("Dereference outside allocation"));
                 DEBUG(StringView("> ") << MIREvalValueRef(p.second) << StringView(" - o=") << (p.first - EncodedLiteral::PTR_BASE) << StringView(" sz=") << sz << StringView(" ") << typ);
+                const auto offset = p.first - EncodedLiteral::PTR_BASE;
+                const auto allocation = MIREvalValueRef(p.second);
+                if (offset > allocation.getLen() || (sz != SIZE_MAX && sz > allocation.getLen() - offset)) {
+                    ERROR(state.sp, E0000, StringView("out of bounds pointer dereference during constant evaluation"));
+                }
                 // TODO: Determine size using metadata?
                 if (sz == SIZE_MAX) {
-                    val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
+                    val = allocation.slice(offset);
                 } else {
-                    val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE).slice(0, sz);
+                    val = allocation.slice(offset, sz);
                 }
                 break;
             }
