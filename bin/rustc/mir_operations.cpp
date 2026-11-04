@@ -7543,7 +7543,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, HIRCrate& crate, TransList& l
                 if (!hirFcn) {
                     hirFcn = &crate.findFunctionMut(wb, Span(), fcnEnt.first, *fcnEnt.second->ptr);
                 }
-                if (hirFcn->code) {
+                if (hirFcn->code || hirFcn->code.mir) {
                     auto& mir = hirFcn->code.getMirOrErrorMut(Span());
                     bool didOpt = MIROptimiseInline(resolve, ip, mir, hirFcn->args, hirFcn->returnType, list, optLevel);
                     mir.transEnumState = MIRFunction::MIREnumCachePtr();
