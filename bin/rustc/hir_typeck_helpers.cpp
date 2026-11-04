@@ -4004,7 +4004,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 // TODO: Should Self here be `type` or `pe.type`
 
                 auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.params, &pe.params);
-                auto rv = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
+                this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
                     DEBUG(StringView("Bound on ATY: ") << bound);
                     auto ppHrb = HIRPathParams();
                     monomorphCb.ppHrb = &ppHrb;
@@ -4033,21 +4033,15 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
 
                     if (bound.path.path == trait) {
                         if (bParamsMono == &paramsMonoO) {
-                            if (callback.visit(SolverImpl(type, mv$(paramsMonoO), mv$(bAtys), bound.constness))) {
-                                return true;
-                            }
+                            callback.visit(SolverImpl(type, mv$(paramsMonoO), mv$(bAtys), bound.constness));
                             paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
                             if (paramsNeedNormalisation) {
                                 this->expandAssociatedTypesParams(sp, paramsMonoO);
                             }
                         } else if (!bAtys.empty()) {
-                            if (callback.visit(SolverImpl(type, bParamsMono->clone(), mv$(bAtys), bound.constness))) {
-                                return true;
-                            }
+                            callback.visit(SolverImpl(type, bParamsMono->clone(), mv$(bAtys), bound.constness));
                         } else {
-                            if (callback.visit(SolverImpl(type, &bound.path.params, nullptr, bound.constness))) {
-                                return true;
-                            }
+                            callback.visit(SolverImpl(type, &bound.path.params, nullptr, bound.constness));
                         }
                     }
                     monomorphCb.ppHrb = nullptr;
@@ -4069,9 +4063,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                     }
                     return false;
                 });
-                if (rv) {
-                    return true;
-                }
             }
             break;
         }
