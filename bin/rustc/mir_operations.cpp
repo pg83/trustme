@@ -6696,10 +6696,6 @@ namespace {
 
                     optVisitMirLvaluesMut(stmt, lvalueCb);
                     if (auto* se = stmt.opt_SetDropFlag()) {
-                        if (dfRewriteTable[se->idx] == ~0u) {
-                            toRemoveStatements.mut(stmtIdx) = true;
-                            continue;
-                        }
                         se->idx = dfRewriteTable[se->idx];
                         if (se->other != ~0u) {
                             se->other = dfRewriteTable[se->other];
@@ -6713,13 +6709,6 @@ namespace {
                 state.setCurStmtTerm(i);
                 if (auto* drop = it->terminator.opt_Drop()) {
                     bool removeDrop = false;
-                    if (drop->flagIdx != ~0u && dfRewriteTable[drop->flagIdx] == ~0u) {
-                        if (fcn.dropFlags[drop->flagIdx]) {
-                            drop->flagIdx = ~0u;
-                        } else {
-                            removeDrop = true;
-                        }
-                    }
                     if (drop->slot.root.is_Local() && localRewriteTable[drop->slot.root.as_Local()] == ~0u) {
                         removeDrop = true;
                     }
