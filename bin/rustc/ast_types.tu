@@ -46,5 +46,6 @@ generate(
             ("stl::Vector<ASTLifetimeRef>", "lifetimes"),
         ]),
         v("ErasedType", "TypeErasedType*"),
+        v("ResolvedHIR", fields=[("const HIRType*", "type")]),
     ],
 )

@@ -1607,6 +1607,9 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
 
 const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
     switch (ty->data.tag()) {
+        case TypeData::TAG_ResolvedHIR: {
+            return ty->data.as_ResolvedHIR().type;
+        }
         case TypeData::TAG_None: {
             BUG(ty->span(), StringView("TypeData::None"));
         }

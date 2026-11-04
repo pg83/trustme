@@ -1632,6 +1632,7 @@ namespace {
             case TypeData::TAG_None: {
                 break;
             }
+            case TypeData::TAG_ResolvedHIR:
             case TypeData::TAG_Any: {
                 break;
             }
@@ -2830,8 +2831,9 @@ namespace {
                 }
                 return mkType(pool, span, mv$(traits), {});
             }
-            case HIRType::TAG_ErasedType: {
-                BUG(span, StringView("Erased type in an external delegation signature"));
+            case HIRType::TAG_ErasedType:
+            case HIRType::TAG_Function: {
+                return mkType(pool, span, TypeData::make_ResolvedHIR({type}));
             }
             case HIRType::TAG_Array: {
                 const auto& array = type->as_Array();
@@ -2841,7 +2843,7 @@ namespace {
                 } else if (const auto* generic = array.size.as_Unevaluated().opt_Generic()) {
                     size = makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(generic->name));
                 } else {
-                    TODO(span, StringView("Unevaluated array size in an external delegation signature: ") << array.size);
+                    return mkType(pool, span, TypeData::make_ResolvedHIR({type}));
                 }
                 return mkType(pool, ASTTypeTags::SizedArray(), span, HIRTypeToAST(context, span, array.inner), size);
             }
@@ -2892,14 +2894,6 @@ namespace {
             }
             case HIRType::TAG_NamedFunction: {
                 BUG(span, StringView("Named function type in an external delegation signature"));
-            }
-            case HIRType::TAG_Function: {
-                auto& e = (*type).as_Function();
-                Vector<ASTType*> args;
-                for (const auto& arg : e.argTypes) {
-                    args.pushBack(HIRTypeToAST(context, span, arg));
-                }
-                return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
             }
             case HIRType::TAG_NodeType: {
                 BUG(span, StringView("Node type in an external delegation signature"));
@@ -6282,7 +6276,44 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
     auto resolvedItemName = itemName;
     auto lookupContext = srcContext;
 
-    // TODO: This should be checked AFTER locals
+    const auto localPath = [&](const auto& block, const Ident::Hygiene& hygiene) -> ASTPath {
+        DEBUG(StringView("- VarBlock"));
+        BUG_ASSERT(block.level <= blockLevel);
+        if (mode == LookupMode::Variable) {
+            for (auto it = block.variables.rbegin(); it != block.variables.rend(); ++it) {
+                if (it->first.name == name) {
+                    DEBUG(StringView("> Match: Hygiene ") << it->first.hygiene << StringView(" check against src_context"));
+                }
+                if (it->first.name == name && it->first.hygiene.isVisible(hygiene)) {
+                    ASTPath path(name);
+                    path.bindVariable(it->second);
+                    return path;
+                }
+            }
+        }
+        return ASTPath();
+    };
+    if (mode == LookupMode::Variable && srcContext.hasModPath()) {
+        auto localContext = srcContext;
+        for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+            if (const auto* block = it->opt_VarBlock()) {
+                auto path = localPath(*block, localContext);
+                if (path.isValid()) {
+                    return path;
+                }
+            } else if (const auto* definition = it->opt_MacroDefinition()) {
+                localContext.leaveMacroDefinition(typePool(), definition->definitionId, definition->tokenHygiene, definition->definitionHygiene);
+            } else if (const auto* module = it->opt_Module()) {
+                const auto localName = localContext.applyToItemName(name);
+                if (localName != name) {
+                    ASTPath path;
+                    if (lookupInMod(sp, *module->mod, localName, mode, path)) {
+                        return path;
+                    }
+                }
+            }
+        }
+    }
     if (srcContext.hasModPath()) {
         const auto& mp = srcContext.modPath();
         DEBUG(mp);
@@ -6502,21 +6533,9 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                 break;
             }
             case Ent::TAG_VarBlock: {
-                auto& e = (*it).as_VarBlock();
-                DEBUG(StringView("- VarBlock"));
-                BUG_ASSERT(e.level <= blockLevel);
-                if (mode != LookupMode::Variable) {
-                } else {
-                    for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
-                        if (it2->first.name == name) {
-                            DEBUG(StringView("> Match: Hygiene ") << it2->first.hygiene << StringView(" check against src_context"));
-                        }
-                        if (it2->first.name == name && it2->first.hygiene.isVisible(lookupContext)) {
-                            ASTPath rv(name);
-                            rv.bindVariable(it2->second);
-                            return rv;
-                        }
-                    }
+                auto path = localPath((*it).as_VarBlock(), lookupContext);
+                if (path.isValid()) {
+                    return path;
                 }
                 break;
             }

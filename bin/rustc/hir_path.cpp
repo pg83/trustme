@@ -1322,6 +1322,9 @@ namespace {
 }
 
 bool HIRConstGenericUnevaluated::equivalent(const HIRConstGenericUnevaluated& x) const {
+    if (!*this->expr || !*x.expr) {
+        return this->ord(x) == OrdEqual;
+    }
     /* Upstream relates unevaluated consts structurally (`ConstKind::Expr`), with the
        generics substituted; the `Self` a value carries is part of that substitution
        only for an expression that names it.  `N + 1` written in a trait's signature
@@ -1340,8 +1343,8 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
 
         // HACK: If the inner is a const param on both, sort based on that.
 
-        const auto* tn = cast<const HIRExprNodeConstParam>(&**this->expr);
-        const auto* xn = cast<const HIRExprNodeConstParam>(&**x.expr);
+        const auto* tn = cast<const HIRExprNodeConstParam>(this->expr->get());
+        const auto* xn = cast<const HIRExprNodeConstParam>(x.expr->get());
         if (tn && xn) {
             return ::ord(tn->binding, xn->binding);
         }

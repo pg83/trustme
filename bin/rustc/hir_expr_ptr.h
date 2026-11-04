@@ -14,6 +14,7 @@ namespace stl {
 
 class HIRType;
 class HIRSimplePath;
+class HIRPath;
 class HIRExprNode;
 class HIRCrate;
 class HIRExprState;
@@ -96,6 +97,7 @@ class HIRExprPtr {
 public:
     stl::Vector<const HIRType*> bindings;
     stl::Vector<const HIRType*> erasedTypes;
+    const HIRPath* rpitOrigin = nullptr;
     std::vector<HIRSimplePath> defineOpaque;
 
     MIRFunctionPointer mir;

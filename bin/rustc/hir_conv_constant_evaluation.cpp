@@ -868,7 +868,9 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     void writeParam(MIREvalValueRef dst, const MIRParam& p);
 
-    const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp);
+    const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp, const HIRType* expectedType = nullptr);
+
+    const EncodedLiteral& getConst(const HIRGenericRef& generic, EncodedLiteral& tmp);
 
     FloatValue readParamFloat(unsigned bits, const MIRParam& p);
 
@@ -2172,7 +2174,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         vp = &(tmpV = localState.ms.getValue(state.sp, *ve));
                     }
                     EncodedLiteral tmpVal;
-                    count = localState.getConst(*vp, tmpVal).readUsize(0);
+                    count = localState.getConst(*vp, tmpVal, localState.rootResolve.crate.types.primitive(HIRCoreType::Usize)).readUsize(0);
                     break;
                 }
             }
@@ -5465,9 +5467,8 @@ auto MIREvalCallStackEntry::writeConst(MIREvalValueRef dst, const MIRConstant& c
         }
         case MIRConstant::TAG_Generic: {
             auto& e2 = c.as_Generic();
-            auto v = ms.getValue(state.sp, e2);
             EncodedLiteral tmp;
-            const auto& encoded = getConst(v, tmp);
+            const auto& encoded = getConst(e2, tmp);
             DEBUG(e2 << StringView(" = ") << encoded);
             writeEncoded(dst, encoded);
             break;
@@ -5520,7 +5521,17 @@ auto MIREvalCallStackEntry::writeParam(MIREvalValueRef dst, const MIRParam& p) -
     }
 }
 
-auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) -> const EncodedLiteral& {
+auto MIREvalCallStackEntry::getConst(const HIRGenericRef& generic, EncodedLiteral& tmp) -> const EncodedLiteral& {
+    auto value = ms.getValue(state.sp, generic);
+    if (!value.is_Unevaluated()) {
+        return getConst(value, tmp);
+    }
+    const auto* params = generic.group() == GENERICImpl ? resolve.implGenericsPtr() : resolve.itemGenericsPtr();
+    MIR_ASSERT(state, params && generic.idx() < params->values.size(), StringView("Missing const parameter definition for ") << generic);
+    return getConst(value, tmp, monomorphExpand(params->values[generic.idx()].type));
+}
+
+auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& tmp, const HIRType* expectedType) -> const EncodedLiteral& {
     switch (v.tag()) {
         case HIRConstGeneric::TAG_Infer: {
             BUG(state.sp, StringView("Infer const generic during concrete evaluation"));
@@ -5550,7 +5561,7 @@ auto MIREvalCallStackEntry::getConst(const HIRConstGeneric& v, EncodedLiteral& t
             valueMs.selfTy = value.selfType;
             valueMs.ppImpl = &value.paramsImpl;
             valueMs.ppMethod = &value.paramsItem;
-            auto type = valueMs.monomorphType(state.sp, expr->resType);
+            auto type = expectedType ? expectedType : valueMs.monomorphType(state.sp, expr.resultType());
             tmp = evaluateConstgeneric(state.sp, rootResolve.wb, rootResolve.crate, type, value);
             return tmp;
         }
@@ -5580,9 +5591,8 @@ auto MIREvalCallStackEntry::readParamFloat(unsigned bits, const MIRParam& p) -> 
                 return EncodedLiteralSlice(val).readFloat();
             }
             if (e.is_Generic()) {
-                auto ve = ms.getValue(state.sp, e.as_Generic());
                 EncodedLiteral elTmp;
-                const auto& el = getConst(ve, elTmp);
+                const auto& el = getConst(e.as_Generic(), elTmp);
                 return EncodedLiteralSlice(el).readFloat();
             }
             MIR_ASSERT(state, e.is_Float(), StringView("Expected a float, got ") << e);
@@ -5609,9 +5619,8 @@ auto MIREvalCallStackEntry::readParamFloatBits(unsigned bits, const MIRParam& p)
                 return EncodedLiteralSlice(val).readUint();
             }
             if (e.is_Generic()) {
-                auto ve = ms.getValue(state.sp, e.as_Generic());
                 EncodedLiteral elTmp;
-                const auto& el = getConst(ve, elTmp);
+                const auto& el = getConst(e.as_Generic(), elTmp);
                 return EncodedLiteralSlice(el).readUint();
             }
             MIR_ASSERT(state, e.is_Float(), StringView("Expected a float, got ") << e);
@@ -5657,9 +5666,8 @@ auto MIREvalCallStackEntry::readParamUint(unsigned bits, const MIRParam& p) -> U
                 return EncodedLiteralSlice(val).readUint();
             }
             if (e.is_Generic()) {
-                auto ve = ms.getValue(state.sp, e.as_Generic());
                 EncodedLiteral elTmp;
-                const auto& el = getConst(ve, elTmp);
+                const auto& el = getConst(e.as_Generic(), elTmp);
                 return EncodedLiteralSlice(el).readUint();
             }
             if (e.is_Int()) {
@@ -5693,9 +5701,8 @@ auto MIREvalCallStackEntry::readParamSint(unsigned bits, const MIRParam& p) -> S
                 return EncodedLiteralSlice(val).readSint();
             }
             if (e.is_Generic()) {
-                auto ve = ms.getValue(state.sp, e.as_Generic());
                 EncodedLiteral elTmp;
-                const auto& el = getConst(ve, elTmp);
+                const auto& el = getConst(e.as_Generic(), elTmp);
                 return EncodedLiteralSlice(el).readSint();
             }
             MIR_ASSERT(state, e.is_Int(), StringView("Expected an integer, got ") << e.tagStr() << StringView(" ") << e);
@@ -6138,9 +6145,9 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
         const auto& unevaluated = *as.as_Unevaluated().as_Unevaluated();
         const auto& exprPtr = *unevaluated.expr;
 
-        const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
+        const auto* tn = cast<const HIRExprNodeConstParam>(exprPtr.get());
         if (!tn) {
-            translateConstExprBody(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
+            translateConstExprBody(exprPtr.span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
         }
         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, unevaluated);
         if (!predicted && !wb.ctfe->capsOracle()) {
@@ -6150,7 +6157,7 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
             return;
         }
         EncodedLiteral val;
-        if (!tryEvaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated, val)) {
+        if (!tryEvaluateConstgeneric(exprPtr.span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated, val)) {
             return;
         }
         as = val.readUsize(0);

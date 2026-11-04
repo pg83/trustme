@@ -1402,6 +1402,9 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     index = erasedIndices.insert(ee->index, fcnErasedCount++);
                 }
                 ee->index = *index;
+                if (!fcnPtr->code.rpitOrigin) {
+                    fcnPtr->code.rpitOrigin = crate.pool->make<HIRPath>(ee->origin.clone());
+                }
             }
 
             // - Add a un-namable generic parameter (TODO: Prevent this from being explicitly set when called)

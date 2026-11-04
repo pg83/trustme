@@ -6530,15 +6530,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
     HIRExprNodeP rootPtr(expr.get());
     BUG_ASSERT(!ms.modPaths.empty());
     Context context{ms.wb, ms.implGenerics, ms.itemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
-    if (resultType) {
-        visitTyWith(resultType, [&](const HIRType* inner) {
-            if (const auto* erased = inner->opt_ErasedType()) {
-                if (const auto* fcn = erased->inner.opt_Fcn()) {
-                    context.resolve.addDefiningFcnOrigin(fcn->origin);
-                }
-            }
-            return false;
-        });
+    if (expr.rpitOrigin) {
+        context.resolve.addDefiningFcnOrigin(*expr.rpitOrigin);
     }
     for (const auto& path : expr.state->defineOpaque) {
         context.resolve.addDefiningOpaqueAlias(path);
@@ -7498,7 +7491,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
                 if (const auto* alias = e->inner.opt_Alias(); alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner)) {
                     return context.hiddenTypeForOpaqueAlias(sp, *e);
                 }
-                if (const auto* ee = e->inner.opt_Fcn()) {
+                if (const auto* ee = e->inner.opt_Fcn(); ee && context.resolve.isDefiningFcnOrigin(ee->origin)) {
                     while (expr.erasedTypes.length() <= ee->index) {
                         expr.erasedTypes.pushBack(nullptr);
                     }

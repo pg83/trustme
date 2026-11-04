@@ -5,6 +5,7 @@
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "ast_pattern.h"
+#include "hir_type.h"
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
@@ -85,6 +86,7 @@ ASTType* ASTType::clone() const {
         _CLONE(Slice, {old.inner->clone()})
         _CLONE(Pattern, {old.inner->clone(), old.pattern ? p.make<ASTPattern>(old.pattern->clone()) : nullptr, old.notNull})
         _COPY(Generic)
+        _COPY(ResolvedHIR)
         _CLONE(Path, p.make<ASTPath>(*old))
         _COPY(TraitObject)
         _CLONE(ErasedType, p.make<TypeErasedType>(TypeErasedType{old->traits, old->maybeTraits, old->lifetimes, old->use ? box$(*old->use) : std::unique_ptr<ASTPathParams>(), old->isEdition2024OrLater}))
@@ -131,6 +133,7 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
         _(Macro, os << *ent.inv;)
         _(Unit, os << StringView("()");)
         _(Primitive, os << ent.coreType;)
+        _(ResolvedHIR, os << ent.type;)
         break;
         case TypeData::TAG_Function: {
             auto& ent = data.as_Function();
