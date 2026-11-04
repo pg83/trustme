@@ -212,10 +212,6 @@ namespace {
 
                 break;
             default:
-                auto its = cfg.values.equal_range(name.c_str());
-                for (auto it = its.first; it != its.second; ++it) {
-                    return true;
-                }
                 auto it = cfg.flags.find(name.c_str());
                 return (it != cfg.flags.end());
         }
