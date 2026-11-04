@@ -804,9 +804,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 break;
                             }
                             case MIRAsmParam::TAG_Label: {
-                                auto& v = p.as_Label();
-                                of << StringView("label ") << v;
-                                break;
+                                UNREACHABLE();
                             }
                         }
                     }
