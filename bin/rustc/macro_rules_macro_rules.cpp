@@ -2926,12 +2926,6 @@ namespace {
                         } else if (entryConds.size() == 1 && entryConds[0].back().tok != TOK_EOF) // HACK: if the entry ends with `EOF` then it won't be correct
                         {
                             pushIfv(false, entryConds.front(), ~0u);
-                        } else if (skipConds.empty()) {
-                            size_t start = rv.size() + entryConds.size() + 1;
-                            for (const auto& p : entryConds) {
-                                pushIfv(true, p, start);
-                            }
-                            push(SimplePatEnt::make_Jump({~0u}));
                         } else {
                             for (const auto& p : skipConds) {
                                 pushIfv(true, p, ~0u);
