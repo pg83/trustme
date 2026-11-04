@@ -5944,12 +5944,13 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
         } else if (*it == '\\') {
             of << StringView("\\\\");
         } else if (*it == '/' && *(it + 1) == '/') {
-            while (it != e.tpl.end() || *it == '\n') {
+            while (it != e.tpl.end() && *it != '\n') {
                 ++it;
             }
             --it;
         } else if (*it == '%' && *(it + 1) == '%') {
-            of << StringView("%");
+            of << StringView("%%%%");
+            ++it;
         } else if (*it == '%' && isdigit(*(it + 1)) && emitAttSyntax) {
             of << StringView("%%%");
         } else if (*it == '%' && !isdigit(*(it + 1))) {
