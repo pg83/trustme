@@ -2993,6 +2993,12 @@ namespace {
                     }
                 }
             }
+            if (binding && !targetFunction && !targetHirFunction && target.cls.is_Absolute()) {
+                const auto& path = target.bindings.value.path;
+                if (const auto external = itemContext.crate.externCrates.find(path.crate); external != itemContext.crate.externCrates.end()) {
+                    targetHirFunction = external->second.hir->getValitemByPath(fcn.sp(), HIRSimplePath(path.crate, path.nodes), true).as_Function();
+                }
+            }
             ASSERT_BUG(fcn.sp(), targetFunction || targetHirFunction, StringView("Delegation target is not a function: ") << target);
 
             auto replacement = signatureSource.ast ? signatureSource.ast->clone() : signatureSource.hir ? HIRFunctionToAST(itemContext, fcn.sp(), *signatureSource.hir) : targetFunction ? targetFunction->clone() : HIRFunctionToAST(itemContext, fcn.sp(), *targetHirFunction);
@@ -6316,6 +6322,9 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             } else {
                                 item = &crate.externCrates.at(imp.path.crateName()).hir->getValitemByPath(sp, imp.path, true);
                             }
+                        }
+                        if (mode == LookupMode::PatternValue && item->is_Function()) {
+                            return ASTPath();
                         }
                         switch ((*item).tag()) {
                             default:
