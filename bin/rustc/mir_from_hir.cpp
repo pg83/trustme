@@ -8249,45 +8249,13 @@ auto ExprVisitorConv::generatorPruneInactiveLocals(const Span& sp, const StaticT
         auto& state = generatorState.states[i];
         ASSERT_BUG(sp, state.suspensionBlock < fcn.blocks.size(), StringView("Coroutine state ") << i << StringView(" has no suspension block"));
 
-        IntMap<bool> visited{traversalPool.mutPtr()};
-        ThinVector<MIRBasicBlockId> pending;
-        pending.push_back(state.suspensionBlock);
-        bool foundReturn = false;
-        while (pending.size() != 0) {
-            const auto block = pending.back();
-            pending.pop_back();
-            ASSERT_BUG(sp, block < fcn.blocks.size(), StringView("Coroutine suspension target BB") << block << StringView(" is out of range"));
-            if (visited.find(block)) {
-                continue;
-            }
-            visited.insert(block, true);
-
-            auto& terminator = fcn.blocks[block].terminator;
-            if (terminator.is_Return()) {
-                ASSERT_BUG(sp, !bridgedReturns.find(block), StringView("Coroutine suspension paths share return BB") << block);
-                bridgedReturns.insert(block, true);
-                bridgedReturnBlocks.push_back(block);
-                terminator = MIRTerminator::make_Goto(generatorState.states[i + 1].entrypoint);
-                foundReturn = true;
-                continue;
-            }
-
-            struct TargetCollector final: MIRTargetVisitor {
-                ThinVector<MIRBasicBlockId>& targets;
-
-                explicit TargetCollector(ThinVector<MIRBasicBlockId>& targets)
-                    : targets(targets)
-                {
-                }
-
-                void visitTarget(const MIRBasicBlockId& target) override {
-                    targets.push_back(target);
-                }
-            } collector{pending};
-
-            visitTerminatorTarget(terminator, collector);
-        }
-        ASSERT_BUG(sp, foundReturn, StringView("Coroutine suspension path from BB") << state.suspensionBlock << StringView(" does not return"));
+        const auto block = state.suspensionBlock;
+        auto& terminator = fcn.blocks[block].terminator;
+        ASSERT_BUG(sp, terminator.is_Return(), StringView("Coroutine suspension block BB") << block << StringView(" must return"));
+        ASSERT_BUG(sp, !bridgedReturns.find(block), StringView("Coroutine suspension paths share return BB") << block);
+        bridgedReturns.insert(block, true);
+        bridgedReturnBlocks.push_back(block);
+        terminator = MIRTerminator::make_Goto(generatorState.states[i + 1].entrypoint);
     }
 
     auto lifetimes = MIRHelperGetLifetimes(mirResolve, fcn);
