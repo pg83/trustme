@@ -2788,6 +2788,7 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
     }
     auto newList = TransEnumerateCommonPost(state);
 
+    TypeVisitor implicitDropTypes{wb, newList, &list};
     Vector<const TransListFunction*> enumeratedImplicitDrops;
     for (;;) {
         Vector<const TransListFunction*> generatedFunctions;
@@ -2814,6 +2815,9 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
             break;
         }
         TransEnumerateGeneratedMIR(wb, newList, generatedFunctions);
+        for (const auto* function : generatedFunctions) {
+            implicitDropTypes.visitFunction(*function->path, *function->ptr, function->pp, false);
+        }
     }
 
     for (const auto* type : newList.dropGlue) {
