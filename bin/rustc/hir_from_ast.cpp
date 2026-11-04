@@ -4726,8 +4726,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeBinOp& v) -> void {
             BUG(v.span(), StringView("Unexpected RANGE_INC binop"));
         }
         case ASTExprNodeBinOp::PLACE_IN:
-            rv.reset(ctx.crate->pool->make<HIRExprNodeEmplace>(v.span(), HIRExprNodeEmplace::Type::Placer, lower(v.left), lower(v.right)));
-            break;
+            ERROR(v.span(), E0000, StringView("placement syntax is not supported"));
 
         case ASTExprNodeBinOp::CMPEQU:
             op = HIRExprNodeBinOp::Op::CmpEqu;
