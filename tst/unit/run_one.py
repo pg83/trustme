@@ -7,6 +7,7 @@ units are compile-only, as are units with `//@ compile-only`.
 `stdout-flags` checks CLI query output, and `compile-variant` also runs the
 program with the given flags. CLI checks accept `OWN_FLAGS || NATIVE_FLAGS`.
 `$OUT` names each temporary output path.
+`compile-fail-exit-code` optionally checks our compiler's exact rejection status.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -40,6 +41,11 @@ def main() -> int:
     compile_fail_match = re.search(
         r"^//@\s*compile-fail:\s*(.+)$", source_text, re.MULTILINE
     )
+    compile_fail_exit_match = re.search(
+        r"^//@\s*compile-fail-exit-code:\s*(\d+)\s*$", source_text, re.MULTILINE
+    )
+    if compile_fail_exit_match and not compile_fail_match:
+        raise RuntimeError("compile-fail-exit-code requires compile-fail")
     edition_match = re.search(r"^//@\s*edition:\s*(\d+)", source_text, re.MULTILINE)
     edition = edition_match.group(1) if edition_match else "2021"
     compile_flags_match = re.search(
@@ -234,7 +240,7 @@ def main() -> int:
             if result.returncode == 0:
                 raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
             internal_failure = re.search(
-                rb"(?m)^(?:<null>|MACRO<[^\n]+>|[^\n]*:\d+(?::\d+)?(?:-\d+(?::\d+)?)?) (?:BUG|TODO):"
+                rb"(?m)^(?:<null>|MACRO<[^\n]+>|[^\n]*:\d+(?::\d+)?(?:-\d+(?::\d+)?)?):? (?:BUG|TODO):"
                 rb"|^MIR (?:BUG|TODO|ERROR):|^LLVM ERROR:|^error: (?:internal compiler error|the compiler unexpectedly panicked)"
                 rb"|^wrap_gdb:[^\n]* died with SIG(?:SEGV|BUS|ILL|FPE)"
                 rb"|^Program received signal SIG(?:SEGV|BUS|ILL|FPE)",
@@ -244,6 +250,10 @@ def main() -> int:
                 sys.stdout.buffer.write(result.stdout)
                 sys.stderr.buffer.write(result.stderr)
                 raise RuntimeError("compile-fail unit hit an internal compiler failure")
+            if compile_fail_exit_match and not system_rustc and result.returncode != int(compile_fail_exit_match.group(1)):
+                sys.stdout.buffer.write(result.stdout)
+                sys.stderr.buffer.write(result.stderr)
+                raise RuntimeError(f"compile-fail exit code was {result.returncode}, expected {compile_fail_exit_match.group(1)}")
             expected = compile_fail_match.group(1).encode() if compile_fail_match else b""
             if expected and not system_rustc and expected not in result.stderr:
                 sys.stdout.buffer.write(result.stdout)

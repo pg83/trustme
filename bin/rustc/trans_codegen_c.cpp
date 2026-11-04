@@ -6395,7 +6395,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                         of << 'q';
                         break;
                     default:
-                        MIR_TODO(localMirRes, StringView("Asm2 GCC: modifier ") << f.modifier);
+                        MIR_BUG(localMirRes, StringView("Unvalidated asm template modifier ") << f.modifier);
                 }
                 of << argMappings[f.index];
             }

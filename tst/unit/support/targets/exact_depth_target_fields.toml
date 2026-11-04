@@ -1,0 +1,11 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+arch = "x86_64"
+[backend.c]
+variant = "gnu"
+emulate-i128 = false
+compiler-opts = ["-fno-strict-aliasing"]
+[arch.alignments]
+u32 = 4

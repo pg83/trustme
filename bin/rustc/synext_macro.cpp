@@ -2197,7 +2197,25 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                 ERROR(sp, E0000, StringView("asm! marked `pure` without `nomem` or `readonly`"));
             }
             if (frag.modifier != '\0') {
-                // TODO: Check that the modifier is valid for the specifier
+                const auto& param = params[frag.index];
+                const auto* reg = param.opt_Reg();
+                const auto* single = param.opt_RegSingle();
+                const auto* spec = reg ? &reg->spec : single ? &single->spec : nullptr;
+                const auto* regClass = spec ? spec->opt_Class() : nullptr;
+                StringView allowed("");
+                if (regClass) {
+                    const bool is64Bit = TargetGetCurSpec(wb).arch.name == "x86_64";
+                    if (*regClass == AsmRegisterClass::x86Reg) {
+                        allowed = StringView(is64Bit ? "lxer" : "xe");
+                    } else if (*regClass == AsmRegisterClass::x86RegAbcd) {
+                        allowed = StringView(is64Bit ? "lhxer" : "lhxe");
+                    } else if (*regClass == AsmRegisterClass::x86Xmm || *regClass == AsmRegisterClass::x86Ymm || *regClass == AsmRegisterClass::x86Zmm) {
+                        allowed = StringView("xyz");
+                    }
+                }
+                if (!allowed.memChr(frag.modifier)) {
+                    ERROR(sp, E0000, StringView("invalid asm template modifier `") << frag.modifier << StringView("` for this operand"));
+                }
             }
         }
     }

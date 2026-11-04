@@ -263,7 +263,10 @@ namespace {
 
         TomlFile tomlFile(filename);
         for (auto keyVal : tomlFile) {
-            BUG_ASSERT(keyVal.path.size() > 1);
+            if (keyVal.path.size() < 2) {
+                sysE << StringView("ERROR: Expected sub-nodes in ") << keyVal.path << StringView(" in ") << filename << endL;
+                exit(1);
+            }
 
             DEBUG(keyVal.path << StringView(" = ") << keyVal.value);
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
@@ -279,6 +282,7 @@ namespace {
             auto checkPathLengthMin = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() < len) {
                     sysE << StringView("ERROR: Expected sub-nodes in ") << kv.path << StringView(" in ") << filename << endL;
+                    exit(1);
                 }
             };
 
