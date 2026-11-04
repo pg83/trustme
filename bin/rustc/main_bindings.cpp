@@ -463,11 +463,6 @@ namespace {
                             panicRuntimeNeeded = true;
                         }
                     }
-                    allocatorCrateLoaded = true;
-                    if (!allocatorCrateLoaded) {
-                        crate.markExternCrateUsed(crate.loadExternCrate(*wb.settings, Span(), "alloc_system"));
-                    }
-
                     if (panicRuntimeNeeded /*&& !panic_runtime_loaded*/) {
                         auto panicCrate = "panic_" + params.codegen.panicType;
                         crate.markExternCrateUsed(crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str()));

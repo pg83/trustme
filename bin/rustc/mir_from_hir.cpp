@@ -1194,6 +1194,23 @@ namespace {
         return cached != binding->monomorphCache.end() ? &cached->second : nullptr;
     }
 
+    Ordering ordPatternValue(const MIRConstant& a, const MIRConstant& b) {
+        const auto* left = a.opt_Float();
+        const auto* right = b.opt_Float();
+        if (!left || !right) {
+            return ::ord(a, b);
+        }
+        ORD(static_cast<unsigned>(left->t), static_cast<unsigned>(right->t));
+        if (left->v == right->v) {
+            return OrdEqual;
+        }
+        auto orderedBits = [](FloatValue value) {
+            const auto mask = u64(0) - (value.bitsHi() >> 63);
+            return U128(value.bitsLo() ^ mask, value.bitsHi() ^ (mask | 0x8000'0000'0000'0000ull));
+        };
+        return ::ord(orderedBits(left->v), orderedBits(right->v));
+    }
+
     Ordering ordRuleCompatible(const PatternRule& a, const PatternRule& b) {
         if (a.tag() != b.tag()) {
             return ::ord((unsigned)a.tag(), (unsigned)b.tag());
@@ -1229,13 +1246,17 @@ namespace {
             case PatternRule::TAG_Value: {
                 auto& ae = a.as_Value();
                 auto& be = b.as_Value();
-                return ::ord(ae, be);
+                return ordPatternValue(ae, be);
             }
             case PatternRule::TAG_ValueRange: {
                 auto& ae = a.as_ValueRange();
                 auto& be = b.as_ValueRange();
-                ORD(ae.first, be.first);
-                ORD(ae.last, be.last);
+                if (auto order = ordPatternValue(ae.first, be.first); order != OrdEqual) {
+                    return order;
+                }
+                if (auto order = ordPatternValue(ae.last, be.last); order != OrdEqual) {
+                    return order;
+                }
                 return ::ord(ae.isInclusive, be.isInclusive);
             }
         }
@@ -1280,17 +1301,18 @@ namespace {
         }
 
         auto isWithinRight = [](const MIRConstant& c, const PatternRule::Data_ValueRange& e) -> bool {
-            return (e.isInclusive ? c <= e.last : c < e.last);
+            const auto order = ordPatternValue(c, e.last);
+            return e.isInclusive ? order != OrdGreater : order == OrdLess;
         };
 
         if (const auto* ae = a.opt_ValueRange()) {
             if (const auto* be = b.opt_Value()) {
-                return (ae->first <= *be && isWithinRight(*be, *ae));
+                return (ordPatternValue(ae->first, *be) != OrdGreater && isWithinRight(*be, *ae));
             } else if (const auto* be = b.opt_ValueRange()) {
-                if (ae->last < be->first || (ae->last == be->first && !ae->isInclusive)) {
+                if (ordPatternValue(ae->last, be->first) == OrdLess || (ordPatternValue(ae->last, be->first) == OrdEqual && !ae->isInclusive)) {
                     return false;
                 }
-                if (be->last < ae->first || (be->last == ae->first && !be->isInclusive)) {
+                if (ordPatternValue(be->last, ae->first) == OrdLess || (ordPatternValue(be->last, ae->first) == OrdEqual && !be->isInclusive)) {
                     return false;
                 }
                 return true;
@@ -1301,9 +1323,9 @@ namespace {
         if (const auto* be = b.opt_ValueRange()) {
             if (const auto* ae = a.opt_Value()) {
                 if (be->isInclusive) {
-                    return (be->first <= *ae && *ae <= be->last);
+                    return (ordPatternValue(be->first, *ae) != OrdGreater && ordPatternValue(*ae, be->last) != OrdGreater);
                 } else {
-                    return (be->first <= *ae && *ae < be->last);
+                    return (ordPatternValue(be->first, *ae) != OrdGreater && ordPatternValue(*ae, be->last) == OrdLess);
                 }
             } else {
                 TODO(Span(), StringView("Check overlap of ") << a << StringView(" and ") << b);
@@ -3108,13 +3130,17 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
         case PatternRule::TAG_Value: {
             auto& te = (*this).as_Value();
             auto& xe = x.as_Value();
-            return ::ord(te, xe);
+            return ordPatternValue(te, xe);
         }
         case PatternRule::TAG_ValueRange: {
             auto& te = (*this).as_ValueRange();
             auto& xe = x.as_ValueRange();
-            ORD(te.first, xe.first);
-            ORD(te.last, xe.last);
+            if (auto order = ordPatternValue(te.first, xe.first); order != OrdEqual) {
+                return order;
+            }
+            if (auto order = ordPatternValue(te.last, xe.last); order != OrdEqual) {
+                return order;
+            }
             return ::ord(te.isInclusive, xe.isInclusive);
         }
     }
