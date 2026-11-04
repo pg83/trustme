@@ -3878,9 +3878,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
     const auto& type = this->ivars.getType(ty);
 
     TRACE_FUNCTION_F(StringView("trait = ") << trait << params << StringView(", type = ") << type);
-    if (assembleTypeCandidatesCb(sp, trait, params, ty, callback)) {
-        return true;
-    }
+    assembleTypeCandidatesCb(sp, trait, params, ty, callback);
 
     switch ((*type).tag()) {
         default:
@@ -5682,7 +5680,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
     }
 
     if (assocInfo) {
-        bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](const HIRType* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
+        this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](const HIRType* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
             const auto& traitRef = *boundInfo.traitPtr;
             const auto& at = traitRef.types.at(assocInfo->item);
             for (const auto& bound : at.traitBounds) {
@@ -5695,16 +5693,11 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                         ty.second.type = this->expandAssociatedTypes(sp, mv$(ty.second.type));
                     }
                     auto projectedSubject = crate.types.path(HIRPath(boundTy, boundTrait.clone(), assocInfo->item, assocInfo->params.clone()), HIRTypePathBinding::make_Opaque({}));
-                    if (itemBoundSink.visit(SolverImpl(std::move(projectedSubject), mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness))) {
-                        return true;
-                    }
+                    itemBoundSink.visit(SolverImpl(std::move(projectedSubject), mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness));
                 }
             }
             return false;
         });
-        if (rv) {
-            return true;
-        }
     }
     return false;
 }
