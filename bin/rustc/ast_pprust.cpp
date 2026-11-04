@@ -1150,15 +1150,9 @@ namespace {
                 fixity = 1;
                 break;
             case ASTExprNodeBinOp::RANGE:
-                text = StringView("..");
-                prec = Prec::Range;
-                fixity = 2;
-                break;
+                UNREACHABLE();
             case ASTExprNodeBinOp::RANGE_INC:
-                text = StringView("..=");
-                prec = Prec::Range;
-                fixity = 2;
-                break;
+                UNREACHABLE();
         }
     }
 
