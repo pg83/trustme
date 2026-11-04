@@ -309,6 +309,12 @@ namespace {
             return 1;
         }
 
+        const auto& target = TargetGetCurSpec(wb).arch;
+        if (target.pointerBits != 64 || target.bigEndian) {
+            sysE << StringView("error: unsupported target `") << params.target << StringView("`: only 64-bit little-endian targets are supported") << endL;
+            abort();
+        }
+
         if (params.testHarness) {
             CfgSetFlag(*wb.settings, "test");
         }

@@ -5,7 +5,8 @@ compiler fix. Binaries and test harnesses must exit 0; `//@ crate-type: lib`
 units are compile-only, as are units with `//@ compile-only`.
 `reject-flags` checks own/native diagnostics before a successful normal run;
 `stdout-flags` checks CLI query output, and `compile-variant` also runs the
-program with the given flags. `$OUT` names each temporary output path.
+program with the given flags. CLI checks accept `OWN_FLAGS || NATIVE_FLAGS`.
+`$OUT` names each temporary output path.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -187,11 +188,14 @@ def main() -> int:
             rustc = lib.require_env("RUSTC_CHAOS")
             env["TRUSTME_CHAOS"] = chaos_match.group(1)
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
+        cli_library_args = [] if system_rustc else ["-L", os.path.join(libstd, "release")]
         for flags, own_diagnostic, native_diagnostic in reject_options:
+            choices = flags.split(" || ", 1)
+            flags = choices[-1] if system_rustc else choices[0]
             extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
                      for flag in shlex.split(flags)]
             rejected = subprocess.run(
-                [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+                [rustc, src, *cli_library_args, "-o", binary,
                  *dependency_args, *base_flags, *extra],
                 env=dict(env, TRUSTME_CLI_EXACT_ARGS="1"),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
@@ -205,10 +209,12 @@ def main() -> int:
                 raise RuntimeError(f"option rejection failed: {extra!r}, expected {expected!r}")
             print(f"option rejection: {extra!r}: {expected.decode()}", flush=True)
         for flags, expected in stdout_options:
+            choices = flags.split(" || ", 1)
+            flags = choices[-1] if system_rustc else choices[0]
             extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
                      for flag in shlex.split(flags)]
             inspected = subprocess.run(
-                [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+                [rustc, src, *cli_library_args, "-o", binary,
                  *dependency_args, *base_flags, *extra],
                 env=dict(env, TRUSTME_CLI_EXACT_ARGS="1"),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, check=False,

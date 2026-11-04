@@ -310,7 +310,7 @@ namespace {
                             rv.arch = archPowerpc();
                         } else if (keyVal.value.asString() == archPowerpc64().name) {
                             rv.arch = archPowerpc64();
-                        } else if (keyVal.value.asString() == archPowerpc64le().name) {
+                        } else if (keyVal.value.asString() == "powerpc64le") {
                             rv.arch = archPowerpc64le();
                         } else if (keyVal.value.asString() == archRiscv64().name) {
                             rv.arch = archRiscv64();
@@ -2226,10 +2226,6 @@ void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
     spec->hasThreadLocal = osHasThreadLocal(*spec);
     wb.target = spec;
-    if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
-        sysE << StringView("error: unsupported target `") << targetName << StringView("`: only 64-bit little-endian targets are supported") << endL;
-        abort();
-    }
     const TargetSpec& tgt = *spec;
 
     if (tgt.family == "unix") {

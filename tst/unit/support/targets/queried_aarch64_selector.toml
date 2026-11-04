@@ -1,0 +1,7 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+arch = "aarch64"
+[backend.c]
+emulate-i128 = false

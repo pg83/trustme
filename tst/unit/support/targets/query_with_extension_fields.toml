@@ -1,0 +1,15 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+arch = "x86_64"
+future-setting = "preserved"
+[backend.c]
+variant = "gnu"
+emulate-i128 = false
+linker-opts-pre = ["-Wl,--as-needed", "-Wl,--no-as-needed"]
+future-setting = 17
+[backend.alternative]
+future-setting = true
+[arch]
+future-setting = 19
