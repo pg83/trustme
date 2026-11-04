@@ -4619,7 +4619,11 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubSuper, std::move(path));
                 case TOK_RWORD_IN: {
                     ASTPath astPath;
-                    switch (GET_TOK(tok, lex)) {
+                    GET_TOK(tok, lex);
+                    if (tok.type() == TOK_IDENT && lex.editionAfter(ASTEdition::Rust2018)) {
+                        ERROR(lex.pointSpan(), E0000, StringView("relative paths are not supported in visibilities in 2018 edition or later"));
+                    }
+                    switch (tok.type()) {
                         case TOK_DOUBLE_COLON:
                             astPath = ASTPath("", {});
                             PUTBACK(tok, lex);
