@@ -3687,18 +3687,9 @@ auto CodeGeneratorC::emitOperationWithUnwindCb(const MIRUnwindAction& action, un
                 emitOperation.emit(indentLevel);
                 break;
             }
-            if (unwindRegion) {
-                of << indent << StringView("trustme_unwind_state = ") << target << StringView(";\n");
-                emitOperation.emit(indentLevel);
-                of << indent << StringView("trustme_unwind_state = 0;\n");
-                break;
-            }
-            of << indent << StringView("try {\n");
-            emitOperation.emit(indentLevel + 1);
-            of << indent << StringView("} catch (...) {\n");
-            of << indent << StringView("\ttrustme_run_cleanup(") << target << StringView(");\n");
-            of << indent << StringView("\tthrow;\n");
-            of << indent << StringView("}\n");
+            of << indent << StringView("trustme_unwind_state = ") << target << StringView(";\n");
+            emitOperation.emit(indentLevel);
+            of << indent << StringView("trustme_unwind_state = 0;\n");
             break;
         }
         case MIRUnwindAction::TAG_Terminate: {

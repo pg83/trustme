@@ -1,0 +1,10 @@
+[target]
+family = "unix"
+os-name = "macos"
+env-name = ""
+arch = "x86_64"
+
+[backend.c]
+variant = "gnu"
+target = "x86_64-apple-darwin"
+emulate-i128 = false
