@@ -3,7 +3,7 @@
 // Unlike the original rustc version, this one is designed to live complely detached from its compiler.
 #![allow(ellipsis_inclusive_range_patterns)]
 #![feature(crate_in_paths)]
-#![feature(optin_builtin_traits)]
+#![feature(negative_impls)]
 #![feature(vec_resize_with)]
 #![feature(const_vec_new)]
 #![feature(panic_can_unwind)]

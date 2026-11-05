@@ -3,6 +3,9 @@
 Each unit test is its own graph node — a self-contained regression for one
 compiler fix. Binaries and test harnesses must exit 0; `//@ crate-type: lib`
 units are compile-only, as are units with `//@ compile-only`.
+`run-fail: DIAGNOSTIC` checks a successfully compiled executable's nonzero exit
+and diagnostic for the default build and each compile variant. Panic aborts are
+accepted; other fatal signals are failures.
 `reject-flags` checks own/native diagnostics before a successful normal run;
 `stdout-flags` checks CLI query output, and `compile-variant` also runs the
 program with the given flags. CLI checks accept `OWN_FLAGS || NATIVE_FLAGS`.
@@ -17,6 +20,7 @@ import hashlib
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 
@@ -41,6 +45,11 @@ def main() -> int:
     compile_fail_match = re.search(
         r"^//@\s*compile-fail:\s*(.+)$", source_text, re.MULTILINE
     )
+    run_fail_match = re.search(
+        r"^//@\s*run-fail:\s*(.+)$", source_text, re.MULTILINE
+    )
+    if run_fail_match and (compile_fail_match or compile_only or test_harness):
+        raise RuntimeError("run-fail requires an executable without compile-fail or test-harness")
     compile_fail_exit_match = re.search(
         r"^//@\s*compile-fail-exit-code:\s*(\d+)\s*$", source_text, re.MULTILINE
     )
@@ -80,6 +89,8 @@ def main() -> int:
     crate_type = crate_type_match.group(1) if crate_type_match else "bin"
     if crate_type not in {"bin", "cdylib", "lib"}:
         raise RuntimeError(f"unsupported unit crate type: {crate_type}")
+    if run_fail_match and crate_type != "bin":
+        raise RuntimeError("run-fail requires an executable crate")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
     aux_builds = re.findall(r"^//@\s*aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE)
     aux_search = {
@@ -276,6 +287,19 @@ def main() -> int:
             with open(binary + suffix, encoding="utf-8") as output:
                 if expected not in output.read():
                     raise RuntimeError(f"compiler output {suffix} does not contain {expected!r}")
+        def run_binary(path):
+            if not run_fail_match:
+                lib.run([path], env=env, timeout=60)
+                return
+            result = subprocess.run([path], env=env, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, timeout=60, check=False)
+            sys.stdout.buffer.write(result.stdout)
+            sys.stderr.buffer.write(result.stderr)
+            if (result.returncode == 0
+                    or (result.returncode < 0 and result.returncode != -signal.SIGABRT)
+                    or run_fail_match.group(1).encode() not in result.stdout + result.stderr):
+                raise RuntimeError("run-fail unit did not produce the expected runtime failure")
+
         if test_harness:
             listing = subprocess.run([binary, "--list"], env=env,
                                      stdout=subprocess.PIPE, timeout=60,
@@ -283,7 +307,7 @@ def main() -> int:
             if b": test" not in listing.stdout:
                 raise RuntimeError("test harness contains no tests")
         if test_harness or (crate_type == "bin" and not compile_only):
-            lib.run([binary], env=env, timeout=60)
+            run_binary(binary)
         for index, flags in enumerate(compile_variants):
             variant = f"{binary}-variant{index}"
             extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", variant)
@@ -298,7 +322,7 @@ def main() -> int:
                     if expected not in output.read():
                         raise RuntimeError(f"compiler output {suffix} does not contain {expected!r}")
             if test_harness or (crate_type == "bin" and not compile_only):
-                lib.run([variant], env=env, timeout=60)
+                run_binary(variant)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     open(stamp, "w").close()

@@ -29,7 +29,7 @@ impl<T: Iterator<Item=char>> CharStream<T> {
     }
 }
 
-static SYMS: [&[u8]; 53] = [
+static SYMS: [&[u8]; 51] = [
     b"!" as &[u8],
     b"!=",
     b"#",
@@ -52,10 +52,8 @@ static SYMS: [&[u8]; 53] = [
     b"?",
     b"@",
     b"[",
-    b"\\",
     b"]",
     b"^", b"^=",
-    b"`",
     b"{",
     b"|", b"|=", b"||",
     b"}",
@@ -138,7 +136,7 @@ impl ::std::str::FromStr for TokenStream {
             s
         }
 
-        fn starts_punctuation<T: Iterator<Item=char>>(it: &CharStream<T>, c: char) -> bool
+        fn starts_punctuation<T: Iterator<Item=char>>(it: &mut CharStream<T>, c: char) -> bool
         {
             if c == '/' && (it.next() == Some('/') || it.next() == Some('*')) {
                 return false;
@@ -604,7 +602,7 @@ impl ::std::str::FromStr for TokenStream {
                     for (i,&punct) in Iterator::enumerate(SYMS[start].iter())
                     {
                         let sep = if i != SYMS[start].len() - 1 ||
-                            (!it.is_complete() && starts_punctuation(&it, c))
+                            (!it.is_complete() && starts_punctuation(&mut it, c))
                         {
                             Spacing::Joint
                         }
