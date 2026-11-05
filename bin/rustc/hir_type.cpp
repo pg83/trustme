@@ -172,14 +172,6 @@ namespace {
                 auto& be = b.as_Infer();
                 return ae.index == be.index && ae.tyClass == be.tyClass;
             }
-            case HIRType::TAG_Diverge: {
-                return true;
-            }
-            case HIRType::TAG_Primitive: {
-                auto& ae = a.as_Primitive();
-                auto& be = b.as_Primitive();
-                return ae == be;
-            }
             case HIRType::TAG_Path: {
                 auto& ae = a.as_Path();
                 auto& be = b.as_Path();
@@ -281,8 +273,9 @@ namespace {
                 auto& be = b.as_NodeType();
                 return ae == be;
             }
+            default:
+                UNREACHABLE();
         }
-        UNREACHABLE();
     }
 
     void addTypeFlags(u32& flags, const HIRType* type) {
