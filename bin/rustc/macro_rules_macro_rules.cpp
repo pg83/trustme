@@ -285,7 +285,6 @@ namespace {
         switch (type) {
             case TOK_INTEGER:
             case TOK_FLOAT:
-            case TOK_CHAR:
             case TOK_STRING:
             case TOK_BYTESTRING:
             case TOK_CSTRING:
@@ -857,7 +856,6 @@ namespace {
                 case TOK_BYTESTRING:
                 case TOK_STRING:
                 case TOK_CSTRING:
-                case TOK_CHAR:
                 case TOK_INTEGER:
                 case TOK_FLOAT:
                 case TOK_RWORD_TRUE:
@@ -886,7 +884,6 @@ namespace {
                         case TOK_BYTESTRING:
                         case TOK_STRING:
                         case TOK_CSTRING:
-                        case TOK_CHAR:
                         case TOK_INTEGER:
                         case TOK_FLOAT:
                             lex.consume();
@@ -924,7 +921,6 @@ namespace {
                     case TOK_BYTESTRING:
                     case TOK_STRING:
                     case TOK_CSTRING:
-                    case TOK_CHAR:
                     case TOK_INTEGER:
                     case TOK_FLOAT:
                         lex.consume();

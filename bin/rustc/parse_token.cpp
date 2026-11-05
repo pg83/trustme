@@ -670,8 +670,6 @@ std::string Token::toStr() const {
             }
             break;
         }
-        case TOK_CHAR:
-            return FMT(StringView("'\\u{") << formatHex(data_.as_Integer().intval) << StringView("}"));
         case TOK_FLOAT:
             if (data_.as_Float().spelling != RcString()) {
                 if (data_.as_Float().datatype == CORETYPE_ANY) {
@@ -679,11 +677,7 @@ std::string Token::toStr() const {
                 }
                 return FMT(data_.as_Float().spelling << coretypeName(data_.as_Float().datatype));
             }
-            if (data_.as_Float().datatype == CORETYPE_ANY) {
-                return formatFloatValueForToken(data_.as_Float().floatval);
-            } else {
-                return FMT(formatFloatValueForToken(data_.as_Float().floatval) << coretypeName(data_.as_Float().datatype));
-            }
+            return formatFloatValueForToken(data_.as_Float().floatval);
         case TOK_STRING: {
             if (data_.as_String().spelling != RcString()) {
                 return FMT(data_.as_String().spelling);
@@ -704,10 +698,7 @@ std::string Token::toStr() const {
             return takeString();
         }
         case TOK_CSTRING:
-            if (data_.as_String().spelling != RcString()) {
-                return FMT(data_.as_String().spelling);
-            }
-            return FMT(StringView("c\"") << EscapedString(literalBytes(data_.as_String().value)) << StringView("\""));
+            return FMT(data_.as_String().spelling);
         case TOK_LITERAL_SUFFIXED:
             return data_.as_String().value;
         case TOK_BYTESTRING:

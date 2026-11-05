@@ -1463,8 +1463,13 @@ namespace {
                 PUTBACK(tok, lex);
                 return ParsePatternRealPath(lex, ps, ParsePath(lex, PATH_GENERIC_EXPR));
             case TOK_DOUBLE_DOT_EQUAL:
-            case TOK_TRIPLE_DOT:
-                return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({{}, ParsePatternValue(lex)}));
+            case TOK_TRIPLE_DOT: {
+                auto upper = ParsePatternValue(lex);
+                if (upper.is_Invalid()) {
+                    compileErrorGeneric(lex, "inclusive range pattern requires an upper bound");
+                }
+                return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({{}, mv$(upper)}));
+            }
             case TOK_DOUBLE_DOT:
                 return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_ValueLeftInc({{}, ParsePatternValue(lex)}));
             case TOK_DASH:
@@ -4908,7 +4913,6 @@ namespace {
     bool isLiteralToken(eTokenType t) {
         switch (t) {
             case TOK_INTEGER:
-            case TOK_CHAR:
             case TOK_FLOAT:
             case TOK_STRING:
             case TOK_BYTESTRING:

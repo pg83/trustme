@@ -1266,9 +1266,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
                 pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
             }
             break;
-        case TOK_CHAR:
-            pmi.sendChar(tok.intval().truncateU64());
-            break;
         case TOK_FLOAT: {
             auto text = tok.toStr();
             pmi.sendRawLiteral(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
