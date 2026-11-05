@@ -980,9 +980,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
     struct PossibleType {
         enum {
-            CoerceTo,
             CoerceFrom,
-            UnsizeTo,
             UnsizeFrom,
         } cls;
 
@@ -1004,8 +1002,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         bool operator==(const PossibleType& o) const;
 
         ZeroCopyOutput& fmt(ZeroCopyOutput& os) const;
-
-        bool isSource() const;
 
         bool isCoerce() const;
     };
@@ -2894,13 +2890,11 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 if (!coercionEndpointCanDetermineType(context, endpoint)) {
                     continue;
                 }
-                const auto cls = endpoint.direction == SolverCoercionConstraint::Direction::InputIsDestination
-                    ? (endpoint.op == SolverCoercionOp::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom)
-                    : (endpoint.op == SolverCoercionOp::Coercion ? PossibleType::CoerceTo : PossibleType::UnsizeTo);
+                const auto cls = endpoint.op == SolverCoercionOp::Coercion ? PossibleType::CoerceFrom : PossibleType::UnsizeFrom;
                 possibleTys.push_back(PossibleType::concrete(cls, context.getType(endpoint.other)));
             }
             const bool hasConcreteSource = std::any_of(possibleTys.begin(), possibleTys.end(), [](const auto& source) {
-                return source.isSource() && !source.ty->is_Infer() && !source.ty->is_Diverge();
+                return !source.ty->is_Infer() && !source.ty->is_Diverge();
             });
             const bool hasInferenceBarrier = !coercionRefs.associated.empty()
                 || !coercionRefs.revisits.empty()
@@ -2938,20 +2932,10 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 possibleTys.erase(newEnd, possibleTys.end());
             }
 
-            /* Joint unification is one rule in both phases.  Before
-             * finalisation it is forced only when an endpoint occurs on both
-             * sides of the coercion: that identity witness already relates
-             * the ivar to the endpoint, so unifying every jointly-compatible
-             * candidate propagates a constraint rather than selecting a
-             * type.  Without such a witness the rule waits for finalisation,
-             * when every producer has had a chance to add its endpoint.
-             * A diverging source is the bottom of the coercion lattice: it
-             * can flow to every destination but is never an equality endpoint
-             * and therefore cannot determine the component's type. */
             const auto jointlyUnifyCandidates = [&](const auto& candidates, size_t minimumCandidates = 2) {
                 Vector<const PossibleType*> equalityCandidates;
                 for (const auto& candidate : candidates) {
-                    if (candidate.hasType() && candidate.isSource() && candidate.ty->is_Diverge()) {
+                    if (candidate.hasType() && candidate.ty->is_Diverge()) {
                         continue;
                     }
                     equalityCandidates.pushBack(&candidate);
@@ -3017,24 +3001,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 }
                 return true;
             };
-            Vector<PossibleType> knownCandidates;
-            for (const auto& candidate : possibleTys) {
-                if (candidate.hasType()) {
-                    knownCandidates.pushBack(candidate);
-                }
-            }
-            const bool hasSourceDestinationIdentity = std::any_of(knownCandidates.begin(), knownCandidates.end(), [&](const auto& source) {
-                return source.isSource() && std::any_of(knownCandidates.begin(), knownCandidates.end(), [&](const auto& destination) {
-                    return !destination.isSource() && destination.hasType() && destination.ty == source.ty;
-                });
-            });
-            if (hasSourceDestinationIdentity) {
-                DEBUG(i << StringView(": source/destination identity witness in ") << FMT_CB(os, for (const auto& candidate : knownCandidates) os << candidate << StringView(", ");));
-            }
-            if (hasSourceDestinationIdentity && jointlyUnifyCandidates(knownCandidates)) {
-                return true;
-            }
-
             if (tyL->as_Infer().isLit() && !finalPhase) {
                 DEBUG(i << StringView(": Literal ") << tyL);
                 return false;
@@ -3150,7 +3116,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
              * nevertheless prove them before the commit. */
             Vector<const PossibleType*> identityCandidates;
             for (const auto& candidate : possibleTys) {
-                if (candidate.hasType() && !(candidate.isSource() && candidate.ty->is_Diverge())) {
+                if (candidate.hasType() && !candidate.ty->is_Diverge()) {
                     identityCandidates.pushBack(&candidate);
                 }
             }
@@ -3174,7 +3140,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                         headGroup = endpoint.alternativeGroup;
                         const auto* head = context.getType(endpoint.other);
                         for (const auto* candidate : identityCandidates) {
-                            if (candidate->isSource() && candidate->ty == head) {
+                            if (candidate->ty == head) {
                                 alternativesHead = candidate;
                             }
                         }
@@ -3187,12 +3153,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             const PossibleType* identityCandidate = identityCandidates.length() == 1 ? identityCandidates[0] : alternativesOfOneReborrow ? alternativesHead : nullptr;
             if (finalPhase
                 && allowIdentityCommit
-                && std::none_of(coercionRefs.endpoints.begin(), coercionRefs.endpoints.end(), [&](const auto& endpoint) {
-                    return endpoint.direction == SolverCoercionConstraint::Direction::InputIsSource
-                        && coercionEndpointCanDetermineType(context, endpoint);
-                })
                 && identityCandidate
-                && identityCandidate->isSource()
                 && (identityCandidate->isCoerce() || allowUnsizingIdentityCommit)
                 && !isResultOfPendingRevisit(context, tyL)
                 && !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, identityCandidate->ty)) {
@@ -3209,9 +3170,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 auto newEnd = std::remove_if(possibleTys.begin(), possibleTys.end(), [&](const PossibleType& ent) {
                     // TODO: Should this remove Unbound associated types too?
                     if ((ent.ty)->is_Infer()) {
-                        if (ent.isSource()) {
-                            nSrcIvars += 1;
-                        }
+                        nSrcIvars += 1;
                         return true;
                     } else if ((ent.ty)->is_Diverge()) {
                         return true;
@@ -3224,11 +3183,11 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             }
             DEBUG(nIvars << StringView(" ivars (") << nSrcIvars << StringView(" src)"));
             const auto isFunctionSource = [](const PossibleType& possible) {
-                return possible.isSource() && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction() || possible.ty->is_Function());
+                return ((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure())) || possible.ty->is_NamedFunction() || possible.ty->is_Function();
             };
             const auto functionSourceCount = std::count_if(possibleTys.begin(), possibleTys.end(), isFunctionSource);
             if (functionSourceCount >= 2 && (finalPhase || (!hasInferenceBarrier && nSrcIvars == 0)) && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
-                return !possible.isSource() || isFunctionSource(possible);
+                return isFunctionSource(possible);
             })) {
                 /* A function pointer among the sources is already the join of this
                    lattice - a closure and a function item each coerce to one - so it is
@@ -3237,7 +3196,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 const HIRType* pointerSource = nullptr;
                 bool pointerSourceUnique = true;
                 for (const auto& possible : possibleTys) {
-                    if (!possible.isSource() || !possible.ty->is_Function()) {
+                    if (!possible.ty->is_Function()) {
                         continue;
                     }
                     if (pointerSource && !context.ivars.typesEqual(pointerSource, possible.ty)) {
@@ -3250,9 +3209,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 if (pointerSource == nullptr) {
                     std::optional<HIRTypeDataFunctionPointer> target;
                     for (const auto& possible : possibleTys) {
-                        if (!possible.isSource()) {
-                            continue;
-                        }
                         HIRTypeDataFunctionPointer candidate;
                         if (const auto* function = possible.ty->opt_NamedFunction()) {
                             candidate = function->decay(context.crate.types, sp);
@@ -3289,9 +3245,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 std::optional<PointerCoercionForm> pointerLub;
                 bool isPointerChain = true;
                 for (const auto& possible : possibleTys) {
-                    if (!possible.isSource()) {
-                        continue;
-                    }
                     const auto shape = pointerCoercionShape(possible.ty);
                     if (!shape) {
                         isPointerChain = false;
@@ -3500,7 +3453,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 && allowIdentityCommit
                 && nIvars == 0
                 && possibleTys.size() == 1
-                && possibleTys[0].isSource()
                 && (possibleTys[0].isCoerce() || allowUnsizingIdentityCommit)
                 && !isResultOfPendingRevisit(context, tyL)) {
                 DEBUG(i << StringView(": Final sole solver-viable source becomes the coercion destination: ") << possibleTys[0].ty);
@@ -10474,14 +10426,8 @@ auto PossibleType::operator==(const PossibleType& o) const -> bool {
 
 auto PossibleType::fmt(ZeroCopyOutput& os) const -> ZeroCopyOutput& {
     switch (cls) {
-        case CoerceTo:
-            os << StringView("C-");
-            break;
         case CoerceFrom:
             os << StringView("CD");
-            break;
-        case UnsizeTo:
-            os << StringView("--");
             break;
         case UnsizeFrom:
             os << StringView("-D");
@@ -10496,12 +10442,8 @@ auto PossibleType::fmt(ZeroCopyOutput& os) const -> ZeroCopyOutput& {
     return os;
 }
 
-auto PossibleType::isSource() const -> bool {
-    return cls == CoerceFrom || cls == UnsizeFrom;
-}
-
 auto PossibleType::isCoerce() const -> bool {
-    return cls == CoerceTo || cls == CoerceFrom;
+    return cls == CoerceFrom;
 }
 
 namespace {
