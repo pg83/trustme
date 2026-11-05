@@ -4413,6 +4413,26 @@ namespace {
                 BUG(span, StringView("Invalid path class in use statement - ") << path.cls.tagStr());
             case ASTPathClass::TAG_Relative: {
                 auto& e = path.cls.as_Relative();
+                if (e.hygiene.hasModPath() && e.hygiene.modPath().crate != "") {
+                    const auto& definition = e.hygiene.modPath();
+                    const auto* definitionMod = getHirModByPath(span, crate, HIRSimplePath(definition.crate, definition.ents));
+                    ASSERT_BUG(span, definitionMod, StringView("Missing macro definition module"));
+                    const auto& name = e.nodes.front().name();
+                    if (definitionMod->modItems.count(name) || definitionMod->valueItems.count(name) || definitionMod->macroItems.count(name)) {
+                        ASTPath absolute(definition.crate, {});
+                        for (const auto& node : definition.ents) {
+                            absolute.nodes().push_back(node);
+                        }
+                        absolute += path;
+                        return absolute;
+                    }
+                    auto implicit = settings.implicitCrates.find(name);
+                    if (implicit != settings.implicitCrates.end()) {
+                        crate.markExternCrateUsed(implicit->second);
+                        e.nodes.erase(e.nodes.begin());
+                        return ASTPath(implicit->second, mv$(e.nodes));
+                    }
+                }
 
                 if (crate.edition >= ASTEdition::Rust2018) {
                     const auto& name = e.nodes.at(0).name();

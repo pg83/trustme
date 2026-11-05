@@ -2974,7 +2974,7 @@ namespace {
             } break;
             default:
                 if (lex.editionAfter(ASTEdition::Rust2018)) {
-                    path = ASTPath::newRelative(/*hygine=*/{}, {});
+                    path = ASTPath::newRelative(tok.type() == TOK_IDENT ? tok.ident().hygiene : Ident::Hygiene(), {});
                 }
                 PUTBACK(tok, lex);
                 break;

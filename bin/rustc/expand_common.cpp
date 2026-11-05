@@ -1679,6 +1679,7 @@ namespace {
                                     break;
                                 }
                                 case ResolveItemRefMacro::TAG_InternalMacro: {
+                                    ref = m.as_InternalMacro();
                                     break;
                                 }
                                 case ResolveItemRefMacro::TAG_ProcMacro: {

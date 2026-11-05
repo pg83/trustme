@@ -169,7 +169,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                         outPath->crate = mp.crate;
                         outPath->nodes = mp.ents;
                     }
-                    return getModuleHir(*mod, path, 1, ignoreLast, outPath);
+                    return getModuleHir(*mod, path, 0, ignoreLast, outPath);
                 } else {
                     ASTPath p("", {});
                     for (const auto& n : mp.ents) {
@@ -701,7 +701,8 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
             DEBUG(StringView("Found in ast (") << i->data.tagStr() << StringView(")"));
             switch (ns) {
                 case ResolveNamespace::Macro:
-                    if (const auto* mac = i->data.opt_Macro()) {
+                    {
+                        const auto* mac = &i->data.as_Macro();
                         if (i->attrs.get("rustc_builtin_macro")) {
                             auto* rv = ExpandFindProcMacro(crate.wb, name);
                             if (rv) {
@@ -711,8 +712,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                         }
                         return ResolveItemRefMacro(&**mac);
                     }
-                    DEBUG(StringView("- Ignoring macro"));
-                    break;
                 case ResolveNamespace::Namespace:
                     return ResolveItemRefType(&i->data);
             }
