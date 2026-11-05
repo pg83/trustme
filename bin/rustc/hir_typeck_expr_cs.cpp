@@ -9173,6 +9173,13 @@ auto ExprVisitorApply::visit(HIRExprNodeBlock& node) -> void {
 auto ExprVisitorApply::visit(HIRExprNodeLet& node) -> void {
     node.type = this->checkTypeResolvedTop(node.span(), node.type);
     HIRExprVisitorDef::visit(node);
+    for (const auto slot : patternBindingSlots(node.pattern, HIRPatternBindingOrder::Declaration)) {
+        const auto& binding = context.bindings.at(slot);
+        const auto* type = this->checkTypeResolvedTop(node.span(), binding.ty);
+        if (context.resolve.typeIsSized(node.span(), type) != SolverCertainty::Proven) {
+            ERROR(node.span(), E0000, StringView("local variable `") << binding.name << StringView("` must have a statically known size: ") << type);
+        }
+    }
 }
 
 auto ExprVisitorApply::visit(HIRExprNodeReturn& node) -> void {
