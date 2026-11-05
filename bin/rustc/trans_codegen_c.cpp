@@ -7294,13 +7294,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         if (this->typeIsBadZst(tyDst)) {
             return;
         }
-        if (this->typeIsBadZst(tySrc)) {
-            of << StringView("memset(&");
-            emitLvalue(e.retVal);
-            of << StringView(", 0, sizeof(");
-            emitCtype(tyDst);
-            of << StringView("))");
-        } else if (e.args.at(0).is_Constant()) {
+        if (e.args.at(0).is_Constant()) {
             of << StringView("{ ");
             emitCtype(tySrc, FMT_CB(s, s << StringView("v");));
             of << StringView(" = ");
