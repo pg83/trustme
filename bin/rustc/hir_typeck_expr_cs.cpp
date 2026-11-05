@@ -6433,7 +6433,7 @@ namespace {
                             bool ready = true;
                             explicit Ready(Context& context): HIRExprVisitorDef(context.crate.types), context(context) {}
                             void visit(HIRExprNodeVariable& node) override {
-                                ready &= node.slot < context.bindings.size() && !context.ivars.expandIvars(context.bindings[node.slot].ty)->hasTypeInfer();
+                                ready &= node.slot < context.bindings.size() && !visitTyWith(context.ivars.expandIvars(context.bindings[node.slot].ty), typeIsUnboundedInfer);
                             }
                         } check(context);
                         node.code->visit(check);
