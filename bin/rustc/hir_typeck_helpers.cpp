@@ -1928,7 +1928,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, const HIRType* type, bool so
                     } else if (const auto* pattern = type->opt_Pattern()) {
                         const auto* primitive = pattern->inner->opt_Primitive();
                         if (!primitive) {
-                            BUG(sp, StringView("Setting primitive to ") << type);
+                            ERROR(sp, E0000, StringView("Cannot infer a numeric literal as ") << type);
                         }
                         checkTypeClassPrimitive(sp, type, e->tyClass, *primitive);
                     } else if (type->is_Diverge()) {
@@ -1936,7 +1936,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, const HIRType* type, bool so
                         const auto* path = type->opt_Path();
                         ASSERT_BUG(sp, path && path->path.data.is_UfcsKnown(), StringView("Solver-proven literal fallback target is not a projection: ") << type);
                     } else {
-                        BUG(sp, StringView("Setting primitive to ") << type);
+                        ERROR(sp, E0000, StringView("Cannot infer a numeric literal as ") << type);
                     }
                     break;
             }
