@@ -933,7 +933,7 @@ public:
        solver when a path probes the traits in scope for it. */
     const HIRType* unknownExistentials(const Span& sp, const HIRType* input) const;
 
-    Unifier::Outcome relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
+    Unifier::Outcome relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams, bool* typeAmbiguity = nullptr) const;
     SolverCertainty probeInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const;
 
     SolverCoercionResponse evaluateCoercionGoal(const Span& sp, const HIRType* destination, const HIRType* source, SolverCoercionOp op, bool allowSourceAutoderef = false, bool unknownTargetIsFresh = false, SolverOpenStepCallback* openStep = nullptr) const;

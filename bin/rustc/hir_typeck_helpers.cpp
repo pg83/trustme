@@ -4899,7 +4899,10 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
     return crate.types.internFolded(input, mv$(data));
 }
 
-Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams) const {
+Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const HIRTypeImpl& impl, const HIRType* receiver, HIRPathParams& implParams, bool* typeAmbiguity) const {
+    if (typeAmbiguity) {
+        *typeAmbiguity = false;
+    }
     ASSERT_BUG(sp, implParams.types.size() <= impl.params.types.size(), StringView("Too many inherent impl type parameters"));
     ASSERT_BUG(sp, implParams.values.size() <= impl.params.values.size(), StringView("Too many inherent impl const parameters"));
     HIRPathParamsBuilder fresh(implParams);
@@ -4952,7 +4955,11 @@ Unifier::Outcome TraitResolution::relateInherentImplHeader(const Span& sp, const
             .rigidProjectionsAreDistinct = true,
         }
     );
-    return normalizedRelation.unify(normalizedReceiver, normalizedCandidate);
+    const auto normalizedOutcome = normalizedRelation.unify(normalizedReceiver, normalizedCandidate);
+    if (typeAmbiguity) {
+        *typeAmbiguity = !normalizedRelation.pending().empty();
+    }
+    return normalizedOutcome;
 }
 
 SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& parameters, const Monomorphiser& monomorph, u32 conditionalScope, bool onlyBoundsConstrainingTraitParams, SolverResponse* effects) const {
@@ -8813,13 +8820,14 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
                 }
             } else {
                 selfType = roughSelfType;
-                switch (resolve_.relateInherentImplHeader(callSpan, impl, selfType, implParams)) {
+                bool headTypeAmbiguity = false;
+                switch (resolve_.relateInherentImplHeader(callSpan, impl, selfType, implParams, &headTypeAmbiguity)) {
                     case Unifier::Outcome::Proven:
                         break;
                     case Unifier::Outcome::Ambiguous: {
                         auto monomorph = MonomorphStatePtr(crate.types, selfType, &implParams, nullptr);
                         const auto* implType = monomorph.monomorphType(callSpan, impl.type, true);
-                        if (resolve_.hasAssociatedType(selfType) || resolve_.hasAssociatedType(implType)) {
+                        if (headTypeAmbiguity && (resolve_.hasAssociatedType(selfType) || resolve_.hasAssociatedType(implType))) {
                             headNormalizationAmbiguity = true;
                         }
                         break;
