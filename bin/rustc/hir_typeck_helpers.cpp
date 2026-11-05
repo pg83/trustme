@@ -13531,6 +13531,7 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
 }
 
 auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type) -> Certainty {
+    ASSERT_BUG(span(), !type->is_Generic(), StringView("auto trait constituent candidate is a generic parameter"));
     auto combine = [](Certainty& result, Certainty nested) {
         if (nested == Certainty::NoSolution) {
             result = Certainty::NoSolution;
@@ -13566,6 +13567,7 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
         }
         case HIRType::TAG_Path: {
             auto& e = (*type).as_Path();
+            ASSERT_BUG(span(), !e.path.data.is_UfcsKnown(), StringView("auto trait constituent candidate is an associated projection"));
             if (const auto* pe = e.path.data.opt_Generic()) {
                 const HIRType* tmp;
                 auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe->params, nullptr);
@@ -13631,13 +13633,7 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
                 }
                 return result;
             }
-            if (e.path.data.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
-                return Certainty::Ambiguous;
-            }
             return Certainty::Ambiguous;
-        }
-        case HIRType::TAG_Generic: {
-            return evaluateInner(type);
         }
         case HIRType::TAG_Tuple: {
             auto& e = (*type).as_Tuple();
