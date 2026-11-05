@@ -1,0 +1,7 @@
+[target]
+arch = "x86_64"
+family = "unix"
+os-name = "linux"
+env-name = "escaped\n\r\b\f\U00000045\u00e9\u4F60\U0001F680"
+[backend.c]
+emulate-i128 = false

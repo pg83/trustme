@@ -371,17 +371,46 @@ namespace {
                 str += '\f';
                 break;
             case 'u':
-                for (int i = 0; i < 4; i++) {
-                    (void)is.get();
+            case 'U': {
+                u32 scalar = 0;
+                const unsigned digits = c == 'u' ? 4 : 8;
+                for (unsigned i = 0; i < digits; i++) {
+                    const int digit = is.get();
+                    if (digit == EOF) {
+                        throw std::runtime_error("Unexpected EOF in Unicode escape");
+                    }
+                    unsigned nibble;
+                    if (digit >= '0' && digit <= '9') {
+                        nibble = static_cast<unsigned>(digit - '0');
+                    } else if (digit >= 'a' && digit <= 'f') {
+                        nibble = static_cast<unsigned>(digit - 'a' + 10);
+                    } else if (digit >= 'A' && digit <= 'F') {
+                        nibble = static_cast<unsigned>(digit - 'A' + 10);
+                    } else {
+                        throw std::runtime_error("Invalid hex digit in Unicode escape");
+                    }
+                    scalar = (scalar << 4) | nibble;
                 }
-                str += '?';
-                break;
-            case 'U':
-                for (int i = 0; i < 8; i++) {
-                    (void)is.get();
+                if (scalar > 0x10FFFF || (scalar >= 0xD800 && scalar <= 0xDFFF)) {
+                    throw std::runtime_error("Invalid Unicode scalar in string escape");
                 }
-                str += '?';
+                if (scalar < 0x80) {
+                    str += static_cast<char>(scalar);
+                } else if (scalar < 0x800) {
+                    str += static_cast<char>(0xC0 | (scalar >> 6));
+                    str += static_cast<char>(0x80 | (scalar & 0x3F));
+                } else if (scalar < 0x10000) {
+                    str += static_cast<char>(0xE0 | (scalar >> 12));
+                    str += static_cast<char>(0x80 | ((scalar >> 6) & 0x3F));
+                    str += static_cast<char>(0x80 | (scalar & 0x3F));
+                } else {
+                    str += static_cast<char>(0xF0 | (scalar >> 18));
+                    str += static_cast<char>(0x80 | ((scalar >> 12) & 0x3F));
+                    str += static_cast<char>(0x80 | ((scalar >> 6) & 0x3F));
+                    str += static_cast<char>(0x80 | (scalar & 0x3F));
+                }
                 break;
+            }
             case '\n':
             case '\r':
             case ' ':
