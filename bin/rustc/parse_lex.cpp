@@ -1532,11 +1532,10 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape, bool byteLiteral) {
             }
             u32 val = 0;
             ch = this->getc();
-            bool reqCloseBrace = false;
-            if (ch == '{') {
-                reqCloseBrace = true;
-                ch = this->getc();
+            if (ch != '{') {
+                compileErrorGeneric(*this, "Unicode escape must start with {");
             }
+            ch = this->getc();
             if (!ch.isxdigit()) {
                 compileErrorGeneric(*this, FMT(StringView("Found invalid character '\\x") << formatHex(ch.v) << StringView("' in \\u sequence")).c_str());
             }
@@ -1548,9 +1547,7 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape, bool byteLiteral) {
                 }
                 ch = this->getc();
             }
-            if (!reqCloseBrace) {
-                this->ungetc();
-            } else if (ch != '}') {
+            if (ch != '}') {
                 compileErrorGeneric(*this, "Expected terminating } in \\u sequence");
             } else {
             }
