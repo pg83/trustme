@@ -11270,22 +11270,8 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
             const char* itemName = nullptr;
             auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
-                case HIRExprNodeBinOp::Op::CmpEqu:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::CmpNEqu:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::CmpLt:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::CmpLtE:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::CmpGt:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::CmpGtE:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::BoolAnd:
-                    UNREACHABLE();
-                case HIRExprNodeBinOp::Op::BoolOr:
-                    UNREACHABLE();
+                default:
+                    break;
 
                 case HIRExprNodeBinOp::Op::Add:
                     itemName = "add";
