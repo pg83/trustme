@@ -152,8 +152,8 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
         }
     };
 
-    auto exists = [&mod](const RcString& name, const MacroRef& mr) -> bool {
-        for (const auto& imp : mod.macroImports) {
+    auto exists = [&mod](const RcString& name, const MacroRef& mr, bool warnPrivate = true) -> bool {
+        for (auto& imp : mod.macroImports) {
             if (imp.name != name) {
                 continue;
             }
@@ -186,6 +186,7 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                 }
             }
             if (rv) {
+                imp.warnPrivate &= warnPrivate;
                 return true;
             }
         }
@@ -194,10 +195,13 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
 
     if (i.is_None()) {
     } else if (const auto* ecItem = i.opt_Crate()) {
+        if (!mod.path().nodes.empty()) {
+            ERROR(sp, E0000, StringView("an `extern crate` loading macros must be at the crate root"));
+        }
         const auto& ec = crate.externCrates.at(ecItem->name);
 
         const auto importMacroRef = [&](const RcString& name, ASTAbsolutePath path, MacroRef mr, bool warnPrivate) {
-            if (!exists(name, mr)) {
+            if (!exists(name, mr, warnPrivate)) {
                 auto mi = ASTModule::MacroImport{false, name, std::move(path), std::move(mr), warnPrivate};
                 DEBUG(StringView("Import macro ") << mi.path);
                 mod.macroImports.push_back(mv$(mi));

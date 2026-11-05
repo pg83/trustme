@@ -10,6 +10,8 @@ accepted; other fatal signals are failures.
 `stdout-flags` checks CLI query output, and `compile-variant` also runs the
 program with the given flags. CLI checks accept `OWN_FLAGS || NATIVE_FLAGS`.
 `$OUT` names each temporary output path.
+`default-compile-flags` augments only the default compilation; CLI checks and
+compile variants retain their own flags.
 `compile-fail-exit-code` optionally checks our compiler's exact rejection status.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
@@ -64,6 +66,13 @@ def main() -> int:
         shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
     )
     compile_flags = [flag.replace("$DIR", os.path.dirname(src)) for flag in compile_flags]
+    default_compile_flags = [
+        flag.replace("$DIR", os.path.dirname(src))
+        for flags in re.findall(
+            r"^//@\s*default-compile-flags:\s*(.*)$", source_text, re.MULTILINE
+        )
+        for flag in shlex.split(flags)
+    ]
     reject_options = re.findall(
         r"^//@\s*reject-flags:\s*(.*?)\s*=>\s*(.+?)\s*\|\|\s*(.+?)\s*$",
         source_text, re.MULTILINE,
@@ -201,6 +210,7 @@ def main() -> int:
                 dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
         binary = os.path.join(work, "t")
         base_flags = [flag.replace("$OUT", binary) for flag in compile_flags]
+        main_flags = [*base_flags, *(flag.replace("$OUT", binary) for flag in default_compile_flags)]
         if chaos_match:
             rustc = lib.require_env("RUSTC_CHAOS")
             env["TRUSTME_CHAOS"] = chaos_match.group(1)
@@ -242,7 +252,7 @@ def main() -> int:
             print(f"option output: {extra!r}: {expected}", flush=True)
         command = lib.wrap_gdb(
             [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-             *mode, "--edition", edition, *dependency_args, *base_flags]
+             *mode, "--edition", edition, *dependency_args, *main_flags]
         )
         expected_failure = compile_fail_match is not None
         if expected_failure:
