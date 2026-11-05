@@ -5101,6 +5101,9 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         auto& pe = pattern.data.as_Deref();
                         if (const auto* inner = context.resolve.typeIsOwnedBox(sp, ty)) {
                             pe.kind = HIRPattern::DerefKind::Box;
+                            if (pe.targetType) {
+                                context.equateTypes(sp, pe.targetType, inner);
+                            }
                             pe.targetType = inner;
                             rv = this->revisitInner(context, *pe.sub, inner, bindingMode);
                             break;
@@ -5108,12 +5111,19 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
 
                         const auto result = context.resolve.autoderefStep(sp, ty);
                         if (result.result == TraitResolution::AutoderefResult::Ambiguous) {
+                            if (!pe.targetType) {
+                                pe.targetType = context.ivars.newIvarTr();
+                                this->revisitInner(context, *pe.sub, pe.targetType, bindingMode);
+                            }
                             return false;
                         }
                         if (result.result == TraitResolution::AutoderefResult::NoMatch || !result.implType) {
                             ERROR(sp, E0000, StringView("Type ") << ty << StringView(" cannot be used in a deref pattern"));
                         }
                         context.equateTypes(sp, ty, *result.implType);
+                        if (pe.targetType) {
+                            context.equateTypes(sp, pe.targetType, result.target);
+                        }
                         context.equateTypesAssoc(sp, result.target, context.crate.getLangItemPath(sp, "deref"), {}, ty, "Target", {}, true, TypeckPrimitiveOperator::Deref);
                         context.addTraitBound(sp, ty, context.crate.getLangItemPath(sp, "deref_pure"), {});
 
@@ -7057,6 +7067,13 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
             (void)unresolvedTypes.checkTypeResolvedTop(node->span(), node->resType);
             StalledInputs inputs(context.crate.types, unresolvedTypes, node->span());
             node->visit(inputs);
+        }
+        for (const auto& adv : context.advRevisits) {
+            stl::Vector<unsigned> dependencies;
+            adv->collectInferenceDependencies(context, dependencies);
+            for (unsigned index : dependencies) {
+                (void)unresolvedTypes.checkTypeResolvedTop(adv->span(), context.ivars.getType(index));
+            }
         }
         for (const auto& coercionP : context.linkCoerce) {
             const auto& coercion = *coercionP;
