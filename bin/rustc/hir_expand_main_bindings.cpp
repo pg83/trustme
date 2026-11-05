@@ -6145,6 +6145,7 @@ auto StaticBorrowOuterVisitorMark::visitStatic(HIRItemPath p, HIRStatic& item) -
 
 auto StaticBorrowOuterVisitorMark::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     if (item.value) {
+        auto _ = resolve_.setItemGenerics(item.params);
         checkConstFinalBorrow(resolve_, *item.value);
         StaticBorrowExprVisitorMark ev(resolve_, selfType, item.value, true);
         ev.visitNodePtr(item.value);
@@ -6704,6 +6705,7 @@ auto StaticBorrowOuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> vo
 
 auto StaticBorrowOuterVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     if (item.value) {
+        auto _ = resolve_.setItemGenerics(item.params);
         isConst = true;
         StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, item.value);
         ev.visitNodePtr(item.value);
