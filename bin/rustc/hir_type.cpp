@@ -137,7 +137,7 @@ namespace {
             case TypeDataErasedTypeInner::TAG_Alias: {
                 auto& ae = a.as_Alias();
                 auto& be = b.as_Alias();
-                return ae.inner->path == be.inner->path && exactPathParamsEqual(ae.params, be.params);
+                return ae.inner->sameOrigin(*be.inner) && exactPathParamsEqual(ae.params, be.params);
             }
         }
         UNREACHABLE();
@@ -678,6 +678,7 @@ namespace {
                         case TypeDataErasedTypeInner::TAG_Alias: {
                             auto& inner = tuMatch.as_Alias();
                             h = hashMix(h, hashSimplePath(inner.inner->path));
+                            h = hashMix(h, inner.inner->index);
                             h = hashMix(h, hashPathParams(inner.params));
                             break;
                         }
@@ -963,8 +964,9 @@ HIRArraySize HIRArraySize::clone() const {
     UNREACHABLE();
 }
 
-HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner)
+HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, unsigned int index, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner)
     : path(p.getSimplePath())
+    , index(index)
     , type()
 {
     this->generics = paramsOuter.clone();
@@ -990,6 +992,10 @@ HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPa
     for (size_t i = 0; i < paramsInner->paramCount(); i++) {
         this->generics.paramKinds.pushBack(paramsInner->paramKindAt(i));
     }
+}
+
+bool HIRTypeDataErasedTypeAliasInner::sameOrigin(const HIRTypeDataErasedTypeAliasInner& other) const {
+    return path == other.path && index == other.index;
 }
 
 bool HIRTypeDataErasedTypeAliasInner::isLocalTo(const HIRSimplePath& p) const {
@@ -1179,7 +1185,7 @@ void HIRType::fmt(ZeroCopyOutput& os) const {
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     auto& ee = e.inner.as_Alias();
-                    os << StringView("type") << ee.params << StringView(" ") << ee.inner->path;
+                    os << StringView("type") << ee.params << StringView(" ") << ee.inner->path << StringView("#") << ee.inner->index;
                     break;
                 }
             }
@@ -1748,6 +1754,7 @@ Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r)
             auto& le = l.as_Alias();
             auto& re = r.as_Alias();
             ORD(le.inner->path, re.inner->path);
+            ORD(le.inner->index, re.inner->index);
             ORD(le.params, re.params);
             break;
         }
@@ -1887,7 +1894,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
     const auto* vAlias = erasedAlias(v);
     const auto* xAlias = erasedAlias(x);
     if (vAlias && xAlias) {
-        if (vAlias->inner->path != xAlias->inner->path) {
+        if (!vAlias->inner->sameOrigin(*xAlias->inner)) {
             return HIRCompare::Unequal;
         }
         return vAlias->params.matchTestGenericsFuzz(sp, xAlias->params, resolvePlaceholder, *this);
@@ -2505,7 +2512,7 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     auto& l = le.inner.as_Alias();
                     auto& r = re.inner.as_Alias();
-                    if (l.inner->path != r.inner->path) {
+                    if (!l.inner->sameOrigin(*r.inner)) {
                         return HIRCompare::Unequal;
                     }
                     return l.params.compareWithPlaceholders(sp, r.params, resolvePlaceholder);

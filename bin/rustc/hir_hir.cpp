@@ -1462,7 +1462,7 @@ bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias
                 break;
             }
             const auto& inner = erased->inner.as_Alias();
-            if (inner.inner->path == alias.path) {
+            if (inner.inner->sameOrigin(alias)) {
                 return true;
             }
             path = &inner.inner->path;
@@ -1478,7 +1478,7 @@ bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias
         auto containsAlias = [&](const HIRType* type) {
             if (const auto* erased = type->opt_ErasedType()) {
                 if (const auto* inner = erased->inner.opt_Alias()) {
-                    return inner->inner->path == alias.path;
+                    return inner->inner->sameOrigin(alias);
                 }
             }
             return false;

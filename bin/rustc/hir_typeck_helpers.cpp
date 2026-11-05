@@ -2370,7 +2370,7 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     auto& l = le.inner.as_Alias();
                     auto& r = re.inner.as_Alias();
-                    if (l.inner->path != r.inner->path) {
+                    if (!l.inner->sameOrigin(*r.inner)) {
                         return false;
                     }
                     return pathparamsEqual(l.params, r.params);
@@ -2965,7 +2965,7 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                 case TypeDataErasedTypeInner::TAG_Alias: {
                     const auto& li = le.inner.as_Alias();
                     const auto& ri = re.inner.as_Alias();
-                    if (li.inner->path != ri.inner->path) {
+                    if (!li.inner->sameOrigin(*ri.inner)) {
                         return Outcome::Mismatch;
                     }
                     return this->unifyParams(li.params, ri.params);

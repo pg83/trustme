@@ -54,6 +54,7 @@ namespace {
         const HIRItemPath* path;
         const HIRGenericParams* paramsOuter;
         const HIRGenericParams* paramsInner = nullptr;
+        unsigned int nextOpaqueIndex = 0;
 
         ImplTraitSource(const HIRItemPath* path, const HIRGenericParams* paramsOuter, const HIRGenericParams* paramsInner = nullptr);
         ImplTraitSource();
@@ -1867,6 +1868,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_ErasedType: {
             auto& e = ty->data.as_ErasedType();
+            const auto aliasIndex = implTraitSource.path ? implTraitSource.nextOpaqueIndex++ : 0;
 
             // TODO: There can be associated type bounds, those need to be propagated
 
@@ -1899,7 +1901,7 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         aliasParams.values.push_back(value.clone());
                     }
                 }
-                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{HIRPathParams(mv$(aliasParams)), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter, implTraitSource.paramsInner)});
+                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{HIRPathParams(mv$(aliasParams)), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, aliasIndex, *implTraitSource.paramsOuter, implTraitSource.paramsInner)});
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), nextErasedType++};
             }

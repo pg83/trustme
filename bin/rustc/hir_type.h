@@ -104,11 +104,13 @@ struct HIRTypeDataTraitObject {
 struct HIRTypeDataErasedTypeAliasInner {
     HIRGenericParams generics;
     HIRSimplePath path;
+    unsigned int index;
     const HIRType* type;
     const HIRTraitImpl* definingImpl = nullptr;
     HIRSimplePath definingTrait;
 
-    HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner = nullptr);
+    HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, unsigned int index, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner = nullptr);
+    bool sameOrigin(const HIRTypeDataErasedTypeAliasInner& other) const;
     bool isLocalTo(const HIRSimplePath& p) const;
 };
 
