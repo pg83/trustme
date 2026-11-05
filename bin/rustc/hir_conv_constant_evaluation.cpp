@@ -6077,6 +6077,15 @@ auto Expander::visitTraitPath(HIRTraitPath& p) -> void {
 
 auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
     auto saved = getParams;
+    if (const auto* e = p.data.opt_UfcsInherent(); pc != HIRVisitor::PathContext::VALUE && e && e->type->hasTypeInfer()) {
+        auto savedUnresolved = paramsUnresolved;
+        getParams = nullptr;
+        paramsUnresolved = true;
+        HIRVisitor::visitPath(p, pc);
+        getParams = saved;
+        paramsUnresolved = savedUnresolved;
+        return;
+    }
     auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
         DEBUG(StringView("visit_path[m_get_params] ") << p);
         StaticTraitResolve resolve(wb);
