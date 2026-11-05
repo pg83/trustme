@@ -5586,12 +5586,6 @@ void Context::equateTypesAssoc(const Span& sp, const HIRType* l, const HIRSimple
             if (a.name != ruleName) {
                 continue;
             }
-            if (a.isOperator != isOp) {
-                continue;
-            }
-            if (a.operatorKind != operatorKind) {
-                continue;
-            }
 
             DEBUG(StringView("(DUPLICATE ") << a << StringView(")"));
             return;
