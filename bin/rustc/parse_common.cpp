@@ -1152,7 +1152,6 @@ namespace {
                         return NEWNODE(ASTExprNodeArray, std::move(items));
                     }
                 }
-                compileErrorBugCheck(lex, "Array literal fell");
             default:
                 parseErrorUnexpected(lex, tok);
         }
@@ -3268,7 +3267,6 @@ namespace {
                     default:
                         parseErrorUnexpected(lex, tok, {TOK_RWORD_CONST, TOK_RWORD_MUT});
                 }
-                compileErrorBugCheck("Reached end of Parse_Type:STAR");
             case TOK_SQUARE_OPEN: {
                 ASTType* inner = ParseType(lex);
                 if (GET_TOK(tok, lex) == TOK_SEMICOLON) {
@@ -3316,7 +3314,6 @@ namespace {
             default:
                 parseErrorUnexpected(lex, tok);
         }
-        compileErrorBugCheck("Reached end of Parse_Type");
     }
 
     ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
