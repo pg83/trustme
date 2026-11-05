@@ -226,15 +226,6 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
                 }
                 ASSERT_BUG(sp, mod.macroItems.count(imp->path.components().back()), StringView("Failed to find final component of ") << imp->path);
                 e = &*mod.macroItems.at(imp->path.components().back());
-                if (const auto& imp2 = e->ent.opt_Import()) {
-                    if (imp2->path.crateName() == CRATE_BUILTINS) {
-                        importBuiltin(name, imp2->path, warnPrivate);
-                        return;
-                    } else {
-                        ASSERT_BUG(sp, !e->ent.is_Import(), StringView("Recursive import - ") << imp->path << StringView(" pointed to ") << imp2->path);
-                    }
-                } else {
-                }
                 path = ASTAbsolutePath(imp->path.crateName(), imp->path.componentsVec());
             }
 
