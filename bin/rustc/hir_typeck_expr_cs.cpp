@@ -190,9 +190,13 @@ namespace {
 
         void visitPattern(const Span& sp, HIRPattern& pat) override;
 
+        void checkSizedBindings(const Span& sp, const HIRPattern& pattern);
+
         void visit(HIRExprNodeBlock& node) override;
 
         void visit(HIRExprNodeLet& node) override;
+
+        void visit(HIRExprNodeMatch& node) override;
 
         void visit(HIRExprNodeReturn& node) override;
 
@@ -9131,14 +9135,30 @@ auto ExprVisitorApply::visit(HIRExprNodeBlock& node) -> void {
     }
 }
 
+auto ExprVisitorApply::checkSizedBindings(const Span& sp, const HIRPattern& pattern) -> void {
+    for (const auto slot : patternBindingSlots(pattern, HIRPatternBindingOrder::Declaration)) {
+        const auto& binding = context.bindings.at(slot);
+        const auto* type = this->checkTypeResolvedTop(sp, binding.ty);
+        if (context.resolve.typeIsSized(sp, type) != SolverCertainty::Proven) {
+            ERROR(sp, E0000, StringView("local variable `") << binding.name << StringView("` must have a statically known size: ") << type);
+        }
+    }
+}
+
 auto ExprVisitorApply::visit(HIRExprNodeLet& node) -> void {
     node.type = this->checkTypeResolvedTop(node.span(), node.type);
     HIRExprVisitorDef::visit(node);
-    for (const auto slot : patternBindingSlots(node.pattern, HIRPatternBindingOrder::Declaration)) {
-        const auto& binding = context.bindings.at(slot);
-        const auto* type = this->checkTypeResolvedTop(node.span(), binding.ty);
-        if (context.resolve.typeIsSized(node.span(), type) != SolverCertainty::Proven) {
-            ERROR(node.span(), E0000, StringView("local variable `") << binding.name << StringView("` must have a statically known size: ") << type);
+    checkSizedBindings(node.span(), node.pattern);
+}
+
+auto ExprVisitorApply::visit(HIRExprNodeMatch& node) -> void {
+    HIRExprVisitorDef::visit(node);
+    for (const auto& arm : node.arms) {
+        for (const auto& pattern : arm.patterns) {
+            checkSizedBindings(node.span(), pattern);
+        }
+        for (const auto& guard : arm.guards) {
+            checkSizedBindings(guard.val->span(), guard.pat);
         }
     }
 }
