@@ -9,6 +9,7 @@
 #include "output_file.h"
 #include "trans_mangling.h"
 #include "hir_typeck_common.h"
+#include "hir_pattern_range.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
@@ -2524,6 +2525,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         case HIRType::TAG_Pattern: {
             auto& te = (*ty).as_Pattern();
+            checkPatternExclusiveEnds(sp, te.inner, te.pattern);
             return TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign);
         }
     }

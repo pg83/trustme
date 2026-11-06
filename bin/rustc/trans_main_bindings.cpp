@@ -13,6 +13,7 @@
 #include "trans_allocator.h"
 #include "trans_trans_list.h"
 #include "hir_typeck_common.h"
+#include "hir_pattern_range.h"
 #include "hir_typeck_static.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h"
@@ -3391,6 +3392,9 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
         revealed = resolve.revealOpaqueTypes(sp, revealed);
         revealed = resolve.expandAssociatedTypes(sp, revealed);
         ty = revealed;
+    }
+    if (const auto* pattern = ty->opt_Pattern()) {
+        checkPatternExclusiveEnds(sp, pattern->inner, pattern->pattern);
     }
     if (out.hasType(ty, mode == Mode::Shallow)) {
         return;

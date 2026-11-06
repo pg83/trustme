@@ -14,6 +14,7 @@
 #include "hir_expr_state.h"
 #include "trans_mangling.h"
 #include "hir_typeck_common.h"
+#include "hir_pattern_range.h"
 #include "trans_monomorphise.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_typeck_expr_visit.h"
@@ -3522,6 +3523,21 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, HIRExprPtr&
     }
 }
 
+void checkPatternExclusiveEnds(const Span& sp, const HIRType* type, const HIRTypePattern& pattern) {
+    auto info = TypeInfo::forType(type);
+    if (info.ty != TypeInfo::Signed && info.ty != TypeInfo::Unsigned) {
+        return;
+    }
+    auto minimum = info.ty == TypeInfo::Signed ? U128(1) << (info.bits - 1) : U128(0);
+    for (const auto& range : pattern.alternatives) {
+        if (range.hasEnd && !range.endInclusive) {
+            if (const auto* value = range.end.opt_Evaluated(); value && EncodedLiteralSlice(**value).readUint() == minimum) {
+                ERROR(sp, E0000, StringView("exclusive range end at minimum value of type ") << type);
+            }
+        }
+    }
+}
+
 void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& crate) {
     EnumValueExpander{wb}.visitCrate(crate);
 
@@ -6223,6 +6239,7 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
                 evaluateEndpoint(range.end);
             }
         }
+        checkPatternExclusiveEnds(Span(), e.inner, e.pattern);
         ty = crate.types.intern(mv$(data));
     }
 
