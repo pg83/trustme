@@ -8611,9 +8611,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         if (!this->typeIsBadZst(params.types.at(0))) {
             if (this->typeIsCScalar(params.types.at(0))) {
                 emitLvalue(e.retVal);
-                of << StringView(" = *(volatile ");
+                of << StringView(" = *(");
                 emitCtype(params.types.at(0));
-                of << StringView("*)");
+                of << StringView(" volatile*)");
                 emitParam(e.args.at(0));
             } else {
                 size_t valueSize = 0;
@@ -8639,9 +8639,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
     } else if (name == "volatile_store") {
         if (!this->typeIsBadZst(params.types.at(0))) {
             if (this->typeIsCScalar(params.types.at(0))) {
-                of << StringView("*(volatile ");
+                of << StringView("*(");
                 emitCtype(params.types.at(0));
-                of << StringView("*)");
+                of << StringView(" volatile*)");
                 emitParam(e.args.at(0));
                 of << StringView(" = ");
                 emitParam(e.args.at(1));
