@@ -1375,9 +1375,6 @@ namespace {
                 DEBUG(StringView("- Self"));
                 const auto& mpNodes = context.mod.path().nodes;
                 unsigned int startLen = mpNodes.length();
-                while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
-                    startLen--;
-                }
                 while (!e.nodes.empty() && e.nodes.front().name() == "super") {
                     if (startLen == 0) {
                         ERROR(sp, E0000, StringView("Too many `super` components"));
@@ -1412,9 +1409,6 @@ namespace {
                 const auto& mpNodes = context.mod.path().nodes;
                 BUG_ASSERT(e.count >= 1);
                 unsigned int startLen = mpNodes.length();
-                while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
-                    startLen--;
-                }
                 for (unsigned int count = 0; count < e.count; count++) {
                     if (startLen == 0) {
                         ERROR(sp, E0000, StringView("Too many `super` components"));
