@@ -8789,31 +8789,17 @@ auto ExprVisitorConv::visit(HIRExprNodeAsm2& node) -> void {
                 if (e.valOut) {
                     checkAsmOperandType(builder.resolve(), e.valOut->span(), e.valOut->resType, false);
                 }
-                switch (e.dir) {
-                    case AsmDirection::In:
-                        ASSERT_BUG(node.span(), e.valIn, StringView("`in` register with no input"));
-                        this->visitNodePtr(e.valIn);
-                        input = box$(builder.getResultInParam(e.valIn->span(), e.valIn->resType));
-                        BUG_ASSERT(!e.valOut);
-                        break;
-                    case AsmDirection::Out:
-                    case AsmDirection::LateOut:
-                        ASSERT_BUG(node.span(), !e.valIn, StringView("`[late]out` register with input value"));
-                        if (e.valOut) {
-                            this->visitNodePtr(e.valOut);
-                            output = box$(builder.getResultUnwrapLvalue(e.valOut->span()));
-                        }
-                        break;
-                    case AsmDirection::InOut:
-                    case AsmDirection::InLateOut:
-                        ASSERT_BUG(node.span(), e.valIn, StringView("`in[late]out` register with no input"));
-                        this->visitNodePtr(e.valIn);
-                        input = box$(builder.getResultInParam(e.valIn->span(), e.valIn->resType));
-                        if (e.valOut) {
-                            this->visitNodePtr(e.valOut);
-                            output = box$(builder.getResultUnwrapLvalue(e.valOut->span()));
-                        }
-                        break;
+                if (e.dir == AsmDirection::Out || e.dir == AsmDirection::LateOut) {
+                    BUG_ASSERT(!e.valIn && !e.valOut);
+                } else {
+                    BUG_ASSERT(e.dir == AsmDirection::InOut || e.dir == AsmDirection::InLateOut);
+                    ASSERT_BUG(node.span(), e.valIn, StringView("`in[late]out` register with no input"));
+                    this->visitNodePtr(e.valIn);
+                    input = box$(builder.getResultInParam(e.valIn->span(), e.valIn->resType));
+                    if (e.valOut) {
+                        this->visitNodePtr(e.valOut);
+                        output = box$(builder.getResultUnwrapLvalue(e.valOut->span()));
+                    }
                 }
                 if (input) {
                     movedParam(*input);
