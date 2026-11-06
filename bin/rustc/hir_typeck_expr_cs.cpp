@@ -2476,9 +2476,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         const bool hasSelfCoercionGoal = std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
             return constraint.isSelf;
         });
-        /* The current primitive impl is redundant only after every operator
-         * type is known. Before then its typed head carries inference effects. */
-        const auto* excludedCurrentOperatorImpl = currentOperatorUsesLanguagePrimitive() && operatorTypesAreResolved ? context.currentTraitImpl : nullptr;
 
         SolverResponse response;
         const SolverImpl* responseApplicable = nullptr;
@@ -2504,7 +2501,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     .assocType = v.name == "" ? nullptr : v.leftTy,
                     .assocParams = v.name == "" ? nullptr : &v.atyPp,
                     .allowInferInputs = true,
-                    .excludedImpl = excludedCurrentOperatorImpl,
                     .coercions = coercionGoals.empty() ? nullptr : &coercionGoals,
                 }
             );

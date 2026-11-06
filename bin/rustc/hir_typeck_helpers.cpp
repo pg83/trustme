@@ -15076,7 +15076,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     ASSERT_BUG(callSpan, !associated || !assocName, StringView("trait query cannot mix a full associated constraint set with a single associated item"));
     const char* valueName = query.valueName;
     const bool allowInferInputs = query.allowInferInputs;
-    const auto* excludedImpl = query.excludedImpl;
     const bool hasCoercionGoals = query.coercions && !query.coercions->empty();
     const bool coercionSelectsCandidate = hasCoercionGoals && trait != resolve_.langPointeeSized();
     const bool hasSelfCoercionGoal = hasCoercionGoals && std::any_of(query.coercions->begin(), query.coercions->end(), [](const SolverCoercionConstraint& constraint) {
@@ -15526,7 +15525,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
        canonical goal like any other and its response is cached under the bindings
        as well; upstream caches every canonical goal evaluation.  Without this each
        adapter in a chain of `map`s re-proves the whole chain beneath it. */
-    const bool cacheableResponse = cacheableAssociatedItem && !valueName && !excludedImpl && !hasCoercionGoals && operatorOutputIsQueriedItem;
+    const bool cacheableResponse = cacheableAssociatedItem && !valueName && !hasCoercionGoals && operatorOutputIsQueriedItem;
     const bool crateCacheableResponse = cacheableResponse && !context_->permanent() && !query.operatorGoal && !hasAssociatedItemQuery && crateCacheUsable() && goalIsConcrete(trait, canonical);
     const auto crateCacheEnvKey = crateCacheEnv(suppressAmbiguity);
     const auto crateRootHash = hashParamEnv(rootHash, crateCacheEnvKey);
@@ -16482,14 +16481,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     };
     auto evaluateCandidateAt = [&](size_t i) {
         auto* candidate = frame.candidates[i];
-        if (excludedImpl) {
-            const auto* traitImpl = candidate->impl.traitImpl;
-            if (traitImpl == excludedImpl) {
-                candidate->traitCertainty = Certainty::NoSolution;
-                candidate->certainty = Certainty::NoSolution;
-                return false;
-            }
-        }
         const bool deferAssociated = hasAssociatedItemQuery && candidate->impl.isTraitImpl();
         auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() || deferAssociated ? nullptr : &rootAssociated);
         candidate->traitCertainty = certainty;

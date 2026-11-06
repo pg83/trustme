@@ -604,8 +604,6 @@ struct TraitGoalQuery {
     bool allowInferInputs = false;
     bool inputsNormalized = false;
 
-    const HIRTraitImpl* excludedImpl = nullptr;
-
     const ThinVector<SolverCoercionConstraint>* coercions = nullptr;
     const SolverOperatorGoal* operatorGoal = nullptr;
     SolverAmbiguityPolicy ambiguity = SolverAmbiguityPolicy::Suppress;
