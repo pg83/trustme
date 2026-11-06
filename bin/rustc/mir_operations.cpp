@@ -4640,8 +4640,9 @@ namespace {
                                 e->src = MIRRValue::make_Constant(MIRConstant::make_ItemAddr({box$(se.val.root.as_Static())}));
                                 changed = true;
                             } else if (se.type == HIRBorrowType::Unique) {
-                                knownValues.erase(se.val);
-                                knownValuesVar.erase(se.val);
+                                const auto root = MIRLValue(se.val.root.clone(), {});
+                                knownValues.erase(root);
+                                knownValuesVar.erase(root);
                             }
                             break;
                         }
@@ -5205,8 +5206,9 @@ namespace {
 
                     bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
                         if (vu == MIRValUsage::Write) {
-                            knownValues.erase(lv);
-                            knownValuesVar.erase(lv);
+                            const auto root = MIRLValue(lv.root.clone(), {});
+                            knownValues.erase(root);
+                            knownValuesVar.erase(root);
                         }
                         return false;
                     }

@@ -4237,17 +4237,8 @@ auto MIREvalAllocation::setReloc(size_t ofs, MIREvalRelocPtr ptr) -> void {
     auto it = std::lower_bound(this->relocations.begin(), this->relocations.end(), ofs, [](const Reloc& r, size_t ofs) {
         return r.offset < ofs;
     });
-    if (it != this->relocations.end() && it->offset == ofs) {
-        if (ptr) {
-            it->ptr = std::move(ptr);
-        } else {
-            this->relocations.erase(it);
-        }
-    } else {
-        if (ptr) {
-            this->relocations.insert(it, Reloc{ofs, std::move(ptr)});
-        } else
-            ;
+    if (ptr) {
+        this->relocations.insert(it, Reloc{ofs, std::move(ptr)});
     }
 }
 
