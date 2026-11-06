@@ -1900,6 +1900,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             MonomorphStatePtr ms(crate.types, pe.type, &traitPath.params, &pp);
 
             HIRFunction newFcn;
+            newFcn.abi = fcnDef.abi;
             newFcn.markings.trackCaller = fcnDef.markings.trackCaller;
             newFcn.markings.alignment = fcnDef.markings.alignment;
             newFcn.returnType = ms.monomorphType(sp, fcnDef.returnType);
@@ -1917,8 +1918,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             MIRLValue lvPtr;
             switch (fcnDef.receiver) {
                 case HIRFunction::Receiver::Value: {
-                    auto& selfTy = newFcn.args.front().second;
-                    selfTy = crate.types.borrow(HIRBorrowType::Owned, selfTy);
+                    auto ownedSelf = builder.addLocal(crate.types.borrow(HIRBorrowType::Owned, newFcn.args.front().second));
+                    builder.pushStmtAssign(ownedSelf.clone(), MIRRValue::make_Borrow({HIRBorrowType::Owned, false, lvSelf.clone()}));
+                    lvSelf = mv$(ownedSelf);
                     lvPtr = builder.addLocal(crate.types.borrow(HIRBorrowType::Owned, crate.types.unit()));
                     builder.pushStmtAssign(lvPtr.clone(), MIRRValue::make_DstPtr({lvSelf.clone()}));
                     DEBUG(StringView("<dyn ") << traitPath << StringView(">::") << name << StringView(" - By-Value"));
