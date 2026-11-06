@@ -94,10 +94,8 @@ namespace {
                 const auto& item = crate.getValitemByPath(sp, path);
 
                 switch (item.tag()) {
-                    case HIRValueItem::TAG_Import: {
-                        auto& e = item.as_Import();
-                        BUG(sp, StringView("Value path pointed to import - ") << path << StringView(" = ") << e.path);
-                    }
+                    default:
+                        BUG(sp, StringView("Unexpected value item in parameter lookup - ") << path << StringView(" : ") << item.tagStr());
                     case HIRValueItem::TAG_Function: {
                         return item.as_Function()->params;
                     }
@@ -123,20 +121,10 @@ namespace {
                 const auto& item = crate.getTypeitemByPath(sp, path);
 
                 switch (item.tag()) {
-                    case HIRTypeItem::TAG_Import: {
-                        BUG(sp, StringView("Type path pointed to import - ") << path);
-                    }
-                    case HIRTypeItem::TAG_TypeAlias: {
-                        BUG(sp, StringView("Type path pointed to type alias - ") << path);
-                    }
-                    case HIRTypeItem::TAG_TraitAlias: {
-                        BUG(sp, StringView("Type path pointed to trait alias - ") << path);
-                    }
+                    default:
+                        BUG(sp, StringView("Unexpected type item in parameter lookup - ") << path << StringView(" : ") << item.tagStr());
                     case HIRTypeItem::TAG_ExternType: {
                         return emptyParams;
-                    }
-                    case HIRTypeItem::TAG_Module: {
-                        BUG(sp, StringView("Type path pointed to module - ") << path);
                     }
                     case HIRTypeItem::TAG_Struct: {
                         auto& e = item.as_Struct();
