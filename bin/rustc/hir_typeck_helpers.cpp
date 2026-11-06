@@ -1961,32 +1961,17 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
         const auto rightIndex = this->rootIvarIndex(rightSlot);
         auto& rootIvar = ivars.at(rightIndex);
 
-        if (const auto* re = rootIvar.type->opt_Infer()) {
-            DEBUG(StringView("Class unify ") << leftIvar.type << StringView(" <- ") << rootIvar.type);
-            if (re->tyClass != HIRInferClass::None) {
-                if (const auto* le = leftIvar.type->opt_Infer()) {
-                    if (le->tyClass != HIRInferClass::None && le->tyClass != re->tyClass) {
-                        ERROR(sp, E0000, StringView("Unifying types with mismatching literal classes - ") << leftIvar.type << StringView(" := ") << rootIvar.type);
-                    }
-                    if (le->tyClass == HIRInferClass::None) {
-                        this->journalMutation(JournalEntry::Kind::TypeSet, leftIndex, leftIvar.type);
-                        leftIvar.type = types.infer(le->index, re->tyClass);
-                    }
-                } else if (const auto* le = leftIvar.type->opt_Primitive()) {
-                    checkTypeClassPrimitive(sp, leftIvar.type, re->tyClass, *le);
-                } else if (const auto* pattern = leftIvar.type->opt_Pattern()) {
-                    const auto* primitive = pattern->inner->opt_Primitive();
-                    if (!primitive) {
-                        ERROR(sp, E0000, StringView("Type unificiation of literal with invalid pattern type - ") << leftIvar.type);
-                    }
-                    checkTypeClassPrimitive(sp, leftIvar.type, re->tyClass, *primitive);
-                } else {
-                    ERROR(sp, E0000, StringView("Type unificiation of literal with invalid type - ") << leftIvar.type);
-                }
-            } else {
+        const auto& re = rootIvar.type->as_Infer();
+        const auto& le = leftIvar.type->as_Infer();
+        DEBUG(StringView("Class unify ") << leftIvar.type << StringView(" <- ") << rootIvar.type);
+        if (re.tyClass != HIRInferClass::None) {
+            if (le.tyClass != HIRInferClass::None && le.tyClass != re.tyClass) {
+                ERROR(sp, E0000, StringView("Unifying types with mismatching literal classes - ") << leftIvar.type << StringView(" := ") << rootIvar.type);
             }
-        } else {
-            BUG(sp, StringView("Unifying over a concrete type - ") << rootIvar.type);
+            if (le.tyClass == HIRInferClass::None) {
+                this->journalMutation(JournalEntry::Kind::TypeSet, leftIndex, leftIvar.type);
+                leftIvar.type = types.infer(le.index, re.tyClass);
+            }
         }
 
         DEBUG(StringView("IVar ") << rootIvar.type->as_Infer().index << StringView(" = @") << leftSlot);
