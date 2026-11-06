@@ -1309,17 +1309,16 @@ MIRUnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
 MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
     TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                  \
-    case MIRSwitchValues::TAG_##x: \
-        return MIRSwitchValues::make_##x(__VA_ARGS__);
-        _(Unsigned, deserialiseVectorC<u64>([&]() {
-            return in.readU64();
-        }))
-        _(Signed, deserialiseVectorC<i64>([&]() {
-            return in.readI64();
-        }))
-        _(String, deserialiseVec<std::string>())
-#undef _
+        case MIRSwitchValues::TAG_Unsigned:
+            return MIRSwitchValues::make_Unsigned(deserialiseVectorC<u64>([&]() {
+                return in.readU64();
+            }));
+        case MIRSwitchValues::TAG_Signed:
+            return MIRSwitchValues::make_Signed(deserialiseVectorC<i64>([&]() {
+                return in.readI64();
+            }));
+        case MIRSwitchValues::TAG_String:
+            return MIRSwitchValues::make_String(deserialiseVec<std::string>());
         default:
             BUG(Span(), StringView("Bad tag for MIR::SwitchValues - ") << tag);
     }
