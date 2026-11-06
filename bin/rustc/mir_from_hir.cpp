@@ -10926,6 +10926,12 @@ auto ExprVisitorConv::visit(HIRExprNodeArraySized& node) -> void {
     if (!builder.blockActive()) {
         return;
     }
+    if (node.size == 0) {
+        auto value = builder.getResultInLvalue(node.span(), node.val->resType);
+        builder.dropLvalue(node.span(), value);
+        builder.setResult(node.span(), MIRRValue::make_Array({{}}));
+        return;
+    }
     auto value = builder.getResultInParam(node.span(), node.val->resType);
 
     builder.setResult(node.span(), MIRRValue::make_SizedArray({mv$(value), node.size.clone()}));

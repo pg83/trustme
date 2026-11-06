@@ -4271,8 +4271,7 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                 }
                 case MIRRValue::TAG_SizedArray: {
                     auto& ve = e.src.as_SizedArray();
-                    if (ve.count == 0) {
-                    } else if (ve.count == 1) {
+                    if (ve.count == 1) {
                         emitLvalue(e.dst);
                         of << StringView(".DATA[0] = ");
                         emitParam(ve.val);
@@ -4865,14 +4864,9 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                 }
                 case MIRRValue::TAG_Struct: {
                     auto& ve = e.src.as_Struct();
-                    if (ve.vals.empty()) {
+                    emitCompositeAssign(localMirRes, [&]() {
                         emitLvalue(e.dst);
-                        of << StringView("._d = 0");
-                    } else {
-                        emitCompositeAssign(localMirRes, [&]() {
-                            emitLvalue(e.dst);
-                        }, ve.vals, indentLevel, /*emit_newline=*/false);
-                    }
+                    }, ve.vals, indentLevel, /*emit_newline=*/false);
                     break;
                 }
             }
