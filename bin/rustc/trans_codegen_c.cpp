@@ -2501,13 +2501,8 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
 
                     of << StringView("(uintptr_t)");
                     if (relocIt->p) {
-                        if (relocIt->p->data.is_UfcsInherent() && relocIt->p->data.as_UfcsInherent().item == "#type_id") {
-                            const auto& ty = relocIt->p->data.as_UfcsInherent().type;
-                            of << StringView("&__typeid_") << TransMangleTypeId(ty);
-                        } else {
-                            of << StringView("&");
-                            emitReifiedFunctionName(*relocIt->p, relocIt->preserveTrackCaller);
-                        }
+                        of << StringView("&");
+                        emitReifiedFunctionName(*relocIt->p, relocIt->preserveTrackCaller);
                     } else {
                         of << StringView("trustme_alloc_") << emitAllocation(relocIt->bytes.data(), relocIt->bytes.size())->index;
                     }
@@ -9952,12 +9947,8 @@ auto CodeGeneratorC::emitEncodedConstant(const HIRType* type, const EncodedLiter
         const auto offset = EncodedLiteralSlice(encoded).slice(relocation.ofs, relocation.len).readUint(pointerSize).truncateU64() - EncodedLiteral::PTR_BASE;
         of << StringView("{ const uintptr_t pointer = (uintptr_t)");
         if (relocation.p) {
-            if (relocation.p->data.is_UfcsInherent() && relocation.p->data.as_UfcsInherent().item == "#type_id") {
-                of << StringView("&__typeid_") << TransMangleTypeId(relocation.p->data.as_UfcsInherent().type);
-            } else {
-                of << StringView("&");
-                emitReifiedFunctionName(*relocation.p, relocation.preserveTrackCaller);
-            }
+            of << StringView("&");
+            emitReifiedFunctionName(*relocation.p, relocation.preserveTrackCaller);
         } else {
             printBytes(relocation.bytes.data(), relocation.bytes.size());
         }
@@ -10098,9 +10089,7 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
                 MIR_ASSERT(*mirRes, c.offset.isU64(), StringView("Item address offset is too large: ") << c.offset);
                 of << StringView("((void*)((uintptr_t)");
             }
-            if (c->data.is_UfcsInherent() && c->data.as_UfcsInherent().item == "#type_id") {
-                of << StringView("(void*)&__typeid_") << TransMangleTypeId(c->data.as_UfcsInherent().type);
-            } else {
+            {
                 MonomorphState msTmp(crate.types);
                 auto v = resolve_.getValue(sp, *c, msTmp, /*signature_only=*/true);
                 if (const auto* stat = v.opt_Static(); stat && (**stat).isPromoted && !hasOffset) {

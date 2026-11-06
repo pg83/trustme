@@ -541,9 +541,6 @@ const MIRBasicBlock& MIRTypeResolve::getBlock(MIRBasicBlockId id) const {
 }
 
 const HIRType* MIRTypeResolve::getStaticType(const HIRPath& path) const {
-    if (path.data.is_UfcsInherent() && path.data.as_UfcsInherent().item == "#type_id") {
-        return crate.types.unit();
-    }
     MonomorphState ms(crate.types);
     auto v = resolve.getValue(this->sp, path, ms, /*signature_only*/ true);
     MIR_ASSERT(*this, v.is_Static(), StringView("LValue::Static not a static - ") << path << StringView(" : ") << v.tagStr());

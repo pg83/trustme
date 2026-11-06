@@ -1269,9 +1269,6 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
     StaticTraitResolve resolve{wb, OpaqueReveal::All};
     resolve.lowerAsyncCallable(path);
 
-    if (path.data.is_UfcsInherent() && path.data.as_UfcsInherent().item == "#type_id") {
-        return EntPtr::make_AutoGenerate({});
-    }
 
     MonomorphState ms(crate.types);
     params.gdefImpl = nullptr;
@@ -1436,8 +1433,6 @@ static void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             if (pathMono.data.is_Generic()) {
                 // TODO: Add to a list of required constructors
                 state.rv.constructors.insert(mv$(pathMono.data.as_Generic()));
-            } else if (pathMono.data.is_UfcsInherent() && pathMono.data.as_UfcsInherent().item == "#type_id") {
-                state.rv.typeids.insert(pathMono.data.as_UfcsInherent().type);
             } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().item == "vtable#") {
                 if (state.rv.addVtable(pathMono.clone(), TransParams(state.crate.types))) {
                     TransEnumerateFillFromVTable(state, mv$(pathMono), subPp);
