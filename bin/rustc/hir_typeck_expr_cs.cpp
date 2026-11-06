@@ -3408,16 +3408,10 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             DEBUG(i << StringView(": possible_tys = ") << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
                 bool removeOption = false;
-                if (it->ty == tyL) {
-                    removeOption = true;
-                } else {
-                }
-
                 // TODO: Ivars have been removed, this sort of check should be moved elsewhere.
-                if (!removeOption && tyL->as_Infer().tyClass == HIRInferClass::Integer) {
+                if (tyL->as_Infer().tyClass == HIRInferClass::Integer) {
                     if (const auto* te = (it->ty)->opt_Primitive()) {
                     } else if (const auto* te = (it->ty)->opt_Path()) {
-                    } else if (const auto* te = (it->ty)->opt_Infer()) {
                     } else {
                         removeOption = true;
                     }
@@ -3427,7 +3421,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             }
             DEBUG(i << StringView(": possible_tys = ") << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
-                const bool removeOption = !(it->ty)->is_Infer() && coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, it->ty);
+                const bool removeOption = coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, it->ty);
                 if (removeOption) {
                     DEBUG(StringView("- Remove ") << *it << StringView(" due to bounds"));
                 }
