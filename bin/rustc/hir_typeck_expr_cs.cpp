@@ -12321,37 +12321,26 @@ auto ExprVisitorEnum::visit(HIRExprNodePathValue& node) -> void {
             applyBoundsAsRules(this->context, sp, trait.params, MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, nullptr), /*is_impl_level=*/true);
 
             auto it = trait.values.find(e.item);
-            if (it == trait.values.end()) {
+            if (it == trait.values.end() || it->second.is_Static()) {
                 ERROR(sp, E0000, StringView("`") << e.item << StringView("` is not a value member of trait ") << e.trait.path);
             }
-            switch (it->second.tag()) {
-                case HIRTraitValueItem::TAG_Constant: {
-                    auto& ie = it->second.as_Constant();
-                    fixParamCount(sp, this->context, e.type, false, node.path, ie.params, e.params);
+            if (const auto* ie = it->second.opt_Constant()) {
+                fixParamCount(sp, this->context, e.type, false, node.path, ie->params, e.params);
 
-                    auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
-                    applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
+                auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
+                applyBoundsAsRules(this->context, sp, ie->params, ms, /*is_impl_level=*/false);
 
-                    const HIRType* tmp;
-                    const auto* ty = ms.maybeMonomorphType(sp, ie.type);
-                    this->context.equateTypes(sp, node.resType, ty);
-                    break;
-                }
-                case HIRTraitValueItem::TAG_Static: {
-                    auto& ie = it->second.as_Static();
-                    TODO(sp, StringView("Monomorpise associated static type - ") << ie.type);
-                }
-                case HIRTraitValueItem::TAG_Function: {
-                    auto& ie = it->second.as_Function();
-                    fixParamCount(sp, this->context, e.type, false, node.path, ie.params, e.params);
+                const auto* ty = ms.maybeMonomorphType(sp, ie->type);
+                this->context.equateTypes(sp, node.resType, ty);
+            } else {
+                const auto& function = it->second.as_Function();
+                fixParamCount(sp, this->context, e.type, false, node.path, function.params, e.params);
 
-                    auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
-                    applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
+                auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
+                applyBoundsAsRules(this->context, sp, function.params, ms, /*is_impl_level=*/false);
 
-                    auto ty = this->context.crate.types.intern(HIRType::make_NamedFunction({node.path.clone(), &ie}));
-                    this->context.equateTypes(node.span(), node.resType, ty);
-                    break;
-                }
+                auto ty = this->context.crate.types.intern(HIRType::make_NamedFunction({node.path.clone(), &function}));
+                this->context.equateTypes(node.span(), node.resType, ty);
             }
             break;
         }

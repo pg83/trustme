@@ -1350,6 +1350,9 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
         }
     }
 
+    if (parseReservedWord && this->editionAfter(ASTEdition::Rust2021) && (ch == '#' || ch == '\'' || ch == '"')) {
+        compileErrorGeneric(*this, "Unknown literal prefix");
+    }
     this->ungetc();
     if (parseReservedWord) {
         auto v = LexFindReservedWord(str, this->edition);

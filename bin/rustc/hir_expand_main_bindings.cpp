@@ -7670,9 +7670,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                         break;
                     }
                     case HIRTraitValueItem::TAG_Static: {
-                        if (vi.first != "vtable#") {
-                            TODO(Span(), StringView("Associated static in vtable"));
-                        }
+                        ASSERT_BUG(Span(), vi.first == "vtable#", StringView("Trait static descriptor has an unexpected name"));
                         break;
                     }
                     case HIRTraitValueItem::TAG_Constant: {
