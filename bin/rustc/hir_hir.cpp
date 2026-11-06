@@ -1156,6 +1156,17 @@ const HIRType* HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, co
     const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
     HIRPathParamsBuilder vtableParams(te.trait.path.params);
     vtableParams.types.resize(te.trait.path.params.types.size() + this->typeIndexes.size());
+    const auto& sized = crate.getLangItemPathOpt("sized");
+    for (const auto& [name, index] : this->typeIndexes) {
+        const auto* item = this->getAtyDef(name).first;
+        for (const auto& bound : item->generics.bounds) {
+            const auto* traitBound = bound.opt_TraitBound();
+            if (traitBound && traitBound->type == crate.types.self() && traitBound->trait.path.path == sized) {
+                vtableParams.types.at(index) = crate.types.unit();
+                break;
+            }
+        }
+    }
     for (const auto& tyB : te.trait.typeBounds) {
         if (this->typeIndexes.count(tyB.first) == 0) {
             /* An associated type the *declaration* already pinned gets no vtable
