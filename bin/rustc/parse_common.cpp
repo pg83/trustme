@@ -4519,8 +4519,6 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                             }
                         }
                         rv.entries.push_back(std::make_pair(mv$(n), std::move(traits)));
-                    } else {
-                        UNREACHABLE();
                     }
                 }
                 break;
