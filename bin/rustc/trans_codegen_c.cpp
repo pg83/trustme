@@ -7224,7 +7224,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
     } else if (name == "type_name") {
         auto name = localMirRes.intrinsicTypeName(params.types.at(0));
         emitLvalue(e.retVal);
-        of << StringView(".PTR = \"") << FmtEscaped(name) << StringView("\";\n\t");
+        of << StringView(".PTR = (void*)\"") << FmtEscaped(name) << StringView("\";\n\t");
         emitLvalue(e.retVal);
         of << StringView(".META = ") << name.size() << StringView("");
     } else if (name == "transmute" || name == "transmute_unchecked") {
