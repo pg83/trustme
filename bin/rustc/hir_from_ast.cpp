@@ -2376,13 +2376,9 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             }
             case ASTItem::TAG_Static: {
                 auto& i = item.data.as_Static();
-                if (i.sClass() == ASTStatic::CONST) {
-                    auto constantParams = LowerHIRGenericParams(i.params(), nullptr);
-                    rv.values.insert(std::make_pair(item.name, HIRTraitValueItem::make_Constant(HIRConstant(mv$(constantParams), LowerHIRType(i.type()), LowerHIRExpr(i.value())))));
-                } else {
-                    HIRLinkage linkage;
-                    rv.values.insert(std::make_pair(item.name, HIRTraitValueItem::make_Static(HIRStatic(mv$(linkage), (i.sClass() == ASTStatic::MUT), LowerHIRType(i.type()), LowerHIRExpr(i.value())))));
-                }
+                ASSERT_BUG(item.span, i.sClass() == ASTStatic::CONST, StringView("Associated static survived trait parsing"));
+                auto constantParams = LowerHIRGenericParams(i.params(), nullptr);
+                rv.values.insert(std::make_pair(item.name, HIRTraitValueItem::make_Constant(HIRConstant(mv$(constantParams), LowerHIRType(i.type()), LowerHIRExpr(i.value())))));
                 break;
             }
         }
