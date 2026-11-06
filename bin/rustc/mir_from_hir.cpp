@@ -5342,7 +5342,7 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
         case MIRRValue::TAG_Borrow: {
             auto& e = val.as_Borrow();
             if (e.type == HIRBorrowType::Owned) {
-                TODO(sp, StringView("Move using &move"));
+                this->movedLvalue(sp, e.val);
             } else {
             }
             break;
@@ -10331,6 +10331,11 @@ auto ExprVisitorConv::getArgs(/*const*/ std::vector<HIRExprNodeP>& args) -> std:
             auto res = builder.getResult(arg->span());
             if (auto* e = res.opt_Constant()) {
                 values.push_back(mv$(*e));
+            } else if (!builder.resolve().typeIsSized(arg->span(), arg->resType)) {
+                auto place = builder.lvalueOrTemp(arg->span(), arg->resType, mv$(res));
+                auto tmp = builder.newTemporary(builder.resolve().crate.types.borrow(HIRBorrowType::Owned, arg->resType));
+                builder.pushStmtAssign(arg->span(), tmp.clone(), MIRRValue::make_Borrow({HIRBorrowType::Owned, false, mv$(place)}));
+                values.push_back(MIRLValue::newDeref(mv$(tmp)));
             } else {
                 auto tmp = builder.newTemporary(arg->resType);
                 builder.pushStmtAssign(arg->span(), tmp.clone(), mv$(res));
@@ -10341,7 +10346,11 @@ auto ExprVisitorConv::getArgs(/*const*/ std::vector<HIRExprNodeP>& args) -> std:
 
     for (size_t i = 0; i < values.size(); i++) {
         if (const auto* e = values[i].opt_LValue()) {
-            builder.movedLvalue(args[i]->span(), *e);
+            if (args.size() > 1 && !builder.resolve().typeIsSized(args[i]->span(), args[i]->resType)) {
+                builder.movedLvalue(args[i]->span(), e->cloneUnwrapped(1));
+            } else {
+                builder.movedLvalue(args[i]->span(), *e);
+            }
         }
     }
     return values;
