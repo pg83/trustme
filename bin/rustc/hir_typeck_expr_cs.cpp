@@ -2569,7 +2569,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     return AssociatedCheckResult::Stalled;
                 }
                 if (!response.obligations.empty()) {
-                    return AssociatedCheckResult::Complete;
+                    return AssociatedCheckResult::Ambiguous;
                 }
                 if (v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce())) {
                     const auto* implType = context.getType(v.implTy);
