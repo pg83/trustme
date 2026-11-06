@@ -15720,8 +15720,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 builtinOutput = pointer->inner;
             } else if (const auto* borrow = implType->opt_Borrow()) {
                 builtinOutput = borrow->inner;
-            } else {
-                return false;
             }
         }
         return resolve_.probeTypeRelation(span(), output, builtinOutput) == Certainty::Proven;
