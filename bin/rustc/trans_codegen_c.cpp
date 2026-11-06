@@ -206,7 +206,6 @@ namespace {
 
         struct {
             bool emulatedI128 = false;
-            bool disallowEmptyStructs = false;
         } options;
 
         HIRTypeRefSet emittedFnTypes;
@@ -831,10 +830,8 @@ CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const
     if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
         WARNING(Span(), W0000, StringView("Potentially misconfigured target, 32-bit targets require i128 emulation"));
     }
-    options.disallowEmptyStructs = true;
-
     const auto& targetSpec = TargetGetCurSpec(wb_);
-    of << StringView("#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS ") << options.disallowEmptyStructs << StringView("\n") << StringView("#define TRUSTME_TARGET_EMULATED_I128 ") << options.emulatedI128 << StringView("\n") << StringView("#define TRUSTME_TARGET_U128_ALIGN ") << static_cast<unsigned>(targetSpec.arch.alignments.u128) << StringView("\n") << StringView("#define TRUSTME_TARGET_HAS_NATIVE_F128 ") << usesIntelCompilerAsmDialect() << StringView("\n") << StringView(CODEGEN_C_PRELUDE);
+    of << StringView("#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS 1\n") << StringView("#define TRUSTME_TARGET_EMULATED_I128 ") << options.emulatedI128 << StringView("\n") << StringView("#define TRUSTME_TARGET_U128_ALIGN ") << static_cast<unsigned>(targetSpec.arch.alignments.u128) << StringView("\n") << StringView("#define TRUSTME_TARGET_HAS_NATIVE_F128 ") << usesIntelCompilerAsmDialect() << StringView("\n") << StringView(CODEGEN_C_PRELUDE);
     of << StringView("}\nnamespace {\n") << StringView("extern const trustme_caller_location trustme_caller_locations[];\n") << StringView("}\nextern \"C\" {\n");
 }
 
@@ -1755,7 +1752,7 @@ auto CodeGeneratorC::emitStructInner(const HIRType* ty, const TypeRepr* repr, un
 
         if ((*ty).is_Path() && (*ty).as_Path().binding.is_ExternType()) {
             hasUnsized = true;
-        } else if (!(s == 0 && options.disallowEmptyStructs)) {
+        } else if (s != 0) {
             of << StringView("\t");
             if (const auto* te = ty->opt_Slice()) {
                 emitCtype(te->inner, FMT_CB(ss, ss << StringView("_") << fld << StringView("[0]");));
@@ -1783,7 +1780,7 @@ auto CodeGeneratorC::emitStructInner(const HIRType* ty, const TypeRepr* repr, un
         curOfs = repr->size;
         sizedFields++;
     }
-    if (sizedFields == 0 && !hasUnsized && options.disallowEmptyStructs) {
+    if (sizedFields == 0 && !hasUnsized) {
         of << StringView("\tchar _d;\n");
     }
     of << StringView("}");
@@ -1832,9 +1829,7 @@ auto CodeGeneratorC::emitType(const HIRType* ty) -> void {
             of << StringView("struct ");
             emitCtype(ty);
             of << StringView(" {");
-            if (options.disallowEmptyStructs) {
-                of << StringView(" char _unused; ");
-            }
+            of << StringView(" char _unused; ");
             of << StringView("};\n");
             break;
         }
@@ -1851,15 +1846,10 @@ auto CodeGeneratorC::emitType(const HIRType* ty) -> void {
             of << StringView("struct ");
             emitCtype(ty);
             of << StringView(" { ");
-            if (isZeroSized && options.disallowEmptyStructs) {
+            if (isZeroSized) {
                 of << StringView("union { char _d; ");
                 emitCtype(te.inner);
                 of << StringView(" DATA[0]; };");
-            } else if (isZeroSized) {
-                if (te.size.as_Known() > 0) {
-                    emitCtype(te.inner);
-                    of << StringView(" DATA[1];");
-                }
             } else {
                 emitCtype(te.inner);
                 of << StringView(" DATA[") << te.size.as_Known() << StringView("];");
@@ -2087,13 +2077,11 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
                 }
             }
             of << StringView("\t} DATA;\n");
-        } else if (options.disallowEmptyStructs && unionFields.length() == repr->fields.size()) {
+        } else if (unionFields.length() == repr->fields.size()) {
             of << StringView("\tchar _d;\n");
         }
     } else if (repr->fields.size() == 0) {
-        if (options.disallowEmptyStructs) {
-            of << StringView("\tchar _d;\n");
-        }
+        of << StringView("\tchar _d;\n");
     } else {
         TODO(sp, StringView("No common offsets and more than one field, is this possible? - ") << itemTy);
     }
@@ -2118,7 +2106,7 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
     }
     of << StringView(";\n");
 
-    size_t expSize = (repr->size > 0 ? repr->size : (options.disallowEmptyStructs ? 1 : 0));
+    size_t expSize = (repr->size > 0 ? repr->size : 1);
     of << StringView("static_assert(sizeof(e_") << TransMangle(p) << StringView(")==") << expSize << StringView(");\n");
 
     mirRes = nullptr;
@@ -3966,32 +3954,20 @@ auto CodeGeneratorC::typeIsCScalar(const HIRType* ty) const -> bool {
 }
 
 auto CodeGeneratorC::typeIsBadZst(const HIRType* ty) const -> bool {
-    if (options.disallowEmptyStructs) {
-        // TODO: Extern types are also ZSTs?
-        size_t size, align;
-        MIR_ASSERT(*mirRes, TargetGetSizeAndAlignOf(sp, resolve_, ty, size, align), StringView("Unexpected generic? ") << ty);
-        return size == 0;
-    } else {
-        return false;
-    }
+    // TODO: Extern types are also ZSTs?
+    size_t size, align;
+    MIR_ASSERT(*mirRes, TargetGetSizeAndAlignOf(sp, resolve_, ty, size, align), StringView("Unexpected generic? ") << ty);
+    return size == 0;
 }
 
 auto CodeGeneratorC::lvalueIsBadZst(const MIRLValue& lv) const -> bool {
-    if (options.disallowEmptyStructs) {
-        const HIRType* tmp;
-        return typeIsBadZst(mirRes->getLvalueType(lv));
-    } else {
-        return false;
-    }
+    const HIRType* tmp;
+    return typeIsBadZst(mirRes->getLvalueType(lv));
 }
 
 auto CodeGeneratorC::lvalueRootIsBadZst(const MIRLValue& lv) const -> bool {
-    if (options.disallowEmptyStructs) {
-        const HIRType* tmp;
-        return typeIsBadZst(mirRes->getLvalueType(lv, lv.wrappers.size()));
-    } else {
-        return false;
-    }
+    const HIRType* tmp;
+    return typeIsBadZst(mirRes->getLvalueType(lv, lv.wrappers.size()));
 }
 
 auto CodeGeneratorC::lvalueZstIndexBacking(const MIRLValue& lv) const -> MIRLValue {
@@ -4036,7 +4012,7 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
     }
 
     auto valRef = MIRLValue::CRef(val);
-    if (!special && options.disallowEmptyStructs && valRef.is_Index() && this->typeIsBadZst(ty)) {
+    if (!special && valRef.is_Index() && this->typeIsBadZst(ty)) {
         auto inner = valRef.innerRef();
         const HIRType* tmp;
         const auto& parentTy = localMirRes.getLvalueType(inner);
@@ -4065,7 +4041,7 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
     while (zstField.is_Downcast()) {
         zstField.tryUnwrap();
     }
-    if (!special && options.disallowEmptyStructs && zstField.is_Field() && this->typeIsBadZst(ty)) {
+    if (!special && zstField.is_Field() && this->typeIsBadZst(ty)) {
         auto valFp = zstField;
         BUG_ASSERT(valFp.is_Field());
         while (valFp.innerRef().is_Field()) {
@@ -4164,17 +4140,15 @@ auto CodeGeneratorC::emitCompositeAssignCb(const MIRTypeResolve& localMirRes, CS
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     bool hasEmitted = prependNewline;
     for (unsigned int j = 0; j < vals.size(); j++) {
-        if (options.disallowEmptyStructs) {
-            const HIRType* tmp;
-            const auto& ty = localMirRes.getParamType(vals[j]);
+        const HIRType* tmp;
+        const auto& ty = localMirRes.getParamType(vals[j]);
 
-            if (vals[j].is_LValue() && resolve_.isTypePhantomData(ty)) {
-                continue;
-            }
+        if (vals[j].is_LValue() && resolve_.isTypePhantomData(ty)) {
+            continue;
+        }
 
-            if (this->typeIsBadZst(ty)) {
-                continue;
-            }
+        if (this->typeIsBadZst(ty)) {
+            continue;
         }
 
         if (hasEmitted) {
@@ -4892,10 +4866,8 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                 case MIRRValue::TAG_Struct: {
                     auto& ve = e.src.as_Struct();
                     if (ve.vals.empty()) {
-                        if (options.disallowEmptyStructs) {
-                            emitLvalue(e.dst);
-                            of << StringView("._d = 0");
-                        }
+                        emitLvalue(e.dst);
+                        of << StringView("._d = 0");
                     } else {
                         emitCompositeAssign(localMirRes, [&]() {
                             emitLvalue(e.dst);
@@ -5620,19 +5592,17 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
         if (!argumentIsPassed(calleeAbi, ty)) {
             continue;
         }
-        if (options.disallowEmptyStructs /*&& (e.args[j].is_LValue() && (e.args[j].as_LValue().is_Field()))*/) {
-            if (this->typeIsBadZst(ty)) {
-                if (!hasZst) {
-                    of << StringView("{\n");
-                    indent.n++;
-                    of << indent;
-                    hasZst = true;
-                }
-                emitCtype(ty, FMT_CB(ss, ss << StringView("zarg") << j;));
-                of << StringView(" = {0};\n");
+        if (this->typeIsBadZst(ty)) {
+            if (!hasZst) {
+                of << StringView("{\n");
+                indent.n++;
                 of << indent;
-                continue;
+                hasZst = true;
             }
+            emitCtype(ty, FMT_CB(ss, ss << StringView("zarg") << j;));
+            of << StringView(" = {0};\n");
+            of << indent;
+            continue;
         }
     }
 
