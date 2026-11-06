@@ -120,7 +120,7 @@ namespace {
 
         MacroExpandState(const std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
 
-        const MacroExpansionEnt* nextEnt();
+        const MacroExpansionEnt* nextEnt(const Span& sp);
 
         const Vector<unsigned int> iterations() const;
 
@@ -250,7 +250,7 @@ namespace {
     };
 
     unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
-    void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
+    void MacroInvokeRulesCountSubstUses(const Span& sp, ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
 
     template <typename Layer>
     unsigned int captureLayerDepth(const Layer& layer) {
@@ -2157,11 +2157,11 @@ namespace {
         }
     }
 
-    void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents) {
+    void MacroInvokeRulesCountSubstUses(const Span& sp, ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents) {
         TRACE_FUNCTION;
         MacroExpandState state(contents, boundTts);
 
-        while (const auto* entPtr = state.nextEnt()) {
+        while (const auto* entPtr = state.nextEnt(sp)) {
             DEBUG(*entPtr);
             switch ((*entPtr).tag()) {
                 case MacroExpansionEnt::TAG_Token: {
@@ -2430,10 +2430,6 @@ namespace {
                         if (!v.second.loopStack.empty() && loopDepth < v.second.loopStack.length()) {
                             controllingLoops.insert(v.second.loopStack[loopDepth]);
                         }
-                    }
-                    if (controllingLoops.empty()) {
-                        WARNING(lex.pointSpan(), W0000, StringView("Macro loop doesn't contain any variables at this depth, omitting as it'll not run"));
-                        continue;
                     }
                     // TODO: Check that +/*/? matches for the controlling loops
 
@@ -3225,7 +3221,7 @@ std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroR
     const auto& rule = rules.rules.at(ruleIndex);
 
     DEBUG(StringView("Using macro '") << name << StringView("' #") << ruleIndex << StringView(" - ") << rule.contents.size() << StringView(" rule contents with ") << boundTts.mappings().size() << StringView(" bound values"));
-    MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
+    MacroInvokeRulesCountSubstUses(sp, boundTts, rule.contents);
 
     Ident::ModPath localInnerMacrosRoot;
     localInnerMacrosRoot.crate = rules.sourceCrate;
@@ -3270,7 +3266,7 @@ Token MacroExpander::realGetToken() {
         ttstream.reset();
     }
 
-    while (const auto* nextEntPtr = state.nextEnt()) {
+    while (const auto* nextEntPtr = state.nextEnt(this->pointSpan())) {
         const auto& ent = *nextEntPtr;
         switch (ent.tag()) {
             case MacroExpansionEnt::TAG_Token: {
@@ -3433,7 +3429,7 @@ Token MacroExpander::realGetToken() {
     return Token(TOK_EOF);
 }
 
-const MacroExpansionEnt* MacroExpandState::nextEnt() {
+const MacroExpansionEnt* MacroExpandState::nextEnt(const Span& sp) {
     while (!offsets.empty()) {
         unsigned int layer = offsets.length() - 1;
         const auto& ents = *curEnts;
@@ -3454,7 +3450,9 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                 }
                 case MacroExpansionEnt::TAG_Loop: {
                     auto& e = ent.as_Loop();
-                    BUG_ASSERT(!e.controllingInputLoops.empty());
+                    if (e.controllingInputLoops.empty()) {
+                        ERROR(sp, E0000, StringView("attempted to repeat an expression containing no syntax variables matched as repeating at this depth"));
+                    }
                     unsigned int numRepeats = mappings_.getLoopRepeats(Span(), iterations_, *e.controllingInputLoops.begin());
                     for (auto loopIdent : e.controllingInputLoops) {
                         if (loopIdent == *e.controllingInputLoops.begin()) {
