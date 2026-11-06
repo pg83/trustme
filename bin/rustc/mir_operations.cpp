@@ -6506,19 +6506,11 @@ namespace {
                     srcBb.statements.back().as_Assign().dst = dst.clone();
                 } else {
                     MIR_TODO(state, StringView("Handle copying assignment to source"));
-                    DEBUG(StringView("+- BB") << bbIdx << StringView("/") << (srcBb.statements.size() - 1) << StringView(" ") << srcBb.statements.back());
                 }
                 DEBUG(StringView("+- BB") << bbIdx << StringView("/TERM ") << srcBb.terminator);
             }
-            if (false && state.lvalueIsCopy(dst)) {
-                auto d = dst.clone();
-                dst = mv$(src);
-                src = mv$(d);
-                DEBUG(state << StringView("- Updated (") << stmt << StringView(")"));
-            } else {
-                stmt = MIRStatement();
-                DEBUG(state << StringView("- Deleted"));
-            }
+            stmt = MIRStatement();
+            DEBUG(state << StringView("- Deleted"));
         }
 
         return changed;

@@ -6020,13 +6020,7 @@ auto Context::getSelf() const -> ::ASTType* {
     for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
         switch ((*it).tag()) {
             case Ent::TAG_ConcreteSelf: {
-                const auto e = (*it).as_ConcreteSelf();
-                if (false && e) {
-                    return (*e)->clone();
-                } else {
-                    return ::mkType(typePool(), Span(), selfName(), GENERICSelf);
-                }
-                break;
+                return ::mkType(typePool(), Span(), selfName(), GENERICSelf);
             }
             default: {
                 break;
