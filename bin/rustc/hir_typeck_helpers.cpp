@@ -2870,10 +2870,25 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
         case HIRType::TAG_Pattern: {
             const auto& le = left->as_Pattern();
             const auto& re = right->as_Pattern();
-            if (le.pattern.ord(re.pattern) != OrdEqual) {
+            if (le.pattern.notNull != re.pattern.notNull || le.pattern.alternatives.size() != re.pattern.alternatives.size()) {
                 return Outcome::Mismatch;
             }
-            return this->unifyResolved(le.inner, re.inner);
+            const auto inner = this->unifyResolved(le.inner, re.inner);
+            if (inner == Outcome::Mismatch) {
+                return inner;
+            }
+            for (size_t i = 0; i < le.pattern.alternatives.size(); i++) {
+                const auto& leftRange = le.pattern.alternatives[i];
+                const auto& rightRange = re.pattern.alternatives[i];
+                if (leftRange.hasStart != rightRange.hasStart || leftRange.hasEnd != rightRange.hasEnd || leftRange.endInclusive != rightRange.endInclusive) {
+                    return Outcome::Mismatch;
+                }
+                if ((leftRange.hasStart && this->unifyValuesResolved(leftRange.start, rightRange.start) == Outcome::Mismatch)
+                    || (leftRange.hasEnd && this->unifyValuesResolved(leftRange.end, rightRange.end) == Outcome::Mismatch)) {
+                    return Outcome::Mismatch;
+                }
+            }
+            return inner;
         }
         case HIRType::TAG_Tuple: {
             const auto& le = left->as_Tuple();
