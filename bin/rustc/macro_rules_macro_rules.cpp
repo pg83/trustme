@@ -3800,11 +3800,17 @@ MacroRulesArm::MacroRulesArm() {
 namespace {
     struct TokenCaptureScan {
         Vector<u8>& captures;
-        Vector<u8> groups;
+        enum class Group : u8 {
+            Other,
+            Call,
+            DefinitionParameters,
+        };
+        Vector<Group> groups;
         size_t insideCall = 0;
         bool afterName = false;
         bool afterBang = false;
         bool afterCallName = false;
+        bool definitionGroup = false;
 
         template <typename Ents>
         void scan(const Ents& ents) {
@@ -3840,8 +3846,10 @@ namespace {
                 case TOK_PAREN_OPEN:
                 case TOK_SQUARE_OPEN:
                 case TOK_BRACE_OPEN: {
-                    const bool isCall = afterBang || afterCallName;
-                    groups.pushBack(isCall ? 1 : 0);
+                    const bool isCall = definitionGroup || afterBang || afterCallName;
+                    const auto group = definitionGroup && type == TOK_PAREN_OPEN ? Group::DefinitionParameters : isCall ? Group::Call : Group::Other;
+                    groups.pushBack(group);
+                    definitionGroup = false;
                     if (isCall) {
                         insideCall++;
                     }
@@ -3851,11 +3859,17 @@ namespace {
                 case TOK_SQUARE_CLOSE:
                 case TOK_BRACE_CLOSE:
                     if (!groups.empty()) {
-                        if (groups.popBack() != 0) {
+                        const auto group = groups.popBack();
+                        if (group != Group::Other) {
                             insideCall--;
                         }
+                        definitionGroup = group == Group::DefinitionParameters;
                     }
                     break;
+                case TOK_RWORD_MACRO:
+                    definitionGroup = true;
+                    this->name();
+                    return;
                 case TOK_EXCLAM:
                     afterBang = afterName;
                     afterName = false;
