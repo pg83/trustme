@@ -319,11 +319,10 @@ auto CMacroExportHandler::runDuringIter() const -> bool {
     return true;
 }
 
-auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath&, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     const bool localInnerMacros = macroExportUsesLocalInnerMacros(mi);
 
-    if (i.is_None()) {
-    } else if (const auto* u = i.opt_Use()) {
+    if (const auto* u = i.opt_Use()) {
         if (u->entries.size() == 1 && u->entries.back().path.isAbsolute() && u->entries.back().path.cls.as_Absolute().crate == CRATE_BUILTINS && u->entries.back().path.cls.as_Absolute().nodes.size() == 1)
             ;
         else {
@@ -340,13 +339,6 @@ auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const W
             ERROR(sp, E0000, StringView("#[macro_export] is only valid on macro_rules!"));
         }
         exportMacroRules(sp, wb, crate, mod, mac.inputIdent(), localInnerMacros);
-    } else if (i.is_Macro()) {
-        const auto& name = path.nodes.back();
-        if (i.as_Macro()) {
-            i.as_Macro()->exported = true;
-            ASSERT_BUG(sp, path.nodes.length() == 1, StringView(""));
-            DEBUG(StringView("- Export macro (item) ") << name << StringView("!"));
-        }
     } else {
         ERROR(sp, E0000, StringView("Use of #[macro_export] on non-macro - ") << i.tagStr());
     }
