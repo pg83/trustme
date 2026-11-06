@@ -5014,14 +5014,6 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
                 effects->valueEqualities.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
             }
         }
-        for (const auto& coercion : response.coercions) {
-            const bool duplicate = std::any_of(effects->coercions.begin(), effects->coercions.end(), [&](const SolverCoercionObligation& existing) {
-                return existing.destination == coercion.destination && existing.source == coercion.source && existing.op == coercion.op && existing.sourceInput == coercion.sourceInput;
-            });
-            if (!duplicate) {
-                effects->coercions.push_back(coercion);
-            }
-        }
     };
 
     struct ContainsConditionalParameter final: MonomorphiserNop {
@@ -5124,7 +5116,7 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
                 }
                 sawResponse = true;
                 bool responseHasDeferredConstraints = !response.obligations.empty() || !response.equalities.empty()
-                    || !response.valueEqualities.empty() || !response.coercions.empty();
+                    || !response.valueEqualities.empty();
                 for (size_t i = 0; i < response.slots.types.size(); i++) {
                     responseHasDeferredConstraints |= response.slots.typeInputs[i] != response.slots.types[i];
                 }
@@ -10622,14 +10614,6 @@ auto NextTraitGoalEvaluator::monomorphSolverResponse(const SolverResponse& sourc
                 monomorph.monomorphConstgeneric(span(), equality.right, true),
             }
         );
-    }
-    for (const auto& coercion : source.coercions) {
-        result.coercions.push_back(SolverCoercionObligation{
-            monomorph.monomorphType(span(), coercion.destination, true),
-            monomorph.monomorphType(span(), coercion.source, true),
-            coercion.op,
-            coercion.sourceInput,
-        });
     }
     return result;
 }
