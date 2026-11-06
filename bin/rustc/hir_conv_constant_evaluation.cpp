@@ -853,9 +853,9 @@ struct HIREvaluator::MIREvalCallStackEntry {
 
     bool valueNeedsNonConstDrop(const HIRType* ty, MIREvalValueRef value, MIREvalValueRef metadata = {}) const;
 
-    MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, const HIRType** outTy = nullptr);
+    MIREvalStaticRefPtr getStaticrefMono(const HIRPath& p, const HIRType** outTy = nullptr, bool materializeValue = false);
 
-    MIREvalStaticRefPtr getStaticref(HIRPath p, const HIRType** outTy = nullptr, bool materializeVtable = false);
+    MIREvalStaticRefPtr getStaticref(HIRPath p, const HIRType** outTy = nullptr, bool materializeValue = false);
 
     MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, std::pair<u64, MIREvalRelocPtr>* borrowAddress = nullptr);
 
@@ -984,9 +984,9 @@ static const RcString* getRustcIntrinsicName(const Span& sp, const StaticTraitRe
 const unsigned TERM_RET_PUSHED = UINT_MAX - 1;
 const unsigned TERM_RET_RETURN = UINT_MAX;
 
-static void resolveStaticPointer(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr>& value) {
+static void resolveStaticPointer(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr>& value, bool materializeValue = false) {
     if (const auto* staticRef = value.second.asStaticref()) {
-        value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
+        value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone(), nullptr, materializeValue));
     }
 }
 
@@ -1001,7 +1001,7 @@ static bool samePointerProvenance(const MIREvalRelocPtr& left, const MIREvalRelo
 
 static MIREvalValueRef pointerBytes(MIREvalCallStackEntry& localState, std::pair<u64, MIREvalRelocPtr> pointer, size_t length, const char* intrinsic) {
     const auto& state = localState.state;
-    resolveStaticPointer(localState, pointer);
+    resolveStaticPointer(localState, pointer, length != 0);
     MIR_ASSERT(state, pointer.second, StringView("`") << intrinsic << StringView("` cannot access an absolute pointer"));
     MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, StringView("Invalid pointer passed to `") << intrinsic << StringView("`"));
     const u64 offset = pointer.first - EncodedLiteral::PTR_BASE;
@@ -4342,7 +4342,7 @@ auto MIREvalStaticRef::getBytes(size_t ofs, size_t len, bool checkMask) const ->
         }
         return encoded->bytes.data() + ofs;
     } else {
-        if (len == 0 && ofs == 0) {
+        if (len == 0 && ofs <= length) {
             return reinterpret_cast<const u8*>("");
         }
         if (valuePending) {
@@ -4947,11 +4947,11 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRType* ty, MIREvalVal
     }
 }
 
-auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, const HIRType** outTy) -> MIREvalStaticRefPtr {
-    return getStaticref(ms.monomorphPath(state.sp, p), outTy);
+auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, const HIRType** outTy, bool materializeValue) -> MIREvalStaticRefPtr {
+    return getStaticref(ms.monomorphPath(state.sp, p), outTy, materializeValue);
 }
 
-auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool materializeVtable) -> MIREvalStaticRefPtr {
+auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool materializeValue) -> MIREvalStaticRefPtr {
     rootResolve.revealOpaqueTypesPath(state.sp, p);
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
@@ -4961,7 +4961,7 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool 
 
     if (const auto* pe = p.data.opt_UfcsKnown()) {
         if (pe->item == rootResolve.board().ctfe->vtableName()) {
-            if (!materializeVtable) {
+            if (!materializeValue) {
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
             }
             const size_t ptrBytes = TargetGetPointerBits() / 8;
@@ -5042,6 +5042,9 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool 
         if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
             BUG(state.sp, StringView("Layout not computable during const evaluation - ") << StringView("sizeof ") << staticTy);
         }
+        if (!materializeValue && !s.valueGenerated) {
+            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize, true);
+        }
         if (!s.valueGenerated) {
             if (!s.value && !s.value.mir) {
                 DEBUG(StringView("No value and no mir"));
@@ -5100,8 +5103,12 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, const HIRType** outTy, bool 
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), value, staticSize);
             }
             DEBUG(StringView("- Evaluate ") << p);
-            item.valueGenerated = true;
+            item.valueEvaluating = true;
+            STD_DEFER {
+                item.valueEvaluating = false;
+            };
             item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
+            item.valueGenerated = true;
             DEBUG(p << StringView(" = ") << item.valueRes);
         }
         const auto* value = s.valueRes.bytes.length() == staticSize ? &s.valueRes : nullptr;
@@ -5142,7 +5149,14 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
         }
         case MIRLValue::Storage::TAG_Static: {
             decltype(lv.root.as_Static()) e = lv.root.as_Static();
-            val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
+            bool materializeValue = !borrowAddress;
+            if (materializeValue) {
+                size_t valueSize;
+                const auto* valueType = monomorphExpand(state.getLvalueType(lv));
+                materializeValue = !TargetGetSizeOf(state.sp, rootResolve, valueType, valueSize) || valueSize != 0;
+            }
+            materializeValue |= std::any_of(lv.wrappers.begin(), lv.wrappers.end(), [](const auto& wrapper) { return wrapper.is_Deref(); });
+            val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy, materializeValue));
             if (!lv.wrappers.empty()) {
                 MIR_ASSERT(state, tmpTy != nullptr, StringView("Type not set?"));
             }
@@ -5221,9 +5235,6 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                     metadata = val.slice(TargetGetPointerBits() / 8);
                 }
                 auto p = val.readPtr(state);
-                if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
-                    p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone(), nullptr, true));
-                }
                 struct DerefLayout { bool zero; size_t align; };
                 const auto derefLayout = [&](auto&& recurse, const HIRType* type, size_t size, size_t align) -> DerefLayout {
                     if (size != SIZE_MAX) {
@@ -5269,6 +5280,10 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                     }
                     val = MIREvalValueRef(MIREvalAllocationPtr::allocateScratch(valuePool, 0));
                     break;
+                }
+                if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
+                    const bool materializeValue = !borrowAddress || std::any_of(&w + 1, lv.wrappers.data() + lv.wrappers.size(), [](const auto& wrapper) { return wrapper.is_Deref(); });
+                    p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone(), nullptr, materializeValue));
                 }
                 MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE && p.second, StringView("Dereference outside allocation"));
                 DEBUG(StringView("> ") << MIREvalValueRef(p.second) << StringView(" - o=") << (p.first - EncodedLiteral::PTR_BASE) << StringView(" sz=") << sz << StringView(" ") << typ);
