@@ -66,6 +66,11 @@ def main() -> int:
         shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
     )
     compile_flags = [flag.replace("$DIR", os.path.dirname(src)) for flag in compile_flags]
+    unit_environment = re.findall(
+        r"^//@\s*env:\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$", source_text, re.MULTILINE
+    )
+    if len(unit_environment) != len(re.findall(r"^//@\s*env:", source_text, re.MULTILINE)):
+        raise RuntimeError("env requires NAME=VALUE")
     default_compile_flags = [
         flag.replace("$DIR", os.path.dirname(src))
         for flags in re.findall(
@@ -120,10 +125,13 @@ def main() -> int:
     )
 
     with lib.workdir() as work:
+        binary = os.path.join(work, "t")
         env = dict(os.environ)
         env.pop("TRUSTME_SYSTEM_RUSTC", None)
         env.pop("TRUSTME_CHAOS", None)
         env.setdefault("CC", "cc")
+        for key, value in unit_environment:
+            env[key] = value.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         dependency_args = []
@@ -208,7 +216,6 @@ def main() -> int:
                 dependency_args.extend(("-L", aux_directory, "--extern", aux_name))
             else:
                 dependency_args.extend(("--extern", f"{aux_name}={aux_rlib}"))
-        binary = os.path.join(work, "t")
         base_flags = [flag.replace("$OUT", binary) for flag in compile_flags]
         main_flags = [*base_flags, *(flag.replace("$OUT", binary) for flag in default_compile_flags)]
         if chaos_match:
