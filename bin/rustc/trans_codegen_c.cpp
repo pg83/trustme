@@ -3599,25 +3599,24 @@ auto CodeGeneratorC::findNoOpCleanupBlocks(const MIRTypeResolve& localMirRes, co
                     noOp = dropOperationIsNoOp(localMirRes, drop) && cleanupBlockIsNoOp(drop.target);
                     break;
                 }
-                case MIRTerminator::TAG_If: {
-                    const auto& e = block.terminator.as_If();
-                    noOp = cleanupBlockIsNoOp(e.bbTrue) && cleanupBlockIsNoOp(e.bbFalse);
-                    break;
-                }
-                case MIRTerminator::TAG_Switch: {
-                    const auto& e = block.terminator.as_Switch();
-                    noOp = e.validFlag == ~0u || cleanupBlockIsNoOp(e.invalidTarget);
-                    for (const auto target : e.targets) {
-                        noOp = noOp && cleanupBlockIsNoOp(target);
-                    }
-                    break;
-                }
+                case MIRTerminator::TAG_If:
+                case MIRTerminator::TAG_Switch:
                 case MIRTerminator::TAG_SwitchValue: {
-                    const auto& e = block.terminator.as_SwitchValue();
-                    noOp = cleanupBlockIsNoOp(e.defTarget);
-                    for (const auto target : e.targets) {
-                        noOp = noOp && cleanupBlockIsNoOp(target);
-                    }
+                    struct CheckCleanupTargets final: MIRTargetVisitor {
+                        const CodeGeneratorC& codegen;
+                        bool allNoOp = true;
+
+                        explicit CheckCleanupTargets(const CodeGeneratorC& codegen)
+                            : codegen(codegen)
+                        {
+                        }
+
+                        void visitTarget(const MIRBasicBlockId& target) override {
+                            allNoOp = allNoOp && codegen.cleanupBlockIsNoOp(target);
+                        }
+                    } targets{*this};
+                    visitTerminatorTarget(block.terminator, targets);
+                    noOp = targets.allNoOp;
                     break;
                 }
                 default:
