@@ -134,7 +134,6 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
         _(Unit, os << StringView("()");)
         _(Primitive, os << ent.coreType;)
         _(ResolvedHIR, os << ent.type;)
-        break;
         case TypeData::TAG_Function: {
             auto& ent = data.as_Function();
             os << ent.info.hrbs;
@@ -157,11 +156,16 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
                 os << StringView(" -> ") << *ent.info.rettype;
             }
         } break;
-            _(Tuple, os << StringView("( "); for (const auto& it : ent.innerTypes) {
+        case TypeData::TAG_Tuple: {
+            const auto& ent = this->data.as_Tuple();
+            os << StringView("( ");
+            for (const auto& it : ent.innerTypes) {
                 it->print(os, isDebug);
                 os << StringView(", ");
-            } os << StringView(")");)
+            }
+            os << StringView(")");
             break;
+        }
         case TypeData::TAG_Borrow: {
             auto& ent = data.as_Borrow();
             os << StringView("&");
