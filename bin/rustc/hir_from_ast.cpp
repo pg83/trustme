@@ -3143,8 +3143,7 @@ HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vect
         }
     }
     for (auto& mac : astMod.macros()) {
-        if (mac.data || mac.vis.isGlobal()) {
-            ASSERT_BUG(mac.span, mac.data, StringView("Null macro - ") << mac.name);
+        if (mac.data) {
             ASSERT_BUG(mac.span, mac.data->rules.size() > 0, StringView("Empty macro - ") << mac.name);
             _add_mod_mac_item(*crate->pool, mod, mac.name, getVis(mac.vis), std::move(mac.data));
         }
