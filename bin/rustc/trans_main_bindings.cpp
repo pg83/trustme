@@ -975,10 +975,13 @@ static void TransEnumerateTypes(EnumState& state) {
     for (const auto& path : state.rv.traitObjectMethods) {
         const auto& pe = path.data.as_UfcsKnown();
         const auto& tyDyn = pe.type->as_TraitObject();
+        const auto vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(state.crate.types, sp, tyDyn.trait.path.params, pe.trait, pe.item);
+        if (tyDyn.trait.traitPtr->vtablePath.components().empty() || vtableIdx == 0) {
+            ERROR(sp, E0000, StringView("Method ") << path << StringView(" cannot be used through a trait object without a vtable entry"));
+        }
         const auto* vtableTy = tyDyn.trait.traitPtr->getVtableType(sp, state.crate, tyDyn);
         tv.visitType(vtableTy);
 
-        const auto vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(state.crate.types, sp, tyDyn.trait.path.params, pe.trait, pe.item);
         const auto& vtablePath = vtableTy->as_Path();
         const auto& vtableData = vtablePath.binding.as_Struct()->data;
         const auto* slotTemplate = vtableData.is_Named() ? vtableData.as_Named()[vtableIdx].ty : vtableData.is_Tuple() ? vtableData.as_Tuple()[vtableIdx].ent : nullptr;
