@@ -925,6 +925,10 @@ HIRPath AST2HIR::LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromAS
             // HACK: Return `<Self>::` (to be expanded later on)
             return HIRPath(crate->types.self(), "");
         }
+        ERROR(sp, E0000, StringView("type parameters cannot be used in struct patterns"));
+    }
+    if (path.bindings.value.binding.is_Generic()) {
+        ERROR(sp, E0000, StringView("constant parameters cannot be referenced in patterns"));
     }
     return LowerHIRPath(sp, path, pc);
 }
@@ -1558,37 +1562,12 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
 
 HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
     switch (path.cls.tag()) {
-        case ASTPathClass::TAG_Invalid: {
-            BUG(sp, StringView("BUG: Encountered Invalid path in LowerHIR_Path"));
-        }
-        case ASTPathClass::TAG_Local: {
-            TODO(sp, StringView("What to do with Path::Class::Local in LowerHIR_Path - ") << path);
-        }
-        case ASTPathClass::TAG_Relative: {
-            BUG(sp, StringView("Encountered `Relative` path in LowerHIR_Path - ") << path);
-        }
-        case ASTPathClass::TAG_Self: {
-            BUG(sp, StringView("Encountered `Self` path in LowerHIR_Path - ") << path);
-        }
-        case ASTPathClass::TAG_Super: {
-            BUG(sp, StringView("Encountered `Super` path in LowerHIR_Path - ") << path);
-        }
         case ASTPathClass::TAG_Absolute: {
             return HIRPath(LowerHIRGenericPath(sp, path, pc));
         }
         case ASTPathClass::TAG_UFCS: {
             auto& e = path.cls.as_UFCS();
-            if (e.nodes.size() == 0) {
-                if (!(!e.trait || e.trait->isValid())) {
-                    TODO(sp, StringView("Handle UFCS w/ trait and no nodes - ") << path);
-                }
-                auto type = LowerHIRType(e.type);
-                ASSERT_BUG(sp, type->is_Path(), StringView("No nodes and non-Path type - ") << path);
-                return type->as_Path().path.clone();
-            }
-            if (e.nodes.size() > 1) {
-                TODO(sp, StringView("Handle UFCS with multiple nodes - ") << path);
-            }
+            ASSERT_BUG(sp, e.nodes.size() == 1, StringView("Expected one resolved UFCS node - ") << path);
             auto params = LowerHIRPathParams(sp, e.nodes.front().args(), /*allow_assoc*/ false, getUfcsGenericParams(path, pc));
             auto itemName = e.nodes[0].name();
             if (e.nodes.front().args().isRtn) {
@@ -1600,10 +1579,10 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
             } else {
                 return HIRPath(HIRPath::Data::make_UfcsKnown({LowerHIRType(e.type), LowerHIRGenericPath(sp, *e.trait, FromASTPathClass::Type), mv$(itemName), mv$(params)}));
             }
-            break;
         }
+        default:
+            BUG(sp, StringView("Unresolved path reached HIR lowering - ") << path);
     }
-    UNREACHABLE();
 }
 
 const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
