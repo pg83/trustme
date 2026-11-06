@@ -3288,7 +3288,7 @@ Token MacroExpander::realGetToken() {
                         auto h = e.strHygiene();
                         h = h.withTailScope(pool, hygiene_, isMacroItem);
                         lastHygiene = h;
-                        auto rv = Token(e.type(), e.str(), std::move(h));
+                        auto rv = Token(e.type(), e.str(), e.spelling(), std::move(h));
                         DEBUG(StringView("Updated hygine: ") << rv);
                         return rv;
                     }
