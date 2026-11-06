@@ -2116,14 +2116,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     break;
                 }
 
-                MIREvalValueRef source;
-                if (const auto* place = e.ptrVal.opt_LValue()) {
-                    source = localState.getLval(*place);
-                } else {
-                    auto storage = MIREvalAllocationPtr::allocate(localState.valuePool, localState.rootResolve, state, srcTy);
-                    source = MIREvalValueRef(storage);
-                    localState.writeParam(source, e.ptrVal);
-                }
+                const auto source = localState.getLval(e.ptrVal.as_LValue());
                 writeCtfeCoercion(localState, dst, source, dstTy, srcTy);
             } else {
                 size_t ptrSize = TargetGetPointerBits() / 8;
