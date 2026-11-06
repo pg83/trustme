@@ -246,6 +246,7 @@ namespace {
 
     struct NormalizeConstValues final: HIRVisitor {
         Context& context;
+        bool hasUnresolvedIvars = false;
 
         explicit NormalizeConstValues(Context& context)
             : HIRVisitor(nullptr, context.crate.types)
@@ -260,6 +261,7 @@ namespace {
                     value = resolved.clone();
                 }
             }
+            hasUnresolvedIvars |= value.is_Infer();
             HIRVisitor::visitConstgeneric(value);
             if (const auto* unevaluated = value.opt_Unevaluated()) {
                 auto& expr = *(*unevaluated)->expr;
@@ -275,6 +277,7 @@ namespace {
             if (type->is_Infer()) {
                 type = context.ivars.getType(type);
             }
+            hasUnresolvedIvars |= type->is_Infer();
             return visitTypeDefaultViaHooks(type);
         }
     };
@@ -9758,6 +9761,11 @@ auto ConstExprEquate::equateLiteral(const HIRExprNodeLiteral& left, const HIRExp
 auto ConstExprEquate::evaluatedPath(const HIRConstGenericUnevaluated& value, const HIRExprNodePathValue& node) const -> const EncodedLiteral* {
     MonomorphStatePtr monomorph(context.crate.types, value.selfType, &value.paramsImpl, &value.paramsItem);
     auto path = monomorph.monomorphPath(sp, node.path);
+    NormalizeConstValues normalize(context);
+    normalize.visitPath(path, HIRVisitor::PathContext::VALUE);
+    if (normalize.hasUnresolvedIvars) {
+        return nullptr;
+    }
     StaticTraitResolve resolve(context.resolve.board());
     resolve.setBothGenericsRaw(context.resolve.implGenericsPtr(), context.resolve.itemGenericsPtr());
     MonomorphState params(context.crate.types);
