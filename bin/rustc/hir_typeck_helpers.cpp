@@ -16872,6 +16872,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     associated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{std::move(sourceTrait), itemParams.clone(), std::move(inherited)}});
                     return emitResponse(SolverImpl(std::move(implType), std::move(traitParams), std::move(associated)), Certainty::Proven);
                 }
+                if (goalIsConcrete(trait, canonical)) {
+                    return false;
+                }
             }
         }
         const Candidate* responseSource = selected;
