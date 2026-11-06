@@ -2489,9 +2489,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                 if (rv2 == HIRCompare::Unequal) {
                     return HIRCompare::Unequal;
                 }
-                if (rv2 == HIRCompare::Fuzzy) {
-                    rv = HIRCompare::Fuzzy;
-                }
             }
             return rv;
         }
