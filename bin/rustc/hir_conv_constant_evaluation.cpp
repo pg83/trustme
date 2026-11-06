@@ -5928,7 +5928,9 @@ auto Expander::visitPathParams(HIRPathParams& p) -> void {
                 continue;
             }
             const auto& paramsDef = getParams->get(sp);
-            ASSERT_BUG(sp, idx < paramsDef.values.size(), StringView(""));
+            if (idx >= paramsDef.values.size()) {
+                ERROR(sp, E0000, StringView("Unexpected const generic argument"));
+            }
             const auto& ty = paramsDef.values[idx].type;
             if (monomorphiseTypeNeeded(ty)) {
                 continue;

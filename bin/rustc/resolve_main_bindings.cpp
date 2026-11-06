@@ -3427,6 +3427,16 @@ namespace {
         return false;
     }
 
+    bool wildcardTypeNameIsShadowed(const WildcardRecursionNode* node, const RcString& name, const ASTPath& path) {
+        for (; node; node = node->next) {
+            const auto entry = node->module->namespaceItems.find(name);
+            if (entry != node->module->namespaceItems.end() && !entry->second.fromGlob && !entry->second.fromPrelude && !entry->second.path.sameLookupPath(path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude, const WildcardRecursionNode* recursionStack, bool nested = false);
 
     std::unordered_map<RcString, ASTModule::IndexEnt>& getModIndex(ASTModule& mod, IndexName location) {
@@ -3452,8 +3462,17 @@ namespace {
         return false;
     }
 
-    void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false) {
+    void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false, const WildcardRecursionNode* recursionStack = nullptr) {
         ASSERT_BUG(sp, ir.bindings.hasBinding(), StringView("Adding item with no binding - ") << ir);
+        if (fromGlob && (location == IndexName::Namespace || location == IndexName::Type) && wildcardTypeNameIsShadowed(recursionStack, name, ir)) {
+            return;
+        }
+        if (location == IndexName::Type) {
+            const auto item = mod.namespaceItems.find(name);
+            if (item == mod.namespaceItems.end() || (!item->second.fromGlob && !item->second.fromPrelude && !item->second.path.sameLookupPath(ir))) {
+                return;
+            }
+        }
         auto& list = getModIndex(mod, location);
 
         if (location != IndexName::Namespace) {
@@ -3495,9 +3514,9 @@ namespace {
         }
     }
 
-    void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false) {
-        _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
-        _add_item(sp, mod, IndexName::Type, name, vis, std::move(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
+    void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false, const WildcardRecursionNode* recursionStack = nullptr) {
+        _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro, recursionStack);
+        _add_item(sp, mod, IndexName::Type, name, vis, std::move(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro, recursionStack);
     }
 
     void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false) {
@@ -3744,7 +3763,8 @@ namespace {
         const ASTVisibility& vis,
         ASTAbsolutePath modAp,
         bool fromPrelude,
-        bool nested
+        bool nested,
+        const WildcardRecursionNode* recursionStack
     ) {
         TRACE_FUNCTION_F(dstMod.path() << StringView(" <= ") << modAp);
         for (const auto& it : hmod.modItems) {
@@ -3762,14 +3782,14 @@ namespace {
                     const auto* hmod = &crate.externCrates.at(spath.crateName()).hir->rootModule;
                     if (spath.components().size() == 0) {
                         pb.binding = ASTPathBindingType::make_Module({nullptr, {nullptr, hmod}});
-                        _add_item(sp, dstMod, IndexName::Namespace, it.first, vis, ASTPath(pb), false, fromPrelude, /*from_glob=*/true, nested);
+                        _add_item(sp, dstMod, IndexName::Namespace, it.first, vis, ASTPath(pb), false, fromPrelude, /*from_glob=*/true, nested, false, recursionStack);
                         continue;
                     }
                     for (unsigned int i = 0; i < spath.components().size() - 1; i++) {
                         const auto& hit = hmod->modItems.at(spath.components()[i]);
                         if (i == spath.components().size() - 2 && hit->ent.is_Enum()) {
                             pb.binding = ASTPathBindingType::make_EnumVar({nullptr, 0});
-                            _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
+                            _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested, false, recursionStack);
                             hmod = nullptr;
                             break;
                         }
@@ -3826,7 +3846,7 @@ namespace {
                         break;
                     }
                 }
-                _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
+                _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested, false, recursionStack);
             }
         }
         for (const auto& it : hmod.valueItems) {
@@ -3935,12 +3955,12 @@ namespace {
 
         for (const auto& vi : srcMod.namespaceItems) {
             if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-                _add_item(sp, dstMod, IndexName::Namespace, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
+                _add_item(sp, dstMod, IndexName::Namespace, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro, recursionStack);
             }
         }
         for (const auto& vi : srcMod.typeItems) {
             if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-                _add_item(sp, dstMod, IndexName::Type, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
+                _add_item(sp, dstMod, IndexName::Type, vi.first, vi.second.vis.isAtLeast(dstVis) ? dstVis : vi.second.vis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro, recursionStack);
             }
         }
         for (const auto& vi : srcMod.valueItems) {
@@ -3982,13 +4002,13 @@ namespace {
         if (const auto* e = b.binding.opt_Crate()) {
             DEBUG(StringView("Glob crate ") << iData.path);
             const auto& hmod = e->crate_->hir->rootModule;
-            ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude, nested);
+            ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude, nested, recursionStack);
         } else if (const auto* e = b.binding.opt_Module()) {
             DEBUG(StringView("Glob mod ") << iData.path);
             if (!e->module_) {
                 ASSERT_BUG(sp, e->hir.mod, StringView("Glob import where HIR module pointer not set - ") << iData.path);
                 const auto& hmod = *e->hir.mod;
-                ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude, nested);
+                ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude, nested, recursionStack);
             } else {
                 ResolveIndexModuleWildcardSubmod(crate, dstMod, *e->module_, vis, fromPrelude, recursionStack, nested);
             }
@@ -4003,7 +4023,7 @@ namespace {
                         ASTPathBinding<ASTPathBindingType> pb;
                         pb.path = b.path + ev.name;
                         pb.binding = ASTPathBindingType::make_EnumVar({e.enum_, idx});
-                        _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
+                        _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested, false, recursionStack);
                     } else {
                         ASTPathBinding<ASTPathBindingValue> pb;
                         pb.path = b.path + ev.name;
@@ -4033,7 +4053,7 @@ namespace {
                             ASTPathBinding<ASTPathBindingType> pb;
                             pb.path = b.path + ev.name;
                             pb.binding = ASTPathBindingType::make_EnumVar({nullptr, idx, e.hir});
-                            _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
+                            _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested, false, recursionStack);
                         } else {
                             ASTPathBinding<ASTPathBindingValue> pb;
                             pb.path = b.path + ev.name;
@@ -4057,7 +4077,7 @@ namespace {
                 ASTPathBinding<ASTPathBindingType> pb;
                 pb.path = b.path + name;
                 pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
-                _add_item_type(sp, dstMod, name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
+                _add_item_type(sp, dstMod, name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested, false, recursionStack);
             };
             if (tp->hir) {
                 for (const auto& v : tp->hir->values) {
@@ -6192,15 +6212,6 @@ auto Context::lookupInMod(const Span& sp, const ASTModule& mod, const RcString& 
                 return true;
             }
         }
-            {
-                auto v = mod.typeItems.find(name);
-                if (v != mod.typeItems.end()) {
-                    DEBUG(StringView("- ") << mod.path() << StringView(" NS: Type ") << v->second.path);
-                    checkUnambiguous(sp, mod, name, v->second);
-                    path = ASTPath(v->second.path);
-                    return true;
-                }
-            }
             break;
 
         case LookupMode::Type:
