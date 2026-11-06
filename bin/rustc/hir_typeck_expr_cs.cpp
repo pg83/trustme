@@ -3123,37 +3123,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                     identityCandidates.pushBack(&candidate);
                 }
             }
-            /* The dereference steps of one reborrow are one source, not several: with
-               the target's pointee unknown, upstream's `coerce_unsized` finds
-               `Source: Unsize<?T>` ambiguous and takes that as "no unsizing", and
-               `coerce_borrowed_pointer` then unifies the target with the first step
-               that fits - which for an unknown is the first, the source's own pointee.
-               `use_ref(&mut &&&&&t)` reads `T` as `&&&&&&Box<_>`, not as any of the
-               types further down the chain. */
-            const PossibleType* alternativesHead = nullptr;
-            bool alternativesOfOneReborrow = !identityCandidates.empty();
-            {
-                unsigned headGroup = 0;
-                for (const auto& endpoint : coercionRefs.endpoints) {
-                    if (!coercionEndpointCanDetermineType(context, endpoint) || endpoint.alternativeGroup == 0 || endpoint.direction != SolverCoercionConstraint::Direction::InputIsDestination) {
-                        alternativesOfOneReborrow = false;
-                        break;
-                    }
-                    if (headGroup == 0) {
-                        headGroup = endpoint.alternativeGroup;
-                        const auto* head = context.getType(endpoint.other);
-                        for (const auto* candidate : identityCandidates) {
-                            if (candidate->ty == head) {
-                                alternativesHead = candidate;
-                            }
-                        }
-                    } else if (endpoint.alternativeGroup != headGroup) {
-                        alternativesOfOneReborrow = false;
-                        break;
-                    }
-                }
-            }
-            const PossibleType* identityCandidate = identityCandidates.length() == 1 ? identityCandidates[0] : alternativesOfOneReborrow ? alternativesHead : nullptr;
+            const PossibleType* identityCandidate = identityCandidates.length() == 1 ? identityCandidates[0] : nullptr;
             if (finalPhase
                 && allowIdentityCommit
                 && identityCandidate
