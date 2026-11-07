@@ -5978,15 +5978,7 @@ void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int t
 
         DEBUG(StringView("Through S") << scopeIdx << StringView(": ") << scopeDef.data.tagStr());
         if (auto* sdLoop = scopeDef.data.opt_Loop()) {
-            if (sdLoop->exitStateValid) {
-                DEBUG(StringView("Crossing loop with existing end state"));
-                for (auto idx : srcList) {
-                    auto v = sdLoop->exitState.states.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
-                    ASSERT_BUG(sp, v.second, StringView(""));
-                }
-            } else {
-                DEBUG(StringView("Crossing loop with no end state"));
-            }
+            DEBUG(StringView("Crossing loop with no end state"));
 
             for (auto idx : srcList) {
                 auto v2 = sdLoop->changedSlots.insert(std::make_pair(idx, VarState(InvalidType::Uninit)));
