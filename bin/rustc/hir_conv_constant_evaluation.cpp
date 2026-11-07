@@ -6042,7 +6042,12 @@ auto Expander::visitTraitPath(HIRTraitPath& p) -> void {
 
 auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
     auto saved = getParams;
-    if (const auto* e = p.data.opt_UfcsInherent(); pc != HIRVisitor::PathContext::VALUE && e && e->type->hasTypeInfer()) {
+    if (const auto* e = p.data.opt_UfcsInherent(); pc != HIRVisitor::PathContext::VALUE && e &&
+        (e->type->hasTypeInfer() || visitTyWith(e->type, [](const HIRType* type) {
+            const auto* erased = type->opt_ErasedType();
+            const auto* opaque = erased ? erased->inner.opt_Alias() : nullptr;
+            return opaque && !opaque->inner->type;
+        }))) {
         auto savedUnresolved = paramsUnresolved;
         getParams = nullptr;
         paramsUnresolved = true;
