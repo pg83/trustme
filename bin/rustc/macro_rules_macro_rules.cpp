@@ -55,7 +55,7 @@ namespace {
 
         const std::vector<CapturedVar>& mappings() const;
 
-        void setLoopCounts(loopCountsT loopCounts);
+        void setLoopCounts(loopCountsT loopCounts, size_t variableCount);
 
         void insert(unsigned int nameIndex, const Vector<unsigned int>& iterations, InterpolatedFragment data);
 
@@ -2152,7 +2152,7 @@ namespace {
             for (const auto& cap : captureInfo) {
                 boundTts.insert(cap.bindingIdx, cap.iterations, mv$(captures[cap.capIdx]));
             }
-            boundTts.setLoopCounts(armStream.takeLoopCounts());
+            boundTts.setLoopCounts(armStream.takeLoopCounts(), rules.rules[i].paramNames.length());
             return i;
         }
     }
@@ -2485,6 +2485,9 @@ namespace {
                             ERROR(lex.pointSpan(), E0000, StringView("Unknown macro variable $") << name << StringView(" in count expression"));
                         }
 
+                        if (loopDepth >= ns->loops.length()) {
+                            ERROR(lex.pointSpan(), E0000, StringView("count requires a metavariable that is still repeating at this depth"));
+                        }
                         DEBUG(StringView("$") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
                         if (varUsagePtr) {
                             varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
@@ -3099,7 +3102,7 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const Vector<un
             return 1;
         }
         if (e->size() == 0) {
-            BUG(sp, StringView("Attempting to get binding for empty capture - #") << nameIdx);
+            return 0;
         }
     }
 
@@ -3947,7 +3950,10 @@ auto ParameterMappings::mappings() const -> const std::vector<CapturedVar>& {
     return mappings_;
 }
 
-auto ParameterMappings::setLoopCounts(loopCountsT loopCounts) -> void {
+auto ParameterMappings::setLoopCounts(loopCountsT loopCounts, size_t variableCount) -> void {
+    if (mappings_.size() < variableCount) {
+        mappings_.resize(variableCount);
+    }
     this->loopCounts = std::move(loopCounts);
 }
 
