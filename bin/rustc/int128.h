@@ -353,10 +353,6 @@ public:
         return *this != S128(x);
     }
 
-    S128& operator<<=(unsigned bits);
-
-    S128& operator>>=(unsigned bits);
-
     S128 operator<<(unsigned bits) const {
         return S128(inner << bits);
     }

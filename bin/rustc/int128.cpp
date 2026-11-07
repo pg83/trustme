@@ -333,16 +333,6 @@ Ordering S128::ord(const S128& x) const {
     return c < 0 ? OrdLess : OrdGreater;
 }
 
-S128& S128::operator<<=(unsigned bits) {
-    *this = *this << bits;
-    return *this;
-}
-
-S128& S128::operator>>=(unsigned bits) {
-    *this = *this >> bits;
-    return *this;
-}
-
 S128 S128::operator>>(unsigned bits) const {
     if (bits == 0) {
         return *this;
