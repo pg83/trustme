@@ -512,7 +512,10 @@ namespace {
                     if (val.defaultValue.is_Infer()) {
                         ERROR(sp, E0000, StringView("Omitted value parameter with no default in ") << path);
                     } else if (val.defaultValue.is_Unevaluated()) {
-                        next.values.push_back(val.defaultValue.clone());
+                        auto rebound = val.defaultValue.as_Unevaluated()->clone();
+                        rebound.selfType = selfTy;
+                        rebound.paramsImpl = HIRPathParams(next);
+                        next.values.push_back(HIRConstGeneric(internUnevaluated(mv$(rebound))));
                     } else {
                         params = HIRPathParams(next);
                         MonomorphStatePtr ms(types, selfTy, &params, nullptr);
