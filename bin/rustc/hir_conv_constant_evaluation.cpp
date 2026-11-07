@@ -6088,12 +6088,6 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                         auto& e = vi.as_Function();
                         return e->params;
                     }
-                    case TypeckValuePtr::TAG_EnumConstructor: {
-                        TODO(sp, StringView("Handle EnumConstructor - ") << p);
-                    }
-                    case TypeckValuePtr::TAG_StructConstructor: {
-                        TODO(sp, StringView("Handle StructConstructor - ") << p);
-                    }
                 }
                 break;
             }
