@@ -2587,8 +2587,12 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
                alias through an `AliasRelate` goal - the alias is normalized and the
                result related - and never fails an occurs check on the alias itself;
                one that does not normalize yet stays open. */
-            const auto* otherPath = other->opt_Path();
-            if (otherPath && otherPath->path.data.is_UfcsKnown() && (otherPath->binding.is_Unbound() || otherPath->binding.is_Opaque())) {
+            const bool hasDeferredProjection = visitTyWith(other, [&](const HIRType* inner) {
+                const auto* path = inner->opt_Path();
+                return path && path->path.data.is_UfcsKnown() && (path->binding.is_Unbound() || path->binding.is_Opaque())
+                    && table_.containsLiveIvar(inner, rootIndex);
+            });
+            if (hasDeferredProjection) {
                 if (resolve_) {
                     const auto* normalized = resolve_->expandAssociatedTypes(sp_, other);
                     if (normalized != other) {
