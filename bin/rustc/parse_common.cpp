@@ -422,6 +422,33 @@ namespace {
         return cast<ASTExprNodeBlock>(&node) || cast<ASTExprNodeAsyncBlock>(&node) || cast<ASTExprNodeGeneratorBlock>(&node) || cast<ASTExprNodeTry>(&node) || cast<ASTExprNodeLoop>(&node) || cast<ASTExprNodeFor>(&node) || cast<ASTExprNodeWhile>(&node) || cast<ASTExprNodeMatch>(&node) || cast<ASTExprNodeIf>(&node);
     }
 
+    static bool exprEndsWithBrace(ASTExprNode* node) {
+        while (node && node->parens() == 0) {
+            if (exprIsBlockHeaded(*node) || cast<ASTExprNodeStructLiteral>(node)) {
+                return true;
+            }
+            if (const auto* binary = cast<ASTExprNodeBinOp>(node)) {
+                node = binary->right;
+            } else if (const auto* assignment = cast<ASTExprNodeAssign>(node)) {
+                node = assignment->value;
+            } else if (const auto* dereference = cast<ASTExprNodeDeref>(node)) {
+                node = dereference->value;
+            } else if (const auto* unary = cast<ASTExprNodeUniOp>(node)) {
+                if (unary->type == ASTExprNodeUniOp::QMARK || unary->type == ASTExprNodeUniOp::AWait || unary->type == ASTExprNodeUniOp::AWaitNext || unary->type == ASTExprNodeUniOp::USE) {
+                    return false;
+                }
+                node = unary->value;
+            } else if (const auto* closure = cast<ASTExprNodeClosure>(node)) {
+                node = closure->code;
+            } else if (const auto* flow = cast<ASTExprNodeFlow>(node)) {
+                node = flow->value;
+            } else {
+                return false;
+            }
+        }
+        return false;
+    }
+
     ASTExprNode* ParseStmtLet(TokenStream& lex, bool isSuper) {
         Token tok;
         ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes);
@@ -434,6 +461,9 @@ namespace {
         if (lex.getTokenIf(TOK_EQUAL)) {
             val = ParseExpr0(lex);
             if (lex.getTokenIf(TOK_RWORD_ELSE)) {
+                if (exprEndsWithBrace(val)) {
+                    ERROR(lex.pointSpan(), E0000, StringView("right curly brace before else in a let-else initializer requires parentheses"));
+                }
                 elseArm = ParseExprBlockNode(lex);
             }
         }
