@@ -285,9 +285,7 @@ namespace {
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG(StringView("Search all lists"));
                 for (const auto& list : it->second.named) {
-                    if (findImplsList(list.second, type, tyRes, crate.implMatcherScratch, callback)) {
-                        return true;
-                    }
+                    findImplsList(list.second, type, tyRes, crate.implMatcherScratch, callback);
                 }
             }
 
@@ -961,9 +959,7 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type,
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG(StringView("Search all lists"));
                 for (const auto& list : group->named) {
-                    if (findImplsList(list.second, type, tyRes, implMatcherScratch, callback)) {
-                        return true;
-                    }
+                    findImplsList(list.second, type, tyRes, implMatcherScratch, callback);
                 }
             }
 
