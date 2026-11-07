@@ -1,0 +1,14 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+
+[arch]
+name = "powerpc"
+pointer-bits = 64
+is-big-endian = false
+alignments = { u16 = 2, u32 = 4, u64 = 8, u128 = 16, f32 = 4, f64 = 8, ptr = 8 }
+
+[backend.c]
+variant = "gnu"
+emulate-i128 = false
