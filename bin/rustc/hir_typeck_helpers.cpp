@@ -15085,7 +15085,9 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     const bool hasCoercionGoals = query.coercions && !query.coercions->empty();
     const bool coercionSelectsCandidate = hasCoercionGoals && trait != resolve_.langPointeeSized();
     const bool hasSelfCoercionGoal = hasCoercionGoals && std::any_of(query.coercions->begin(), query.coercions->end(), [](const SolverCoercionConstraint& constraint) {
-        return constraint.isSelf;
+        return constraint.isSelf
+            && (constraint.direction != SolverCoercionConstraint::Direction::InputIsSource
+                || constraint.op != SolverCoercionOp::Unsizing);
     });
     const bool outermost = span_ == nullptr;
     if (outermost) {
