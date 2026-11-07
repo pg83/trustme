@@ -3377,20 +3377,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
             DEBUG(i << StringView(": possible_tys = ") << possibleTys);
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
-                bool removeOption = false;
-                // TODO: Ivars have been removed, this sort of check should be moved elsewhere.
-                if (tyL->as_Infer().tyClass == HIRInferClass::Integer) {
-                    if (const auto* te = (it->ty)->opt_Primitive()) {
-                    } else if (const auto* te = (it->ty)->opt_Path()) {
-                    } else {
-                        removeOption = true;
-                    }
-                }
-
-                it = (removeOption ? possibleTys.erase(it) : it + 1);
-            }
-            DEBUG(i << StringView(": possible_tys = ") << possibleTys);
-            for (auto it = possibleTys.begin(); it != possibleTys.end();) {
                 const bool removeOption = coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, it->ty);
                 if (removeOption) {
                     DEBUG(StringView("- Remove ") << *it << StringView(" due to bounds"));
