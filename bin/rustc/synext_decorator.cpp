@@ -1410,7 +1410,7 @@ namespace {
                 }
                 case MacroRef::TAG_MacroRules: {
                     if (!builtinDerive) {
-                        TODO(sp, StringView("Custom derive using macro_rules?"));
+                        ERROR(sp, E0000, StringView("macro_rules macro cannot be used as a derive macro: ") << traitPath);
                     }
                     break;
                 }
