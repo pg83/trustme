@@ -5913,9 +5913,6 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
     if (scopeStack.empty() || scopeStack.back() != scope.idx) {
         DEBUG(StringView("- m_scope_stack = [") << scopeStack << StringView("]"));
         auto it = std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
-        if (it == scopeStack.end()) {
-            BUG(sp, StringView("Terminating scope not on the stack - scope ") << scope.idx);
-        }
         BUG(sp, StringView("Terminating scope ") << scope.idx << StringView(" when not at top of stack, ") << (scopeStack.end() - it - 1) << StringView(" scopes in the way"));
     }
 
@@ -5954,9 +5951,6 @@ void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int t
     if (scopeStack.empty() || scopeStack.back() != source.idx) {
         DEBUG(StringView("- m_scope_stack = [") << scopeStack << StringView("]"));
         auto it = std::find(scopeStack.begin(), scopeStack.end(), source.idx);
-        if (it == scopeStack.end()) {
-            BUG(sp, StringView("Terminating scope not on the stack - scope ") << source.idx);
-        }
         BUG(sp, StringView("Terminating scope ") << source.idx << StringView(" when not at top of stack, ") << (scopeStack.end() - it - 1) << StringView(" scopes in the way"));
     }
     auto& srcScopeDef = scopes.at(source.idx);
