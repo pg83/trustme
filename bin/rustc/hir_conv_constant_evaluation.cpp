@@ -91,8 +91,6 @@ namespace {
         U128 mask(U128 v) const;
 
         U128 mask(S128 v) const;
-
-        double mask(double v) const;
     };
 
     struct GenericParamsCallback {
@@ -4635,10 +4633,6 @@ auto TypeInfo::mask(U128 v) const -> U128 {
         return U128(v.getLo() & maskVal);
     } else if (bits == 64) {
         return U128(v.getLo());
-    } else if (bits < 128) {
-        U128 maskVal = (U128(1) << bits) - 1u;
-        BUG_ASSERT(maskVal != 0);
-        return U128(v & maskVal);
     } else if (bits == 128) {
         return v;
     } else {
@@ -4652,10 +4646,6 @@ auto TypeInfo::mask(S128 v) const -> U128 {
     } else {
         return mask((v).getInner());
     }
-}
-
-auto TypeInfo::mask(double v) const -> double {
-    return v;
 }
 
 MIREvalPathCallback::MIREvalPathCallback(const HIRItemPath& path)
