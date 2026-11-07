@@ -60,14 +60,6 @@ namespace {
         void visit(HIRExprNodeConstParam& node) override;
     };
 
-    struct NewvalStateNop: public HIREvaluator::Newval {
-        const Span& sp;
-
-        NewvalStateNop(const Span& sp);
-
-        HIRPath newStatic(const HIRType* type, EncodedLiteral value, size_t alignment) override;
-    };
-
     struct NewvalState: public HIREvaluator::Newval {
         HIRModule& mod;
         const HIRItemPath& modPath;
@@ -635,7 +627,8 @@ namespace {
         auto name = anonConstBodyName(wb, expr);
         const auto& state = *expr.state;
 
-        NewvalStateNop nvs{sp};
+        HIRItemPath modIp{state.modPath};
+        NewvalState nvs{state.module, modIp, name.c_str(), wb.itemSerial};
         auto eval = HIREvaluator{sp, wb, nvs};
         eval.setRequireConstCalls();
         eval.resolve.setBothGenericsRaw(state.implGenerics, state.itemGenerics);
@@ -3866,15 +3859,6 @@ auto ExprCaptureScan::visitPathParams(HIRPathParams& pp) -> void {
 auto ExprCaptureScan::visit(HIRExprNodeConstParam& node) -> void {
     addSlot(out.valueMask, node.binding);
     HIRExprVisitorDef::visit(node);
-}
-
-NewvalStateNop::NewvalStateNop(const Span& sp)
-    : sp(sp)
-{
-}
-
-auto NewvalStateNop::newStatic(const HIRType* type, EncodedLiteral value, size_t alignment) -> HIRPath {
-    TODO(this->sp, StringView("new_static while evaluating a const generic"));
 }
 
 NewvalState::NewvalState(HIRModule& mod, const HIRItemPath& modPath, std::string prefix, u32& serial)
