@@ -2831,9 +2831,6 @@ auto TreeVisitor::visit(HIRExprNodeDeref& node) -> void {
 }
 
 auto TreeVisitor::visit(HIRExprNodeEmplace& node) -> void {
-    if (node.type == HIRExprNodeEmplace::Type::Noop) {
-        return node.value->visit(*this);
-    }
     os << StringView("(");
     this->visitNodePtr(node.place);
     os << StringView(" <- ");

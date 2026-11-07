@@ -2069,18 +2069,11 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeDeref& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeEmplace& node) -> void {
-    if (node.type == HIRExprNodeEmplace::Type::Noop) {
-        if (node.place) {
-            this->visitNodePtr(node.place);
-        }
-        this->visitNodePtr(node.value);
-    } else {
-        auto _ = pushUsage(HIRValueUsage::Move);
-        if (node.place) {
-            this->visitNodePtr(node.place);
-        }
-        this->visitNodePtr(node.value);
+    auto _ = pushUsage(HIRValueUsage::Move);
+    if (node.place) {
+        this->visitNodePtr(node.place);
     }
+    this->visitNodePtr(node.value);
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeField& node) -> void {
