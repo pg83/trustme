@@ -947,7 +947,7 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
             return false;
         }
     }
-    return true;
+    return cb.valuesEqual(parentArgs, this->traitArgs);
 }
 
 bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const {

@@ -759,7 +759,7 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool assembledHeadIsExact(const HIRPathParams& goalParams, const HIRType* goalType, const SolverImpl& impl) const;
 
-    Certainty unifyImplHead(const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRType* implType, const HIRPathParams& goalParams, const HIRType* goalType, HIRPathParams& outputParams, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities);
+    Certainty unifyImplHead(const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRType* implType, const HIRPathParams& goalParams, const HIRType* goalType, HIRPathParams& outputParams, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities, const HIRGenericParams& traitParamsDef);
 
     void assembleAliasBoundCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRType* type);
 
@@ -866,9 +866,9 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     /* Upstream `specializes(child, parent)`: does `parent` apply to every type `child`
        does?  A property of the two impls alone, so it is computed once per pair. */
-    bool specializes(const HIRTraitImpl& child, const HIRTraitImpl& parent);
+    bool specializes(const HIRSimplePath& trait, const HIRTraitImpl& child, const HIRTraitImpl& parent);
 
-    bool specializesUncached(const HIRTraitImpl& child, const HIRTraitImpl& parent);
+    bool specializesUncached(const HIRSimplePath& trait, const HIRTraitImpl& child, const HIRTraitImpl& parent);
 
     bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right);
 
@@ -11700,7 +11700,7 @@ auto NextTraitGoalEvaluator::assembledHeadIsExact(const HIRPathParams& goalParam
     return goalType == impl.getImplType(crate.types) && goalParams == impl.getTraitParamsRef(crate.types);
 }
 
-auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRType* implType, const HIRPathParams& goalParams, const HIRType* goalType, HIRPathParams& outputParams, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities) -> Certainty {
+auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitArgs, const HIRType* implType, const HIRPathParams& goalParams, const HIRType* goalType, HIRPathParams& outputParams, bool& headNormalizationAmbiguity, ThinVector<SolverTypeEquality>& headEqualities, ThinVector<SolverValueEquality>& headValueEqualities, const HIRGenericParams& traitParamsDef) -> Certainty {
     const auto snapshot = resolve_.ivars.snapshot();
     STD_DEFER {
         resolve_.ivars.rollbackTo(snapshot);
@@ -11759,7 +11759,14 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         }
     }
     for (size_t i = 0; i < candidateParams.values.size(); i++) {
-        relation = unifier.unifyValues(goalParams.values[i], candidateParams.values[i]);
+        resolvedInferenceParams = inferenceParams.map(
+            [&](const HIRType* type) { return resolve_.ivars.getType(type); },
+            [&](const HIRConstGeneric& value) { return resolve_.ivars.getValue(value).clone(); });
+        auto normalizedCandidateParams = resolvedMonomorph.monomorphPathParams(span(), implTraitArgs, true);
+        auto normalizedGoalParams = goalParams.clone();
+        ConvertHIRConstantEvaluateMethodParams(span(), resolve_.board(), crate, &traitParamsDef, normalizedCandidateParams);
+        ConvertHIRConstantEvaluateMethodParams(span(), resolve_.board(), crate, &traitParamsDef, normalizedGoalParams);
+        relation = unifier.unifyValues(normalizedGoalParams.values[i], normalizedCandidateParams.values[i]);
         if (relation == Unifier::Outcome::Mismatch) {
             return Certainty::NoSolution;
         }
@@ -12042,7 +12049,7 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
             bool headNormalizationAmbiguity = false;
             ThinVector<SolverTypeEquality> headEqualities;
             ThinVector<SolverValueEquality> headValueEqualities;
-            const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+            const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities, traitDef.params);
             if (relation != Certainty::NoSolution) {
                 pushCandidate(frameIndex, SolverImpl(std::move(implParams), traitDef, trait, impl), relation == Certainty::Proven, relation, nullptr, {}, false, CandidateSource::TraitImpl, headNormalizationAmbiguity, std::move(headEqualities), std::move(headValueEqualities));
             }
@@ -12055,7 +12062,7 @@ auto NextTraitGoalEvaluator::assembleTraitImplCandidates(size_t frameIndex, cons
             bool headNormalizationAmbiguity = false;
             ThinVector<SolverTypeEquality> headEqualities;
             ThinVector<SolverValueEquality> headValueEqualities;
-            const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities);
+            const auto relation = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity, headEqualities, headValueEqualities, traitDef.params);
             if (relation != Certainty::NoSolution) {
                 hasAutoTraitImpl = true;
                 auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
@@ -14901,17 +14908,17 @@ auto NextTraitGoalEvaluator::evaluateOverlap(const Span& callSpan, const HIRSimp
     return rv;
 }
 
-auto NextTraitGoalEvaluator::specializes(const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
+auto NextTraitGoalEvaluator::specializes(const HIRSimplePath& trait, const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
     auto& relation = crateCache().specializations;
     if (const auto* cached = relation.find(child, parent)) {
         return cached->holds;
     }
-    const bool rv = specializesUncached(child, parent);
+    const bool rv = specializesUncached(trait, child, parent);
     relation.insert(child, parent, rv);
     return rv;
 }
 
-auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
+auto NextTraitGoalEvaluator::specializesUncached(const HIRSimplePath& trait, const HIRTraitImpl& child, const HIRTraitImpl& parent) -> bool {
     /* Only a crate that opted into specialization may specialize, and only a positive
        impl may specialize a positive one.  A const parent is only specialized by a const
        child. */
@@ -14947,11 +14954,13 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, cons
         StaticTraitResolve& probe;
         const HIRCrate& crate;
         const Span& sp;
+        const HIRGenericParams& traitParams;
 
-        Prover(StaticTraitResolve& probe, const HIRCrate& crate, const Span& sp)
+        Prover(StaticTraitResolve& probe, const HIRCrate& crate, const Span& sp, const HIRGenericParams& traitParams)
             : probe(probe)
             , crate(crate)
             , sp(sp)
+            , traitParams(traitParams)
         {
         }
 
@@ -14989,6 +14998,19 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, cons
             return leftNormalized == rightNormalized || leftNormalized->equalsIgnoringRegions(rightNormalized);
         }
 
+        bool valuesEqual(const HIRPathParams& left, const HIRPathParams& right) override {
+            auto leftNormalized = left.clone();
+            auto rightNormalized = right.clone();
+            ConvertHIRConstantEvaluateMethodParams(sp, probe.board(), crate, &traitParams, leftNormalized);
+            ConvertHIRConstantEvaluateMethodParams(sp, probe.board(), crate, &traitParams, rightNormalized);
+            for (size_t i = 0; i < leftNormalized.values.size(); i++) {
+                if (leftNormalized.values[i] != rightNormalized.values[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         bool sizedBound(const HIRType* type) override {
             const bool sized = probe.typeIsSized(sp, type);
             DEBUG(StringView("parent sized ") << type << StringView(" => ") << sized);
@@ -15003,7 +15025,7 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRTraitImpl& child, cons
             DEBUG(StringView("parent projection ") << projection << StringView(" => ") << (unresolved ? StringView("unresolved") : StringView("")) << (unresolved ? nullptr : normalized));
             return unresolved ? nullptr : normalized;
         }
-    } prover{probe, crate, sp};
+    } prover{probe, crate, sp, crate.getTraitByPath(sp, trait).params};
 
     const bool rv = child.headWithin(sp, crate.types, parent, prover);
     DEBUG(StringView("specializes => ") << rv);
@@ -15038,7 +15060,7 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     bool rightHeadNormalizationAmbiguity = false;
     ThinVector<SolverTypeEquality> rightHeadEqualities;
     ThinVector<SolverValueEquality> rightHeadValueEqualities;
-    const auto rightRelation = this->unifyImplHead(right.params, right.traitArgs, right.type, goalParams, goalType, rightParams, rightHeadNormalizationAmbiguity, rightHeadEqualities, rightHeadValueEqualities);
+    const auto rightRelation = this->unifyImplHead(right.params, right.traitArgs, right.type, goalParams, goalType, rightParams, rightHeadNormalizationAmbiguity, rightHeadEqualities, rightHeadValueEqualities, crate.getTraitByPath(callSpan, trait).params);
     if (rightRelation == Certainty::NoSolution) {
         return false;
     }
@@ -15902,14 +15924,14 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                     const Candidate* inheritedFrom = nullptr;
                     if (output == nullptr && candidate->impl.isTraitImpl()) {
                         const auto considerInherited = [&](const Candidate* source) {
-                            if (!source || !source->impl.isTraitImpl() || !specializes(*candidate->impl.traitImpl, *source->impl.traitImpl)) {
+                            if (!source || !source->impl.isTraitImpl() || !specializes(trait, *candidate->impl.traitImpl, *source->impl.traitImpl)) {
                                 return;
                             }
                             auto sourceImpl = monomorphCandidateImpl(source->impl, canonicalizer);
                             if (sourceImpl.getType(crate.types, assocName, itemParams) == nullptr) {
                                 return;
                             }
-                            if (!inheritedFrom || specializes(*source->impl.traitImpl, *inheritedFrom->impl.traitImpl)) {
+                            if (!inheritedFrom || specializes(trait, *source->impl.traitImpl, *inheritedFrom->impl.traitImpl)) {
                                 inheritedFrom = source;
                             }
                         };
@@ -16701,7 +16723,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (!shadowed->impl.isTraitImpl()) {
             return;
         }
-        if (!winner->specializationItemSource || specializes(*shadowed->impl.traitImpl, *winner->specializationItemSource->impl.traitImpl)) {
+        if (!winner->specializationItemSource || specializes(trait, *shadowed->impl.traitImpl, *winner->specializationItemSource->impl.traitImpl)) {
             winner->specializationItemSource = shadowed;
         }
     };
@@ -16711,6 +16733,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (!head.ready) {
             head.type = normalizeGoalInput(impl.getImplType(crate.types));
             head.params = impl.getTraitParamsRef(crate.types).mapTypes([&](const HIRType* param) { return normalizeGoalInput(param); });
+            ConvertHIRConstantEvaluateMethodParams(span(), resolve_.board(), crate, &crate.getTraitByPath(span(), trait).params, head.params);
             head.ready = true;
         }
         return head;
@@ -16763,8 +16786,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                Reading it off the heads alone let `TryFrom<usize> for i32` retire the
                blanket `TryFrom<U> for T where U: Into<T>` on `i32: TryFrom<_>`, though
                `usize: Into<i32>` never holds; the goal is ambiguous until `_` is known. */
-            const bool leftSpecializes = specializes(*left.traitImpl, *right.traitImpl);
-            const bool rightSpecializes = !leftSpecializes && specializes(*right.traitImpl, *left.traitImpl);
+            const bool leftSpecializes = specializes(trait, *left.traitImpl, *right.traitImpl);
+            const bool rightSpecializes = !leftSpecializes && specializes(trait, *right.traitImpl, *left.traitImpl);
             if (leftSpecializes) {
                 if (frame.viable[i]->certainty == Certainty::Proven && !frame.viable[i]->ambiguityBeyondHead) {
                     frame.viable[j]->discarded = true;

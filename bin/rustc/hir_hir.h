@@ -589,6 +589,7 @@ struct HIRSpecializationBoundCallback {
     virtual bool traitBound(const HIRType* type, const HIRTraitPath& trait) = 0;
     virtual bool sizedBound(const HIRType* type) = 0;
     virtual bool typeEquality(const HIRType* left, const HIRType* right) = 0;
+    virtual bool valuesEqual(const HIRPathParams& left, const HIRPathParams& right) = 0;
 
     /* What `<type as sourceTrait>::item<atyParams>` is in the child's environment, or
        null when it does not resolve there. */
