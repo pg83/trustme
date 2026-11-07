@@ -75,9 +75,6 @@ namespace {
     }
 
     static int bitLength128(u128 v) {
-        if (v == 0) {
-            return 0;
-        }
         return 128 - clz128(v);
     }
 
