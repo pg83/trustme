@@ -208,18 +208,11 @@ struct HIRTypeCloneCb final: HIRTypeCloneCallback {
 };
 
 const HIRType* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRType* tpl, HIRTypeCloneCallback& callback);
-HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
 
 template <typename F>
 const HIRType* cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRType* tpl, F f) {
     HIRTypeCloneCb<F> cb(f);
     return cloneTyWithCb(types, sp, tpl, cb);
-}
-
-template <typename F>
-HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, F f) {
-    HIRTypeCloneCb<F> cb(f);
-    return clonePathParamsWithCb(types, sp, tpl, cb);
 }
 
 void checkTypeClassPrimitive(const Span& sp, const HIRType* type, HIRInferClass ic, HIRCoreType ct);

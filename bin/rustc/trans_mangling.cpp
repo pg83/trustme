@@ -164,14 +164,6 @@ RcString TransMangle(const WireBoard& wb, const HIRPath& p) {
     return mangleFinish(sb);
 }
 
-RcString TransMangleValue(const WireBoard& wb, const HIRGenericPath& p) {
-    return symbolOfHash(TransValueIdentity(wb, p));
-}
-
-RcString TransMangleValue(const WireBoard& wb, const HIRSimplePath& p) {
-    return TransMangleValue(wb, HIRGenericPath(p));
-}
-
 RcString TransMangleValue(const WireBoard& wb, const HIRPath& p) {
     return symbolOfHash(TransValueIdentity(wb, p));
 }

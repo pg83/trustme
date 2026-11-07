@@ -3464,10 +3464,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         return sp.parent();
     }
 
-    inline HIRGenericPath getRuleParentPath(const HIRGenericPath& gp) {
-        return HIRGenericPath(gp.path.parent(), gp.params.clone());
-    }
-
     void visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr, const HIRTypeImpl* selectedImpl);
 
     template <typename T>

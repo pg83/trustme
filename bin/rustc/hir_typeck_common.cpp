@@ -474,10 +474,6 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
     }
 }
 
-HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback) {
-    return tpl.mapTypes([&](const HIRType* type) { return cloneTyWithCb(types, sp, type, callback); });
-}
-
 const HIRType* cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRType* tpl, HIRTypeCloneCallback& callback) {
     CloneTyWithMonomorph m(types, callback);
     return m.monomorphType(sp, tpl, true);
