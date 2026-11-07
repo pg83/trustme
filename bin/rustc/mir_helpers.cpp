@@ -878,6 +878,12 @@ const HIRType* MIRTypeResolve::isTypeOwnedBox(const HIRType* ty) const {
 size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MIRParam>& values) const {
     const auto* curTy = ty;
     size_t baseOfs = 0;
+    const auto isVariantFieldIndex = [](const MIRParam& value) {
+        const auto* constant = value.opt_Constant();
+        const auto* index = constant ? constant->opt_Uint() : nullptr;
+        return index && index->t == HIRCoreType::U32;
+    };
+    const bool variantAndField = values.size() == 2 && isVariantFieldIndex(values[0]) && isVariantFieldIndex(values[1]);
     for (size_t i = 0; i < values.size(); i++) {
         MIR_ASSERT(*this, values[i].is_Constant(), StringView("Arguments to `offset_of` must be constants"));
         size_t idx = 0;
@@ -940,6 +946,15 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRType* ty, const std::vector<MI
                     }
                     break;
                 }
+            }
+        }
+        if (variantAndField && i == 0) {
+            const auto* path = curTy->opt_Path();
+            if (!path || !path->binding.is_Enum()) {
+                if (idx != 0) {
+                    ERROR(sp, E0000, StringView("non-enum offset_of variant index must be zero"));
+                }
+                continue;
             }
         }
         auto* repr = TargetGetTypeRepr(this->sp, resolve, curTy);
