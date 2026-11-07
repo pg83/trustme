@@ -27,14 +27,6 @@ Token TTStream::realGetToken() {
         BUG_ASSERT(stack.back().second);
         const TokenTree& tree = *stack.back().second;
 
-        if (idx == 0 && tree.isToken()) {
-            idx++;
-            edition = tree.getEdition();
-            hygienePtr = &tree.hygiene();
-            DEBUG(tree.tok());
-            return tree.tok();
-        }
-
         if (idx < tree.size()) {
             const TokenTree& subtree = tree[idx];
             idx++;
