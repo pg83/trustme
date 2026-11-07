@@ -1031,16 +1031,8 @@ auto BigUint::shiftLeft(size_t bits) -> void {
 }
 
 auto BigUint::shiftRightSticky(size_t bits, bool& sticky) -> void {
-    if (bits == 0) {
-        return;
-    }
     const size_t whole = bits / 64;
     const unsigned rest = bits % 64;
-    if (whole >= limbs_.length()) {
-        sticky |= !isZero();
-        limbs_.clear();
-        return;
-    }
     for (size_t i = 0; i < whole; i++) {
         sticky |= limbs_[i] != 0;
     }
