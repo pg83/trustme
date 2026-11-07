@@ -167,15 +167,8 @@ ASTEdition TokenStream::lookaheadEdition(unsigned int i) {
 }
 
 bool TokenStream::lookaheadIdentIs(unsigned int i, const char* name) {
-    if (this->lookahead(i) != TOK_IDENT) {
-        return false;
-    }
-    if (cacheValid) {
-        if (i == 0) {
-            return cache.ident().name == name;
-        }
-        i--;
-    }
+    BUG_ASSERT(!cacheValid);
+    BUG_ASSERT(this->lookahead(i) == TOK_IDENT);
     return lookaheadAt(i).tok.ident().name == name;
 }
 
