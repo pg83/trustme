@@ -1060,29 +1060,19 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
         switch (ti.ty) {
             case TypeInfo::Unsigned: {
                 auto l = localState.readParamUint(ti.bits, valL);
-                switch (op) {
-                    case MIRBinOp::BIT_SHL:
-                        dst.writeUint(state, ti.bits, ti.mask(l << amt));
-                        break;
-                    case MIRBinOp::BIT_SHR:
-                        dst.writeUint(state, ti.bits, ti.mask(l >> amt));
-                        break;
-                    default:
-                        MIR_BUG(state, StringView("This block should only be active for SHL/SHR"));
+                if (op == MIRBinOp::BIT_SHL) {
+                    dst.writeUint(state, ti.bits, ti.mask(l << amt));
+                } else {
+                    dst.writeUint(state, ti.bits, ti.mask(l >> amt));
                 }
                 break;
             }
             case TypeInfo::Signed: {
                 auto l = localState.readParamSint(ti.bits, valL);
-                switch (op) {
-                    case MIRBinOp::BIT_SHL:
-                        dst.writeUint(state, ti.bits, ti.mask(l << amt));
-                        break;
-                    case MIRBinOp::BIT_SHR:
-                        dst.writeUint(state, ti.bits, ti.mask(l >> amt));
-                        break;
-                    default:
-                        MIR_BUG(state, StringView("This block should only be active for SHL/SHR"));
+                if (op == MIRBinOp::BIT_SHL) {
+                    dst.writeUint(state, ti.bits, ti.mask(l << amt));
+                } else {
+                    dst.writeUint(state, ti.bits, ti.mask(l >> amt));
                 }
                 break;
             }
@@ -1144,9 +1134,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                 case MIRBinOp::BIT_AND:
                 case MIRBinOp::BIT_XOR:
                     MIR_BUG(state, StringView("do_arith float with bitwise - val = ") << l << StringView(" , ") << r);
-                case MIRBinOp::BIT_SHL:
-                case MIRBinOp::BIT_SHR:
-                    MIR_BUG(state, StringView("Bitshifts should be handled in caller"));
                 case MIRBinOp::EQ:
                     dst.writeByte(state, l == r);
                     break;
@@ -1221,9 +1208,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                 case MIRBinOp::BIT_XOR:
                     dst.writeUint(state, ti.bits, l ^ r);
                     break;
-                case MIRBinOp::BIT_SHL:
-                case MIRBinOp::BIT_SHR:
-                    MIR_BUG(state, StringView("Bitshifts should be handled in caller"));
 
                 case MIRBinOp::EQ:
                     dst.writeByte(state, l == r);
@@ -1312,9 +1296,6 @@ static bool doArithChecked(MIREvalCallStackEntry& localState, const HIRType* ty,
                 case MIRBinOp::BIT_XOR:
                     dst.writeUint(state, ti.bits, (l ^ r).getInner());
                     break;
-                case MIRBinOp::BIT_SHL:
-                case MIRBinOp::BIT_SHR:
-                    MIR_BUG(state, StringView("Bitshifts should be handled in caller"));
 
                 case MIRBinOp::EQ:
                     dst.writeByte(state, l == r);
