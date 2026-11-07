@@ -3659,8 +3659,8 @@ auto DeriverClone::makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGener
     // TODO: What if the type is only conditionally copy? (generic over something)
 
     // TODO: Are these bounds needed?
-    for (auto& b : ret.def().params().bounds) {
-        auto& be = b.as_IsTrait();
+    for (size_t i = p.bounds.size(); i < ret.def().params().bounds.size(); i++) {
+        auto& be = ret.def().params().bounds[i].as_IsTrait();
         be.trait = getPath(opts.coreName, "marker", "Copy");
     }
 
