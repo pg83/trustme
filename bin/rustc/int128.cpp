@@ -97,11 +97,6 @@ U128& U128::operator*=(unsigned x) {
     return *this;
 }
 
-U128& U128::operator*=(U128 x) {
-    *this = *this * x;
-    return *this;
-}
-
 U128& U128::operator|=(unsigned x) {
     *this = *this | x;
     return *this;
@@ -109,11 +104,6 @@ U128& U128::operator|=(unsigned x) {
 
 U128& U128::operator|=(U128 x) {
     *this = *this | x;
-    return *this;
-}
-
-U128& U128::operator&=(unsigned x) {
-    *this = *this & x;
     return *this;
 }
 

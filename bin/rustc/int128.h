@@ -130,13 +130,9 @@ public:
 
     U128& operator*=(unsigned x);
 
-    U128& operator*=(U128 x);
-
     U128& operator|=(unsigned x);
 
     U128& operator|=(U128 x);
-
-    U128& operator&=(unsigned x);
 
     U128& operator&=(U128 x);
 
