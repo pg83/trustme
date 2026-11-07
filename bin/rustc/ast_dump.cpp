@@ -1261,7 +1261,7 @@ auto RustPrinter::visit(ASTExprNodeCallObject& n) -> void {
 }
 
 auto RustPrinter::visit(ASTExprNodeLoop& n) -> void {
-    bool exprRoot = exprRoot;
+    const bool wasExprRoot = exprRoot;
     exprRoot = false;
 
     if (n.label.name != "") {
@@ -1270,7 +1270,7 @@ auto RustPrinter::visit(ASTExprNodeLoop& n) -> void {
 
     os << StringView("loop");
 
-    if (exprRoot) {
+    if (wasExprRoot) {
         os << StringView("\n");
         os << indent();
     } else {
@@ -1301,7 +1301,7 @@ auto RustPrinter::visitIfletConditions(std::vector<ASTIfLetCondition>& conds) ->
 }
 
 auto RustPrinter::visit(ASTExprNodeWhile& n) -> void {
-    bool exprRoot = exprRoot;
+    const bool wasExprRoot = exprRoot;
     exprRoot = false;
 
     if (n.label.name != "") {
@@ -1310,7 +1310,7 @@ auto RustPrinter::visit(ASTExprNodeWhile& n) -> void {
 
     os << StringView("while ");
     visitIfletConditions(n.conditions);
-    if (exprRoot) {
+    if (wasExprRoot) {
         os << StringView("\n");
         os << indent();
     } else {
@@ -1321,12 +1321,12 @@ auto RustPrinter::visit(ASTExprNodeWhile& n) -> void {
 }
 
 auto RustPrinter::visit(ASTExprNodeMatch& n) -> void {
-    bool exprRoot = exprRoot;
+    const bool wasExprRoot = exprRoot;
     exprRoot = false;
     os << StringView("match ");
     ASTNodeVisitor::visit(n.val);
 
-    if (exprRoot) {
+    if (wasExprRoot) {
         os << StringView("\n");
         os << indent() << StringView("{\n");
     } else {
@@ -1355,7 +1355,7 @@ auto RustPrinter::visit(ASTExprNodeMatch& n) -> void {
         os << StringView(",\n");
     }
 
-    if (exprRoot) {
+    if (wasExprRoot) {
         os << indent() << StringView("}");
     } else {
         os << indent() << StringView("}");
@@ -1364,11 +1364,11 @@ auto RustPrinter::visit(ASTExprNodeMatch& n) -> void {
 }
 
 auto RustPrinter::visit(ASTExprNodeIf& n) -> void {
-    bool exprRoot = exprRoot;
+    const bool wasExprRoot = exprRoot;
     exprRoot = false;
     for (auto& arm : n.arms) {
         if (&arm != n.arms.data()) {
-            if (exprRoot) {
+            if (wasExprRoot) {
                 os << indent();
             }
             os << StringView("else ");
@@ -1385,12 +1385,12 @@ auto RustPrinter::visit(ASTExprNodeIf& n) -> void {
         if (!isBlock) {
             os << StringView(" }");
         }
-        if (exprRoot) {
+        if (wasExprRoot) {
             os << StringView("\n");
         }
     }
     if (n.elseNode) {
-        if (exprRoot) {
+        if (wasExprRoot) {
             os << indent();
         }
         os << StringView("else");
