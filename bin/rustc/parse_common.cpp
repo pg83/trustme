@@ -5790,10 +5790,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             DEBUG(StringView("path_attr = \"") << pathAttr << StringView("\""));
             FsPath subPath;
             bool subFileControlsDir = true;
-            if (modFileinfo.path == "-") {
-                if (hasPathAttr) {
-                    ERROR(lex.pointSpan(), E0000, StringView("Cannot load module from file when reading stdin"));
-                }
+            if (modFileinfo.path == "-" && !hasPathAttr) {
                 subPath = "-";
             } else if (hasPathAttr) {
                 bool inSubmod = modFileinfo.path[modFileinfo.path.size() - 1] == '/';
