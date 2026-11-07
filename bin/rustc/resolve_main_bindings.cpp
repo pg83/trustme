@@ -1982,6 +1982,7 @@ namespace {
                     case GenericParam::TAG_Value: {
                         auto& param = tuMatch.as_Value();
                         ResolveAbsoluteType(context, param.type());
+                        auto rootBlock = context.enterRootblock();
                         ResolveAbsoluteExpr(context, param.defaultValue());
                         break;
                     }
