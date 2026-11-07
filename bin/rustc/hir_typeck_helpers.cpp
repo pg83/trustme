@@ -6823,6 +6823,9 @@ TraitResolution::Autoderef TraitResolution::autoderefStep(const Span& sp, const 
 
         this->probeTraitGoalMayApply(sp, langDeref_, HIRPathParams{}, ty, [&](SolverMayApply probe) {
             const auto inspect = [&](const SolverImpl& solverImpl, SolverCertainty candidateCertainty) {
+                if (solverImpl.getImplType(crate.types)->is_Pointer()) {
+                    return;
+                }
                 auto foundTarget = solverImpl.getType(crate.types, "Target", {});
                 if (foundTarget == nullptr) {
                     foundTarget = crate.types.path(HIRPath(ty, langDeref_, RcString::newInterned("Target")), HIRTypePathBinding::make_Opaque({}));
