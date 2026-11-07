@@ -5217,12 +5217,6 @@ namespace {
             if (it->second->ent.is_Module()) {
                 auto& mod = it->second->ent.as_Module();
                 hmod = &mod;
-            } else if (it->second->ent.is_Import()) {
-                auto& import = it->second->ent.as_Import();
-                hmod = getHirModByPath(sp, crate, import.path);
-                if (!hmod) {
-                    BUG(sp, StringView("Import in module position didn't resolve as a module - ") << import.path);
-                }
             } else if (it->second->ent.is_Enum()) {
                 auto& enm = it->second->ent.as_Enum();
                 if (&node == &path.components().back()) {
