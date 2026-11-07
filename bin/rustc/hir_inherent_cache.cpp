@@ -68,10 +68,7 @@ void InherentCacheImpl::Lowest::iterate(const HIRType* type, Callback& cb) const
     visit(this->generic);
 
     if (type->is_Infer() && !type->as_Infer().isLit()) {
-        for (const auto& entry : this->named) {
-            visit(entry.second);
-        }
-        visit(this->nonNamed);
+        return;
     } else if (const auto* path = type->getSortPath()) {
         auto it = this->named.find(*path);
         if (it != this->named.end()) {
