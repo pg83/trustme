@@ -9093,6 +9093,7 @@ auto ExprVisitorConv::writeLoopHeads(const Span& sp, const LoopHead* heads) -> v
 
 auto ExprVisitorConv::visit(HIRExprNodeLoop& node) -> void {
     TRACE_FUNCTION_FR(StringView("_Loop"), StringView("_Loop"));
+    auto _borrow_extension = this->disableBorrowExtension();
     auto* heads = builder.blockActive() ? enterLoopHeads(node.span(), *node.code) : nullptr;
     auto loopBlock = builder.newBbLinked();
     auto loopBodyScope = builder.newScopeLoop(node.span());
