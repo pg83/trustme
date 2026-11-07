@@ -1404,7 +1404,7 @@ namespace {
                 }
                 case MacroRef::TAG_BuiltinProcMacro: {
                     if (!builtinDerive) {
-                        TODO(sp, StringView("Handle builtin proc macro"));
+                        ERROR(sp, E0000, StringView("function-like builtin macro cannot be used as a derive macro"));
                     }
                     break;
                 }
