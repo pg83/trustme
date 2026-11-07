@@ -3668,15 +3668,8 @@ auto CodeGeneratorC::emitOperationWithUnwindCb(const MIRUnwindAction& action, un
             of << indent << StringView("trustme_unwind_state = 0;\n");
             break;
         }
-        case MIRUnwindAction::TAG_Terminate: {
-            auto& _ = action.as_Terminate();
-            of << indent << StringView("try {\n");
-            emitOperation.emit(indentLevel + 1);
-            of << indent << StringView("} catch (...) { abort(); }\n");
-            break;
-        }
+        case MIRUnwindAction::TAG_Terminate:
         case MIRUnwindAction::TAG_Unreachable: {
-            auto& _ = action.as_Unreachable();
             of << indent << StringView("try {\n");
             emitOperation.emit(indentLevel + 1);
             of << indent << StringView("} catch (...) { abort(); }\n");
