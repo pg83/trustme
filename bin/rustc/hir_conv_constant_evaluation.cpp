@@ -58,8 +58,6 @@ namespace {
         void visitPathParams(HIRPathParams& pp) override;
 
         void visit(HIRExprNodeConstParam& node) override;
-
-        void visit(HIRExprNodeCallMethod& node) override;
     };
 
     struct NewvalStateNop: public HIREvaluator::Newval {
@@ -3867,11 +3865,6 @@ auto ExprCaptureScan::visitPathParams(HIRPathParams& pp) -> void {
 
 auto ExprCaptureScan::visit(HIRExprNodeConstParam& node) -> void {
     addSlot(out.valueMask, node.binding);
-    HIRExprVisitorDef::visit(node);
-}
-
-auto ExprCaptureScan::visit(HIRExprNodeCallMethod& node) -> void {
-    out.unknown = true;
     HIRExprVisitorDef::visit(node);
 }
 
