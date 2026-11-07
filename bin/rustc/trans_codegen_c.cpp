@@ -1682,9 +1682,6 @@ auto CodeGeneratorC::emitStructInner(const HIRType* ty, const TypeRepr* repr, un
         maxAlign = std::max(maxAlign, al);
         {
             size_t alC = al;
-            if (TargetCapsMemberAlignment() && sz > 0 && ent.offset != 0 && alC > 4 && !TargetTypeHasUserAlignment(sp, resolve_, ty)) {
-                alC = 4;
-            }
             cMaxAlign = std::max(cMaxAlign, alC);
         }
 

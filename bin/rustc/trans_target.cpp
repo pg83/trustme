@@ -1089,17 +1089,10 @@ namespace {
             offset = alignTo(prefixSize, effectivePrefixAlign);
         }
         U128 largestAvailable = U128(0);
-        bool isFirstField = true;
         for (size_t k = 0; k < count; k++) {
             const size_t i = order[k];
             const auto& e = ents[i];
             size_t fieldAlign = e.align;
-            if (TargetCapsMemberAlignment() && e.size > 0) {
-                if (!isFirstField && !e.userAlign && fieldAlign >= 4 && fieldAlign <= 8) {
-                    fieldAlign = 4;
-                }
-                isFirstField = false;
-            }
             if (pack > 0 && pack < fieldAlign) {
                 fieldAlign = pack;
             }
@@ -2548,10 +2541,6 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const H
         BUG(sp, StringView("Getting alignment of Unsized type - ") << ty);
     }
     return rv;
-}
-
-bool TargetCapsMemberAlignment() {
-    return false;
 }
 
 bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty) {

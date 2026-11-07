@@ -164,8 +164,6 @@ bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HI
 bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outAlign);
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty, size_t& outSize, size_t& outAlign);
 
-bool TargetCapsMemberAlignment();
-
 bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty);
 
 const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRType* ty);
