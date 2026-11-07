@@ -811,25 +811,11 @@ namespace {
         const auto& generic = path->path.data.as_Generic();
         const auto& str = *path->binding.as_Struct();
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, stateTy, &generic.params, nullptr);
-        switch (str.data.tag()) {
-            case HIRStructData::TAG_Unit:
-                break;
-            case HIRStructData::TAG_Tuple:
-                for (const auto& field : str.data.as_Tuple()) {
-                    auto fieldTy = resolve.monomorphExpand(sp, field.ent, monomorph);
-                    if (!addAsyncDropCoroutineStateFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
-                        return false;
-                    }
-                }
-                break;
-            case HIRStructData::TAG_Named:
-                for (const auto& field : str.data.as_Named()) {
-                    auto fieldTy = resolve.monomorphExpand(sp, field.ty, monomorph);
-                    if (!addAsyncDropCoroutineStateFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
-                        return false;
-                    }
-                }
-                break;
+        for (const auto& field : str.data.as_Tuple()) {
+            auto fieldTy = resolve.monomorphExpand(sp, field.ent, monomorph);
+            if (!addAsyncDropCoroutineStateFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                return false;
+            }
         }
         return true;
     }
