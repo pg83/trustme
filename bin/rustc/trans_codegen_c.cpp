@@ -10858,16 +10858,7 @@ void stl::output<ZeroCopyOutput, FmtShell>(ZeroCopyOutput& os, FmtShell x) {
 
 template <>
 void stl::output<ZeroCopyOutput, FmtGccAsm>(ZeroCopyOutput& os, FmtGccAsm x) {
-    bool inComment = false;
     for (const char& ch : x.s) {
-        if (ch == '/' && (&ch)[1] == '/') {
-            if (!inComment) {
-                os << StringView("\" ");
-            }
-            inComment = true;
-        } else {
-            inComment = false;
-        }
         switch (ch) {
             case '\n':
                 os << StringView("\\n\"\n\"");
