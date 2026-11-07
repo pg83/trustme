@@ -8333,15 +8333,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         appendResponse(effects, std::move(preliminaryEffects));
     };
 
-    /* Upstream registers the method's trait obligation at lookup and, before an
-       argument is coerced to a parameter that still holds inference variables,
-       selects what it can (`resolve_vars_with_obligations`): a trait parameter that
-       one impl alone decides is decided before the argument is related to it.
-       `set.eq(&other_ref)` reads `Rhs` as `BTreeSet` from the only `PartialEq` impl
-       of `BTreeSet`, and the argument then reaches `&BTreeSet` by dereferencing;
-       related first, it would have read `Rhs` off the argument as `Ref<BTreeSet>`.
-       Only a parameter an argument mentions is worth the probe, and only a proof
-       that decides outright is kept. */
     const auto constrainTraitParamsBeforeArguments = [&](const HIRFunction& function, const HIRGenericPath& proofTrait, const HIRPathParams& proofParams, const HIRType* selfType, const Monomorphiser& monomorph, SolverResponse& effects, size_t firstArgument) {
         if (function.fixedArgCount() != argumentTypes.size() + 1) {
             return;
@@ -8382,7 +8373,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
            the vector's element is still unknown to upstream at the call, the
            specializing impl is not known to apply, and nothing is decided.  An answer
            that rests on specialization is therefore not taken before the arguments. */
-        if (!hasProbe || probe.effects.certainty != Certainty::Proven || !probe.candidate || probe.effects.winnowedBySpecialization || applyResponse(probe.effects) != Certainty::Proven) {
+        if (!hasProbe || probe.effects.certainty == Certainty::NoSolution || !probe.candidate || probe.effects.winnowedBySpecialization || applyResponse(probe.effects) == Certainty::NoSolution) {
             resolve_.ivars.rollbackTo(snapshot);
             if (firstArgument > 0 && (!hasProbe || probe.effects.certainty == Certainty::Ambiguous)) {
                 ThinVector<unsigned> mentioned;
