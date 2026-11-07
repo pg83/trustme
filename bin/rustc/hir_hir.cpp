@@ -469,43 +469,30 @@ U128 HIREnum::getValue(size_t idx) const {
     switch (r) {
         case HIREnum::Repr::Auto:
             return HIRCoreType::Isize;
-            break;
         case HIREnum::Repr::Usize:
             return HIRCoreType::Usize;
-            break;
         case HIREnum::Repr::U8:
             return HIRCoreType::U8;
-            break;
         case HIREnum::Repr::U16:
             return HIRCoreType::U16;
-            break;
         case HIREnum::Repr::U32:
             return HIRCoreType::U32;
-            break;
         case HIREnum::Repr::U64:
             return HIRCoreType::U64;
-            break;
         case HIREnum::Repr::U128:
             return HIRCoreType::U128;
-            break;
         case HIREnum::Repr::Isize:
             return HIRCoreType::Isize;
-            break;
         case HIREnum::Repr::I8:
             return HIRCoreType::I8;
-            break;
         case HIREnum::Repr::I16:
             return HIRCoreType::I16;
-            break;
         case HIREnum::Repr::I32:
             return HIRCoreType::I32;
-            break;
         case HIREnum::Repr::I64:
             return HIRCoreType::I64;
-            break;
         case HIREnum::Repr::I128:
             return HIRCoreType::I128;
-            break;
     }
     UNREACHABLE();
 }
