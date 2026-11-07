@@ -4963,12 +4963,18 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     return this->revisitInner(context, *deref.sub, target, bindingMode);
                 }
 
+                const auto checkScalarValue = [&](HIRPattern::Value& value) {
+                    if (value.is_Integer() || value.is_Float()) {
+                        context.equateTypes(sp, ty, *getPossibleTypeVal(context, value));
+                    }
+                };
                 bool rv = false;
                 switch (pattern.data.tag()) {
                     default:
                         UNREACHABLE();
                     case HIRPatternData::TAG_Value: {
                         auto& pe = pattern.data.as_Value();
+                        checkScalarValue(pe.val);
                         if (pe.val.is_ByteString()) {
                             const auto& bytes = pe.val.as_ByteString().v;
                             if (const auto* array = ty->opt_Array()) {
@@ -4984,6 +4990,13 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         break;
                     }
                     case HIRPatternData::TAG_Range: {
+                        auto& pe = pattern.data.as_Range();
+                        if (pe.start) {
+                            checkScalarValue(*pe.start);
+                        }
+                        if (pe.end) {
+                            checkScalarValue(*pe.end);
+                        }
                         rv = true;
                         break;
                     }
