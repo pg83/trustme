@@ -33,10 +33,6 @@ ASTPathParams::ASTPathParams(const ASTPathParams& x)
 
 ASTPathParamEnt ASTPathParamEnt::clone() const {
     switch ((*this).tag()) {
-        case ASTPathParamEnt::TAG_Null: {
-            auto& v = (*this).as_Null();
-            return v;
-        }
         case ASTPathParamEnt::TAG_Lifetime: {
             auto& v = (*this).as_Lifetime();
             return v;
@@ -67,11 +63,6 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
 
 void ASTPathParamEnt::fmt(ZeroCopyOutput& os) const {
     switch ((*this).tag()) {
-        case ASTPathParamEnt::TAG_Null: {
-            auto& _ = (*this).as_Null();
-            os << StringView("/*removed*/");
-            break;
-        }
         case ASTPathParamEnt::TAG_Lifetime: {
             auto& v = (*this).as_Lifetime();
             os << v;
@@ -607,9 +598,6 @@ void stl::output<ZeroCopyOutput, ASTPathParams>(ZeroCopyOutput& os, const ASTPat
     bool needsComma = false;
     os << StringView(x.isParen ? "(" : "<");
     for (const auto& e : x.entries) {
-        if (e.is_Null()) {
-            continue;
-        }
         if (needsComma) {
             os << StringView(", ");
         }

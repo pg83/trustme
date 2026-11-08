@@ -3,10 +3,9 @@
 
 generate(
     name="ASTPathParamEnt",
-    default="Null",
+    default="Lifetime",
     clone=False,
     variants=[
-        v("Null"),
         v("Lifetime", "ASTLifetimeRef"),
         v("Type", "ASTType*"),
         v("Value", "ASTExprNode*", copy=False),

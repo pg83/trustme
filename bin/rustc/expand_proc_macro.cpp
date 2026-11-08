@@ -2083,16 +2083,11 @@ auto ProcMacroVisitor::visitPathParams(const ASTPathParams& args, bool isExpr) -
     pmi.sendSymbol("<");
     bool first = true;
     for (const auto& ent : args.entries) {
-        if (ent.is_Null()) {
-            continue;
-        }
         if (!first) {
             pmi.sendSymbol(",");
         }
         first = false;
         switch (ent.tag()) {
-            case ASTPathParamEnt::TAG_Null:
-                UNREACHABLE();
             case ASTPathParamEnt::TAG_Lifetime: {
                 auto& l = ent.as_Lifetime();
                 pmi.sendLifetime(l.name().name.c_str());

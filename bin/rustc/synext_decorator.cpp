@@ -1059,9 +1059,6 @@ namespace {
         bool changed = false;
         for (auto& param : params.entries) {
             switch (param.tag()) {
-                case ASTPathParamEnt::TAG_Null: {
-                    break;
-                }
                 case ASTPathParamEnt::TAG_Lifetime: {
                     break;
                 }

@@ -270,10 +270,6 @@ namespace {
     void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPathParams& args) {
         for (auto& ent : args.entries) {
             switch (ent.tag()) {
-                case ASTPathParamEnt::TAG_Null: {
-                    auto& _ = ent.as_Null();
-                    break;
-                }
                 case ASTPathParamEnt::TAG_Lifetime: {
                     auto& l = ent.as_Lifetime();
                     ResolveAbsoluteLifetime(context, sp, l);
@@ -2436,9 +2432,6 @@ namespace {
     void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName) {
         for (auto& param : params.entries) {
             switch (param.tag()) {
-                case ASTPathParamEnt::TAG_Null: {
-                    break;
-                }
                 case ASTPathParamEnt::TAG_Lifetime: {
                     break;
                 }

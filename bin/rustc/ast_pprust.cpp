@@ -1608,8 +1608,6 @@ void State::printPath(const ASTPath& path, bool colonsBeforeParams) {
 
 void State::printGenericArg(const ASTPathParamEnt& arg) {
     switch (arg.tag()) {
-        case ASTPathParamEnt::TAG_Null:
-            break;
         case ASTPathParamEnt::TAG_Lifetime:
             this->printLifetimeName(arg.as_Lifetime().name().name);
             break;

@@ -1218,9 +1218,6 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
     for (const auto& param : srcParams.entries) {
         const bool inferredConst = isInferredConstArgument(param, paramDefs, paramDefIndex);
         switch (param.tag()) {
-            case ASTPathParamEnt::TAG_Null: {
-                break;
-            }
             case ASTPathParamEnt::TAG_Lifetime: {
                 numLft++;
                 break;
@@ -1251,9 +1248,6 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
     for (const auto& param : srcParams.entries) {
         const bool inferredConst = isInferredConstArgument(param, paramDefs, paramDefIndex);
         switch (param.tag()) {
-            case ASTPathParamEnt::TAG_Null: {
-                break;
-            }
             case ASTPathParamEnt::TAG_Lifetime: {
                 break;
             }
@@ -1504,10 +1498,6 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
 
     for (const auto& e : path.nodes().back().args().entries) {
         switch (e.tag()) {
-            case ASTPathParamEnt::TAG_Null: {
-                auto& _ = e.as_Null();
-                break;
-            }
             case ASTPathParamEnt::TAG_Lifetime: {
                 auto& _ = e.as_Lifetime();
                 break;
@@ -3918,9 +3908,6 @@ auto LifetimeIdentity::pathParams(const ASTPathParams& params) -> void {
     appendNumber(params.entries.size());
     for (const auto& entry : params.entries) {
         switch (entry.tag()) {
-            case ASTPathParamEnt::TAG_Null:
-                append('n');
-                break;
             case ASTPathParamEnt::TAG_Value:
                 append('v');
                 break;

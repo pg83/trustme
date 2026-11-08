@@ -1048,10 +1048,6 @@ namespace {
     void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& params) {
         for (auto& e : params.entries) {
             switch (e.tag()) {
-                case ASTPathParamEnt::TAG_Null: {
-                    auto& _ = e.as_Null();
-                    break;
-                }
                 case ASTPathParamEnt::TAG_Lifetime: {
                     auto& _ = e.as_Lifetime();
                     break;
