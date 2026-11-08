@@ -80,6 +80,18 @@ namespace {
 
         static RcString getReprName(TokenStream& lex);
 
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&) const override {
+            ERROR(sp, E0000, StringView("#[repr] should be applied to a struct, enum, or union"));
+        }
+
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&, ASTImpl&, const RcString&, slice<const ASTAttribute>, const ASTVisibility&, ASTItem&) const override {
+            ERROR(sp, E0000, StringView("#[repr] should be applied to a struct, enum, or union"));
+        }
+
+        void handle(const Span& sp, const ASTAttribute&, const WireBoard&, ASTCrate&, const ASTAbsolutePath&, ASTTrait&, slice<const ASTAttribute>, ASTItem&) const override {
+            ERROR(sp, E0000, StringView("#[repr] should be applied to a struct, enum, or union"));
+        }
+
         void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
     };
 
