@@ -518,18 +518,13 @@ const char* Token::typestr(enum eTokenType type) {
 
 void printEscapedLiteral(ZeroCopyOutput& os, eTokenType type, const u8* value, size_t size) {
     const auto bytes = StringView(value, size);
-    switch (type) {
-        case TOK_STRING:
-            os << StringView("\"") << EscapedString(bytes) << StringView("\"");
-            return;
-        case TOK_BYTESTRING:
-            os << StringView("b\"") << EscapedByteString(bytes) << StringView("\"");
-            return;
-        case TOK_CSTRING:
-            os << StringView("c\"") << EscapedString(bytes) << StringView("\"");
-            return;
-        default:
-            compileErrorBugCheck("printEscapedLiteral called for a non-string token");
+    if (type == TOK_BYTESTRING) {
+        os << StringView("b\"") << EscapedByteString(bytes) << StringView("\"");
+    } else {
+        if (type == TOK_CSTRING) {
+            os << StringView("c");
+        }
+        os << StringView("\"") << EscapedString(bytes) << StringView("\"");
     }
 }
 
