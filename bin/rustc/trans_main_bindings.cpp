@@ -3665,7 +3665,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                     switch (lv.root.tag()) {
                         case MIRLValue::Storage::TAG_Return: {
                             MIR_TODO(localMirRes, StringView("Get return type for MIR type enumeration"));
-                            break;
                         }
                         case MIRLValue::Storage::TAG_Argument: {
                             decltype(lv.root.as_Argument()) e = lv.root.as_Argument();

@@ -5180,7 +5180,6 @@ namespace {
                         } break;
                         default:
                             BUG(sp2, StringView("Wildcard import expanded to an invalid item class - ") << bindings->type.binding.tagStr());
-                            break;
                     }
                 }
             }

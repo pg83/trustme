@@ -4550,7 +4550,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeFlow& v) -> void {
         } break;
         case ASTExprNodeFlow::YEET:
             BUG(v.span(), StringView("do yeet should have been desugared"));
-            break;
     }
 }
 
@@ -4776,7 +4775,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeUniOp& v) -> void {
         } break;
         case ASTExprNodeUniOp::QMARK:
             BUG(v.span(), StringView("Encounterd question mark operator (should have been expanded in AST)"));
-            break;
 
         case ASTExprNodeUniOp::REF:
             rv.reset(ctx.crate->pool->make<HIRExprNodeBorrow>(v.span(), HIRBorrowType::Shared, lower(v.value)));
@@ -4793,7 +4791,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeUniOp& v) -> void {
         case ASTExprNodeUniOp::PinBorrow:
         case ASTExprNodeUniOp::PinBorrowMut:
             BUG(v.span(), StringView("Pin borrow was not expanded before HIR lowering"));
-            break;
 
         case ASTExprNodeUniOp::AWait: {
             auto value = lower(v.value);

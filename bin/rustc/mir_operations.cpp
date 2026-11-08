@@ -796,7 +796,6 @@ namespace {
         switch ((*dstTy).tag()) {
             default:
                 MIR_TODO(state, StringView("Obtain metadata converting to ") << dstTy);
-                break;
             case HIRType::TAG_Generic: {
                 // TODO: What should be returned to indicate "no conversion"
                 return nullptr;
@@ -826,7 +825,6 @@ namespace {
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
                         MIR_BUG(state, StringView("Unit-like struct Unsize is impossible - ") << srcTy);
-                        break;
                     }
                     case HIRStructData::TAG_Tuple: {
                         auto& se = str.data.as_Tuple();
@@ -952,7 +950,6 @@ namespace {
             switch (str.data.tag()) {
                 case HIRStructData::TAG_Unit: {
                     MIR_BUG(state, StringView("Unit-like struct CoerceUnsized is impossible - ") << srcTy);
-                    break;
                 }
                 case HIRStructData::TAG_Tuple: {
                     auto& se = str.data.as_Tuple();
@@ -1075,7 +1072,6 @@ namespace {
                     switch (str.data.tag()) {
                         case HIRStructData::TAG_Unit: {
                             MIR_BUG(state, StringView("Box contained a unit-like struct"));
-                            break;
                         }
                         case HIRStructData::TAG_Tuple: {
                             auto& se = str.data.as_Tuple();
@@ -1763,14 +1759,12 @@ namespace {
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 MIR_BUG(state, StringView("UfcsUnknown hit - ") << path);
-                break;
             }
         }
 
         switch (e.tag()) {
             default:
                 MIR_BUG(state, StringView("MIR Call of ") << e.tagStr() << StringView(" - ") << path);
-                break;
             case TypeckValuePtr::TAG_NotFound: {
                 auto& _ = e.as_NotFound();
                 return nullptr;

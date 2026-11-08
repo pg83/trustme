@@ -1384,7 +1384,6 @@ static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalVa
         switch (definition.data.tag()) {
             case HIRStructData::TAG_Unit:
                 MIR_BUG(state, StringView("Pointer unsize through unit-like struct ") << dynamicTypeD);
-                break;
             case HIRStructData::TAG_Tuple:
                 tailTemplate = definition.data.as_Tuple().at(unsizedField).ent;
                 break;
@@ -1867,19 +1866,15 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         }
         case MIRStatement::TAG_SaveDropFlag: {
             MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
-            break;
         }
         case MIRStatement::TAG_LoadDropFlag: {
             MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
-            break;
         }
         case MIRStatement::TAG_Asm: {
-            MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
-            break;
+            ERROR(state.sp, E0000, StringView("inline assembly is not allowed in constant evaluation"));
         }
         case MIRStatement::TAG_Asm2: {
-            MIR_TODO(state, StringView("Non-assign statement - ") << stmt);
-            break;
+            ERROR(state.sp, E0000, StringView("inline assembly is not allowed in constant evaluation"));
         }
     }
 
@@ -1913,7 +1908,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             switch ((*castType).tag()) {
                 default:
                     MIR_TODO(state, StringView("RValue::Cast to ") << castType << StringView(" from ") << srcTy << StringView(", val = ") << inval);
-                    break;
                 case HIRType::TAG_Primitive: {
                     auto& te = (*castType).as_Primitive();
                     auto ti = TypeInfo::forPrimitive(te);
@@ -2207,6 +2201,9 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
     switch (terminator.tag()) {
         default:
             MIR_BUG(state, StringView("Unexpected terminator - ") << terminator);
+        case MIRTerminator::TAG_Asm2: {
+            ERROR(state.sp, E0000, StringView("inline assembly is not allowed in constant evaluation"));
+        }
         case MIRTerminator::TAG_Goto: {
             auto& e = terminator.as_Goto();
             return e;
@@ -5555,7 +5552,6 @@ auto MIREvalCallStackEntry::readParamFloat(unsigned bits, const MIRParam& p) -> 
         }
         case MIRParam::TAG_Borrow: {
             MIR_BUG(state, StringView("Expected a float, got a MIR::Param::Borrow"));
-            break;
         }
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
@@ -5584,7 +5580,6 @@ auto MIREvalCallStackEntry::readParamFloatBits(unsigned bits, const MIRParam& p)
         }
         case MIRParam::TAG_Borrow: {
             MIR_BUG(state, StringView("Expected a float, got a MIR::Param::Borrow"));
-            break;
         }
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
@@ -5630,7 +5625,6 @@ auto MIREvalCallStackEntry::readParamUint(unsigned bits, const MIRParam& p) -> U
         }
         case MIRParam::TAG_Borrow: {
             MIR_BUG(state, StringView("Expected an integer, got a MIR::Param::Borrow"));
-            break;
         }
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
@@ -5665,7 +5659,6 @@ auto MIREvalCallStackEntry::readParamSint(unsigned bits, const MIRParam& p) -> S
         }
         case MIRParam::TAG_Borrow: {
             MIR_BUG(state, StringView("Expected an integer, got a MIR::Param::Borrow"));
-            break;
         }
         case MIRParam::TAG_Constant: {
             auto& e = p.as_Constant();
@@ -6401,7 +6394,6 @@ auto Expander::enumTagIsSigned(HIRCoreType ty) -> bool {
         case HIRCoreType::F64:
         case HIRCoreType::F128:
             TODO(Span(), StringView("Floating point enum tag."));
-            break;
         case HIRCoreType::Str:
             BUG(Span(), StringView("Unsized tag?!"));
     }

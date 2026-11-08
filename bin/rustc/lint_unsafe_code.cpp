@@ -65,7 +65,6 @@ namespace {
             case CfgLintLevel::Deny:
             case CfgLintLevel::Forbid:
                 ERROR(sp, E0000, StringView("usage of ") << what);
-                break;
         }
     }
 }

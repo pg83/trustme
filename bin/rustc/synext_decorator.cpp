@@ -4533,7 +4533,6 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
     switch (i.tag()) {
         default:
             TODO(sp, StringView("Unknown item type ") << i.tagStr() << StringView(" with #[") << attr << StringView("] attached at ") << path);
-            break;
         case ASTItem::TAG_None: {
             break;
         }

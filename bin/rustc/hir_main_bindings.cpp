@@ -3459,7 +3459,6 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
         } break;
         case HIRType::TAG_NodeType:
             BUG(Span(), StringView("Encountered invalid type when serialising - ") << ty);
-            break;
     }
 
     const auto id = nextTypeId++;

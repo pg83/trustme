@@ -804,7 +804,6 @@ Token ProcMacroInv::realGetToken_() {
             UNREACHABLE();
         case TokenClass::SpanDef:
             TODO(this->parentSpan, StringView("SpanDef"));
-            break;
         case TokenClass::Fragment: {
             const auto index = this->recvV128u();
             ASSERT_BUG(this->parentSpan, index < fragments.length(), StringView("Fragment #") << index << StringView(" was never sent to the child process"));
@@ -1249,7 +1248,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_WHITESPACE:
         case TOK_COMMENT:
             BUG(sp, StringView("Unexpected whitepace in tokenstream"));
-            break;
         case TOK_IDENT:
             /* A token of the invocation is passed through with the context it
                was written in - that is what the macro gives back for it. */
@@ -2948,7 +2946,6 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
         switch (i.data.tag()) {
             default:
                 TODO(i.span, StringView("visit_trait item - ") << i.data.tagStr());
-                break;
             case ASTItem::TAG_Function: {
                 auto& e = i.data.as_Function();
                 this->visitFunction(i.name, itemVis, e);
@@ -2992,7 +2989,6 @@ auto ProcMacroVisitor::visitImpl(const ASTImpl& impl) -> void {
         switch (item.tag()) {
             default:
                 TODO(sp, StringView("Item ") << item.tagStr());
-                break;
             case ASTItem::TAG_Function: {
                 auto& e = item.as_Function();
                 visitFunction(i.name.c_str(), i.vis, e);
@@ -3025,7 +3021,6 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
     switch (item.tag()) {
         default:
             TODO(sp, StringView("visit_item - ") << item.tagStr());
-            break;
         case ASTItem::TAG_ExternBlock: {
             auto& e = item.as_ExternBlock();
             if (e.isUnsafe()) {

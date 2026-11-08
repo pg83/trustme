@@ -1022,10 +1022,8 @@ namespace {
                     break;
                 case HIRExprNodeClosure::Class::NoCapture:
                     BUG(sp, StringView(""));
-                    break;
                 case HIRExprNodeClosure::Class::Unknown:
                     BUG(Span(), StringView("Encountered Unkown closure type in new impls"));
-                    break;
             }
         }
         for (auto& ptr : this->implsType) {
@@ -2167,7 +2165,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeCallValue& node) -> void {
     switch (node.traitUsed) {
         case HIRExprNodeCallValue::TraitUsed::Unknown:
             BUG(node.span(), StringView("Annotate usage when CallValue trait is unknown"));
-            break;
         case HIRExprNodeCallValue::TraitUsed::Fn:
         case HIRExprNodeCallValue::TraitUsed::AsyncFn:
             vu = HIRValueUsage::Borrow;
@@ -7268,7 +7265,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeUnsize& node) -> void {
         switch (node.usage) {
             case HIRValueUsage::Unknown:
                 BUG(sp, StringView("Unknown usage type of _Unsize value"));
-                break;
             case HIRValueUsage::Borrow:
                 bt = HIRBorrowType::Shared;
                 break;

@@ -4640,7 +4640,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                                 break;
                             case MIRUniOp::INV:
                                 MIR_TODO(*mirRes, StringView("f128 INV"));
-                                break;
                         }
                         break;
                     }
@@ -9708,7 +9707,6 @@ auto CodeGeneratorC::emitEnumVariantVal(const TypeRepr* repr, unsigned idx) -> v
         case HIRCoreType::F64:
         case HIRCoreType::F128:
             MIR_TODO(*mirRes, StringView("Floating point enum tag."));
-            break;
         case HIRCoreType::Str:
             MIR_BUG(*mirRes, StringView("Unsized tag?!"));
     }
@@ -10044,15 +10042,12 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
         }
         case MIRConstant::TAG_Const: {
             MIR_BUG(*mirRes, StringView("Unexpected Constant::Const - ") << ve);
-            break;
         }
         case MIRConstant::TAG_Generic: {
             MIR_BUG(*mirRes, StringView("Generic value present at codegen"));
-            break;
         }
         case MIRConstant::TAG_Function: {
             MIR_TODO(*mirRes, StringView("Constant::Function"));
-            break;
         }
         case MIRConstant::TAG_ItemAddr: {
             auto& c = ve.as_ItemAddr();
@@ -10385,7 +10380,6 @@ auto CodeGeneratorC::getInnerUnsizedType(const HIRType* ty) -> const HIRType* {
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
                                     MIR_BUG(*mirRes, StringView("Unit-like struct with DstType::Possible"));
-                                    break;
                                 }
                                 case HIRStructData::TAG_Tuple: {
                                     auto& se = str.data.as_Tuple();

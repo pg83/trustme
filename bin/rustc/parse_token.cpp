@@ -441,7 +441,6 @@ Token Token::clone() const {
                 }
                 default:
                     BUG(Span(Span(), pos), StringView("Fragment with invalid token type (") << *this << StringView(")"));
-                    break;
             }
             BUG_ASSERT(rv.data_.is_Fragment());
             break;

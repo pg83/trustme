@@ -1123,7 +1123,6 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<co
             } break;
             case HIRType::TAG_NodeType:
                 BUG(Span(), StringView("Unexpected type in trans: ") << x.e);
-                break;
         }
     }
     return;

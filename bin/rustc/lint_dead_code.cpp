@@ -160,7 +160,6 @@ void LintDeadCode(const WireBoard& wb, HIRCrate& crate) {
             case CfgLintLevel::Deny:
             case CfgLintLevel::Forbid:
                 ERROR(candidate.function->span, E0000, StringView("function `") << candidate.name << StringView("` is never used"));
-                break;
         }
     }
 }

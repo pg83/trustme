@@ -153,7 +153,6 @@ auto MustUseVisitor::report(const Span& sp, const char* what) -> void {
         case CfgLintLevel::Deny:
         case CfgLintLevel::Forbid:
             ERROR(sp, E0000, StringView("unused ") << what << StringView(" that must be used"));
-            break;
     }
 }
 

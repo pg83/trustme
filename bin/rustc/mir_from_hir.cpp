@@ -4818,10 +4818,8 @@ void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRCon
         switch (te) {
             case HIRCoreType::Bool:
                 BUG(sp, StringView("Range match over Bool"));
-                break;
             case HIRCoreType::Str:
                 BUG(sp, StringView("Range match over Str - is this valid?"));
-                break;
             case HIRCoreType::U8:
             case HIRCoreType::U16:
             case HIRCoreType::U32:
@@ -9761,7 +9759,6 @@ auto ExprVisitorConv::visit(HIRExprNodeBinOp& node) -> void {
         case HIRExprNodeBinOp::Op::BoolAnd:
         case HIRExprNodeBinOp::Op::BoolOr:
             BUG(node.span(), StringView(""));
-            break;
     }
     builder.setResult(node.span(), mv$(res));
 }
@@ -9992,7 +9989,6 @@ auto ExprVisitorConv::visitIndexOperator(HIRExprNodeIndex& node, const HIRType* 
     switch (node.value->usage) {
         case HIRValueUsage::Unknown:
             BUG(sp, StringView("Usage of index reciever is still `Unknown`"));
-            break;
         case HIRValueUsage::Borrow:
             bt = HIRBorrowType::Shared;
             langitem = method = "index";
@@ -10003,7 +9999,6 @@ auto ExprVisitorConv::visitIndexOperator(HIRExprNodeIndex& node, const HIRType* 
             break;
         case HIRValueUsage::Move:
             TODO(sp, StringView("Support moving out of indexed values"));
-            break;
     }
     BUG_ASSERT(langitem);
     BUG_ASSERT(method);
@@ -10157,7 +10152,6 @@ auto ExprVisitorConv::visit(HIRExprNodeDeref& node) -> void {
         switch (node.value->usage) {
             case HIRValueUsage::Unknown:
                 BUG(sp, StringView("Unknown usage type of deref value - ") << tyVal);
-                break;
             case HIRValueUsage::Borrow:
                 bt = HIRBorrowType::Shared;
                 langitem = method = "deref";
@@ -10168,7 +10162,6 @@ auto ExprVisitorConv::visit(HIRExprNodeDeref& node) -> void {
                 break;
             case HIRValueUsage::Move:
                 TODO(sp, StringView("ValueUsage::Move for desugared Deref of ") << node.value->resType);
-                break;
         }
         BUG_ASSERT(langitem);
         BUG_ASSERT(method);
