@@ -50,7 +50,6 @@ namespace {
         void writeU32(u32 v) override;
         void writeU64(u64 v) override;
         void writeU128(U128 v) override;
-        void writeDouble(double v) override;
         void writeFloatValue(FloatValue value) override;
         void writeTag(unsigned int t) override;
         void writeCount(size_t c) override;
@@ -141,10 +140,6 @@ void WriterImpl::writeU64(u64 v) {
 void WriterImpl::writeU128(U128 v) {
     writeU64(v.getLo());
     writeU64(v.getHi());
-}
-
-void WriterImpl::writeDouble(double v) {
-    this->write(&v, sizeof v);
 }
 
 void WriterImpl::writeFloatValue(FloatValue value) {

@@ -29,7 +29,6 @@ struct HIRSerialiseWriter {
     virtual void writeU32(u32 v) = 0;
     virtual void writeU64(u64 v) = 0;
     virtual void writeU128(U128 v) = 0;
-    virtual void writeDouble(double v) = 0;
     virtual void writeFloatValue(FloatValue value) = 0;
     virtual void writeTag(unsigned int t) = 0;
     virtual void writeCount(size_t c) = 0;
