@@ -2249,7 +2249,9 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeStructLiteral& node) -> void {
         tStructFields tupleFields;
         ASSERT_BUG(node.span(), tpb.is_Struct(), StringView("Record update base is not a struct"));
         const auto& str = *tpb.as_Struct();
-        if (str.data.is_Tuple()) {
+        if (str.data.is_Unit()) {
+            fieldsPtr = &tupleFields;
+        } else if (str.data.is_Tuple()) {
             const auto& tuple = str.data.as_Tuple();
             for (size_t i = 0; i < tuple.size(); i++) {
                 tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});

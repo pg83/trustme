@@ -10872,6 +10872,13 @@ auto ExprVisitorConv::visit(HIRExprNodeStructLiteral& node) -> void {
             case HIRTypePathBinding::TAG_Struct: {
                 const auto e = tuMatch.as_Struct();
                 if (e->data.is_Unit()) {
+                    if (node.baseValue) {
+                        this->visitNodePtr(node.baseValue);
+                        if (!builder.blockActive()) {
+                            return;
+                        }
+                        (void)builder.getResultInLvalue(node.baseValue->span(), node.baseValue->resType);
+                    }
                     builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), {}}));
                     return;
                 }

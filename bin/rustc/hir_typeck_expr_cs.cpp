@@ -9176,7 +9176,7 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                 const auto e = tuMatch.as_Struct();
                 if (e->data.is_Unit()) {
                     ASSERT_BUG(node.span(), node.values.size() == 0, StringView("Values provided for unit-like struct"));
-                    ASSERT_BUG(node.span(), !node.baseValue, StringView("Values provided for unit-like struct"));
+                    HIRExprVisitorDef::visit(node);
                     return;
                 }
                 if (e->data.is_Tuple()) {
@@ -11556,6 +11556,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
 
                     if (node.baseValue) {
                         auto _ = this->pushInnerCoerceScoped(false);
+                        this->context.equateTypes(node.span(), node.resType, node.baseValue->resType);
                         this->visitChild(*node.baseValue);
                         this->inheritDivergence(node, *node.baseValue);
                     }
