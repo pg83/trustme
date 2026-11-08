@@ -1687,11 +1687,8 @@ auto AnnotateExprVisitorMark::visitRootNode(HIRExprNode& root) -> void {
     BUG_ASSERT(usage.length() == expectedSize);
 
     for (auto* call : pendingCalls) {
-        const auto* nodePp = (*viewed(call->value->resType)).is_NodeType() ? ((*viewed(call->value->resType)).as_NodeType().opt_Closure()) : nullptr;
-        if (!nodePp) {
-            continue;
-        }
-        switch (nodePp->cls) {
+        const auto& closure = *call->value->resType->as_NodeType().opt_Closure();
+        switch (closure.cls) {
             case HIRExprNodeClosure::Class::Unknown:
                 break;
             case HIRExprNodeClosure::Class::NoCapture:

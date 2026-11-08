@@ -2078,11 +2078,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRType* ty, bool onlyUnbound) co
             }
             return true;
         }
-        case HIRType::TAG_Primitive:
-        case HIRType::TAG_Diverge:
-        case HIRType::TAG_Generic:
-        case HIRType::TAG_NodeType:
-            BUG(Span(), StringView("Type without inference variables passed the flag check: ") << ty);
+        default:
+            UNREACHABLE();
         case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
             return pathContainsIvars(e.path, onlyUnbound);
