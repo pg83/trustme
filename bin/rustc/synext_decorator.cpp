@@ -326,8 +326,6 @@ namespace {
 
         ASTExprNode* assertIsEq(const ASTPath& methodPath, ASTExprNode* val) const;
 
-        ASTExprNode* field(ObjPool& pool, const std::string& name) const;
-
         ASTExprNode* field(ObjPool& pool, const RcString& name) const;
 
         const char* traitName() const override;
@@ -471,8 +469,6 @@ namespace {
         ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, Vector<ASTType*> typesToBound, ASTExprNode* node) const;
 
         ASTExprNode* decVal(ObjPool& pool) const;
-
-        ASTExprNode* field(ObjPool& pool, const std::string& name) const;
 
         ASTExprNode* decClosure(ObjPool& pool, Span sp, ASTExprNode* code) const;
 
@@ -3393,10 +3389,6 @@ auto DeriverEq::assertIsEq(const ASTPath& methodPath, ASTExprNode* val) const ->
     return makeAstExprNode<ASTExprNodeCallPath>(pool, ASTPath(methodPath), vec$(makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, mv$(val))));
 }
 
-auto DeriverEq::field(ObjPool& pool, const std::string& name) const -> ASTExprNode* {
-    return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
-}
-
 auto DeriverEq::field(ObjPool& pool, const RcString& name) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), name);
 }
@@ -4184,10 +4176,6 @@ auto DeriverRustcDecodable::makeRet(Span sp, const RcString& coreName, const AST
 
 auto DeriverRustcDecodable::decVal(ObjPool& pool) const -> ASTExprNode* {
     return makeAstExprNode<ASTExprNodeCallPath>(pool, this->getMethodPath(), vec$(makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath("d"))));
-}
-
-auto DeriverRustcDecodable::field(ObjPool& pool, const std::string& name) const -> ASTExprNode* {
-    return makeAstExprNode<ASTExprNodeField>(pool, makeAstExprNode<ASTExprNodeNamedValue>(pool, ASTPath(RcString("self"))), RcString::newInterned(name));
 }
 
 auto DeriverRustcDecodable::decClosure(ObjPool& pool, Span sp, ASTExprNode* code) const -> ASTExprNode* {
