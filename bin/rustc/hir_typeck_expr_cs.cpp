@@ -61,7 +61,7 @@ namespace {
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
     };
 
-    struct ExprVisitorRevisit: public HIRExprVisitor {
+    struct ExprVisitorRevisit {
         Context& context;
         bool completed;
         bool isFallback;
@@ -74,59 +74,25 @@ namespace {
 
         bool nodeCompleted() const;
 
-        void visit(HIRExprNodeBlock& node) override;
+        void revisit(HIRExprNode& node);
 
-        void visit(HIRExprNodeConstBlock& node) override;
+        void visit(HIRExprNodeBlock& node);
 
-        void visit(HIRExprNodeAsm& node) override;
-
-        void visit(HIRExprNodeAsm2& node) override;
-
-        void visit(HIRExprNodeReturn& node) override;
-
-        void visit(HIRExprNodeYield& node) override;
-
-        void visit(HIRExprNodeAWait& node) override;
-
-        void visit(HIRExprNodeUse& node) override;
-
-        void visit(HIRExprNodeLet& node) override;
-
-        void visit(HIRExprNodeLoop& node) override;
-
-        void visit(HIRExprNodeLoopControl& node) override;
-
-        void visit(HIRExprNodeMatch& node) override;
-
-        void visit(HIRExprNodeAssign& node) override;
-
-        void visit(HIRExprNodeBinOp& node) override;
-
-        void visit(HIRExprNodeUniOp& node) override;
-
-        void visit(HIRExprNodeBorrow& node) override;
-
-        void visit(HIRExprNodeRawBorrow& node) override;
+        void visit(HIRExprNodeLet& node);
 
         void bad_cast(const Span& sp, const HIRType* srcTy, const HIRType* tgtTy, const char* where);
 
         void equateFunctionSignature(const Span& sp, const HIRTypeDataFunctionPointer& dst, const HIRTypeDataFunctionPointer& src);
 
-        void visit(HIRExprNodeCast& node) override;
+        void visit(HIRExprNodeCast& node);
 
-        void visit(HIRExprNodeUnsize& node) override;
+        void visit(HIRExprNodeIndex& node);
 
-        void visit(HIRExprNodeIndex& node) override;
-
-        void visit(HIRExprNodeDeref& node) override;
+        void visit(HIRExprNodeDeref& node);
 
         void visitEmplace129(HIRExprNodeEmplace& node);
 
-        void visit(HIRExprNodeEmplace& node) override;
-
-        void visit(HIRExprNodeTupleVariant& node) override;
-
-        void visit(HIRExprNodeCallPath& node) override;
+        void visit(HIRExprNodeEmplace& node);
 
         enum class AsyncCallResult {
             NoSolution,
@@ -136,39 +102,16 @@ namespace {
 
         AsyncCallResult callAsyncCallable(HIRExprNodeCallValue& node, const HIRType* ty, const HIRPathParams& traitPp);
 
-        void visit(HIRExprNodeCallValue& node) override;
+        void visit(HIRExprNodeCallValue& node);
 
-        void visit(HIRExprNodeCallMethod& node) override;
+        void visit(HIRExprNodeCallMethod& node);
 
-        void visit(HIRExprNodeField& node) override;
+        void visit(HIRExprNodeField& node);
 
-        void visit(HIRExprNodeLiteral& node) override;
+        void visit(HIRExprNodePathValue& node);
 
-        void visit(HIRExprNodeUnitVariant& node) override;
+        void visit(HIRExprNodeArraySized& node);
 
-        void visit(HIRExprNodePathValue& node) override;
-
-        void visit(HIRExprNodeVariable& node) override;
-
-        void visit(HIRExprNodeConstParam& node) override;
-
-        void visit(HIRExprNodeStructLiteral& node) override;
-
-        void visit(HIRExprNodeTuple& node) override;
-
-        void visit(HIRExprNodeArrayList& node) override;
-
-        void visit(HIRExprNodeArraySized& node) override;
-
-        void visit(HIRExprNodeClosure& node) override;
-
-        void visit(HIRExprNodeGenerator& node) override;
-
-        void visit(HIRExprNodeGeneratorWrapper& node) override;
-
-        void visit(HIRExprNodeAsyncBlock& node) override;
-
-        void noRevisit(HIRExprNode& node);
     };
 
     struct ExprVisitorApply: public HIRExprVisitorDef {
@@ -6606,7 +6549,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 ExprVisitorRevisit visitor{context, false, &passStartIvars, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 context.currentOrder = node.checkOrder;
-                node.visit(visitor);
+                visitor.revisit(node);
                 context.currentOrder = 0;
                 if (visitor.nodeCompleted()) {
                     for (size_t j = i + 1; j < context.toVisit.length(); j++) {
@@ -6820,7 +6763,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
                 ExprVisitorRevisit visitor{context, true, nullptr, &*ivarCoercionIndex};
                 DEBUG(StringView("> ") << static_cast<const void*>(&node) << StringView(" ") << typeid(node).name() << StringView(" -> ") << context.ivars.fmtType(node.resType));
                 context.currentOrder = node.checkOrder;
-                node.visit(visitor);
+                visitor.revisit(node);
                 context.currentOrder = 0;
                 if (visitor.nodeCompleted()) {
                     for (size_t j = i + 1; j < context.toVisit.length(); j++) {
@@ -7714,6 +7657,35 @@ ExprVisitorRevisit::ExprVisitorRevisit(Context& context, bool fallback, const Ve
 {
 }
 
+auto ExprVisitorRevisit::revisit(HIRExprNode& node) -> void {
+    switch (node.nodeKind()) {
+        case HIRExprNodeBlock::kind:
+            return this->visit(static_cast<HIRExprNodeBlock&>(node));
+        case HIRExprNodeLet::kind:
+            return this->visit(static_cast<HIRExprNodeLet&>(node));
+        case HIRExprNodeCast::kind:
+            return this->visit(static_cast<HIRExprNodeCast&>(node));
+        case HIRExprNodeIndex::kind:
+            return this->visit(static_cast<HIRExprNodeIndex&>(node));
+        case HIRExprNodeDeref::kind:
+            return this->visit(static_cast<HIRExprNodeDeref&>(node));
+        case HIRExprNodeEmplace::kind:
+            return this->visit(static_cast<HIRExprNodeEmplace&>(node));
+        case HIRExprNodeCallValue::kind:
+            return this->visit(static_cast<HIRExprNodeCallValue&>(node));
+        case HIRExprNodeCallMethod::kind:
+            return this->visit(static_cast<HIRExprNodeCallMethod&>(node));
+        case HIRExprNodeField::kind:
+            return this->visit(static_cast<HIRExprNodeField&>(node));
+        case HIRExprNodePathValue::kind:
+            return this->visit(static_cast<HIRExprNodePathValue&>(node));
+        case HIRExprNodeArraySized::kind:
+            return this->visit(static_cast<HIRExprNodeArraySized&>(node));
+        default:
+            BUG(node.span(), StringView("Node revisit unexpected - ") << typeid(node).name());
+    }
+}
+
 auto ExprVisitorRevisit::nodeCompleted() const -> bool {
     return completed;
 }
@@ -7752,36 +7724,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeBlock& node) -> void {
     this->completed = true;
 }
 
-auto ExprVisitorRevisit::visit(HIRExprNodeConstBlock& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeAsm& node) -> void {
-    // TODO: Revisit for validation
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeAsm2& node) -> void {
-    // TODO: Revisit for validation
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeReturn& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeYield& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeAWait& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeUse& node) -> void {
-    noRevisit(node);
-}
-
 auto ExprVisitorRevisit::visit(HIRExprNodeLet& node) -> void {
     if (!node.value) {
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
@@ -7796,38 +7738,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeLet& node) -> void {
     node.diverges = this->nodeDiverges(*node.value);
     this->context.equateTypes(node.span(), node.resType, node.diverges ? this->context.crate.types.diverge() : this->context.crate.types.unit());
     this->completed = true;
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeLoop& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeLoopControl& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeMatch& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeAssign& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeBinOp& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeUniOp& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeBorrow& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeRawBorrow& node) -> void {
-    noRevisit(node);
 }
 
 auto ExprVisitorRevisit::bad_cast(const Span& sp, const HIRType* srcTy, const HIRType* tgtTy, const char* where) -> void {
@@ -8126,10 +8036,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
     }
 }
 
-auto ExprVisitorRevisit::visit(HIRExprNodeUnsize& node) -> void {
-    noRevisit(node);
-}
-
 auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
     const auto& langIndex = this->context.crate.getLangItemPath(node.span(), "index"); // TODO: Pre-load
     const auto& valTy = this->context.getType(node.value->resType);
@@ -8285,14 +8191,6 @@ auto ExprVisitorRevisit::visitEmplace129(HIRExprNodeEmplace& node) -> void {
 
 auto ExprVisitorRevisit::visit(HIRExprNodeEmplace& node) -> void {
     return visitEmplace129(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeTupleVariant& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeCallPath& node) -> void {
-    noRevisit(node);
 }
 
 auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIRType* ty, const HIRPathParams& traitPp) -> AsyncCallResult {
@@ -8878,36 +8776,8 @@ auto ExprVisitorRevisit::visit(HIRExprNodeField& node) -> void {
     completed = true;
 }
 
-auto ExprVisitorRevisit::visit(HIRExprNodeLiteral& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeUnitVariant& node) -> void {
-    noRevisit(node);
-}
-
 auto ExprVisitorRevisit::visit(HIRExprNodePathValue& node) -> void {
     completed = resolveInherentPathValue(context, node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeVariable& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeConstParam& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeStructLiteral& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeTuple& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeArrayList& node) -> void {
-    noRevisit(node);
 }
 
 auto ExprVisitorRevisit::visit(HIRExprNodeArraySized& node) -> void {
@@ -8945,26 +8815,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeArraySized& node) -> void {
         this->context.addTraitBound(node.span(), node.val->resType, this->context.resolve.langCopy(), {});
     }
     completed = true;
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeClosure& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeGenerator& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeGeneratorWrapper& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::visit(HIRExprNodeAsyncBlock& node) -> void {
-    noRevisit(node);
-}
-
-auto ExprVisitorRevisit::noRevisit(HIRExprNode& node) -> void {
-    BUG(node.span(), StringView("Node revisit unexpected - ") << typeid(node).name());
 }
 
 ExprVisitorApply::ExprVisitorApply(Context& context, const tArgs* callerArgs, const HIRType* callerReturnType)
@@ -12018,7 +11868,7 @@ auto ExprVisitorEnum::visit(HIRExprNodeField& node) -> void {
        from a coercion of the whole `Option` (combine's `AnyPartialState`).  A
        receiver still open keeps the revisit. */
     ExprVisitorRevisit eager{this->context};
-    node.visit(eager);
+    eager.visit(node);
     if (eager.nodeCompleted()) {
         return;
     }
