@@ -450,11 +450,11 @@ namespace {
     };
 
     struct HirSerialiser {
-        std::map<RcString, size_t> types;
+        size_t nextTypeId = 0;
+        size_t regionTypeIdStart = 0;
         IntMap<size_t> typeIds;
         IntMap<size_t> simplePathIds;
         bool inRegion = false;
-        Vector<RcString> regionTypeNames;
         Vector<u64> regionTypeKeys;
         Vector<u64> regionPathKeys;
         HIRSerialiseWriter& out;
@@ -3335,23 +3335,9 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
     if (inRegion) {
         regionTypeKeys.pushBack(typeKey);
     }
-    auto tyStr = FMT(ty);
-    if (tyStr[0] == '{') {
-        auto p = tyStr.find('}');
-        tyStr = tyStr.substr(p + 1);
-    }
-
-    auto interned = RcString::newInterned(tyStr);
-    auto it = types.find(interned);
-    if (it != types.end()) {
-        DEBUG(StringView("Cached ") << it->second);
-        typeIds.insert(typeKey, it->second);
-        out.writeCount(it->second);
-        return;
-    }
     out.writeCount(~0u);
 
-    DEBUG(StringView("Fresh ") << types.size());
+    DEBUG(StringView("Fresh ") << nextTypeId);
     auto _ = out.openObject("HIR::TypeData");
     out.writeTag(ty->tag());
     switch ((*ty).tag()) {
@@ -3472,11 +3458,7 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
             break;
     }
 
-    const auto inserted = types.insert(std::make_pair(interned, types.size()));
-    if (inRegion && inserted.second) {
-        regionTypeNames.pushBack(interned);
-    }
-    const auto id = inserted.first->second;
+    const auto id = nextTypeId++;
     if (!typeIds.find(typeKey)) {
         typeIds.insert(typeKey, id);
     }
@@ -4031,6 +4013,7 @@ auto HirSerialiser::serialiseFunctionBody(const HIRExprPtr& exp, bool saveMir) -
     if (saveMir) {
         BUG_ASSERT(!inRegion);
         const size_t length = out.reserveCount();
+        regionTypeIdStart = nextTypeId;
         inRegion = true;
         serialise(*exp.mir);
         endRegion();
@@ -4048,14 +4031,11 @@ auto HirSerialiser::endRegion() -> void {
     for (const u64 key : regionTypeKeys) {
         typeIds.erase(key);
     }
-    for (const auto& name : regionTypeNames) {
-        types.erase(name);
-    }
+    nextTypeId = regionTypeIdStart;
     for (const u64 key : regionPathKeys) {
         simplePathIds.erase(key);
     }
     regionTypeKeys.clear();
-    regionTypeNames.clear();
     regionPathKeys.clear();
     inRegion = false;
 }

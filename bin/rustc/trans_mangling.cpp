@@ -482,6 +482,11 @@ auto Mangler::fmtType(const HIRType* ty) -> void {
             });
             for (const auto* aty : bounds) {
                 this->fmtName(aty->first);
+                if (!aty->second.atyParams.types.empty() || !aty->second.atyParams.values.empty()) {
+                    os << StringView("g");
+                    this->fmtGenericPath(aty->second.sourceTrait);
+                    this->fmtPathParams(aty->second.atyParams);
+                }
                 this->fmtType(aty->second.type);
             }
             os << e.markers.size();

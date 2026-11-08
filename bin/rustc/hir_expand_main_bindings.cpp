@@ -7722,6 +7722,15 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
             DEBUG(StringView("ATY ") << ty.first << StringView(" : ") << ty.second);
             auto tyDef = tr.getAtyDef(ty.first);
             ASSERT_BUG(sp, tyDef.first, StringView("Unable to find ATY defintiion"));
+            bool requiresSizedSelf = false;
+            for (const auto& bound : tyDef.first->generics.bounds) {
+                const auto* traitBound = bound.opt_TraitBound();
+                requiresSizedSelf |= traitBound && traitBound->type == crate.types.self() && traitBound->trait.path.path == crate.getLangItemPathOpt("sized");
+            }
+            if (tyDef.first->generics.isGeneric() && requiresSizedSelf) {
+                params.types.push_back(crate.types.unit());
+                continue;
+            }
             auto atyParams = tyDef.first->generics.makeNopParams(crate.types, 1);
             HIRPath path(crate.types.self(), traitPath.clone(), ty.first, std::move(atyParams));
             params.types.push_back(crate.types.path(mv$(path), {}));
