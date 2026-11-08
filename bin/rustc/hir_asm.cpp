@@ -112,9 +112,7 @@ bool AsmOptions::operator==(const AsmOptions& x) const {
 }
 
 bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
-    if (a.tag() != b.tag()) {
-        return false;
-    }
+    BUG_ASSERT(a.tag() == b.tag());
     switch (a.tag()) {
         case AsmRegisterSpec::TAG_Class: {
             auto& ae = a.as_Class();
