@@ -2151,7 +2151,7 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             } else if (reprType == "no_niche") {
                 // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
             } else {
-                TODO(sp, StringView("Handle struct repr '") << reprType << StringView("'"));
+                ERROR(sp, E0000, StringView("Unknown struct repr '") << reprType << StringView("'"));
             }
         } while (lex.getTokenIf(TOK_COMMA));
         lex.getTokenCheck(TOK_PAREN_CLOSE);

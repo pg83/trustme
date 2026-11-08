@@ -25,6 +25,7 @@
 #include <std/lib/vector.h>
 #include <std/str/builder.h>
 #include <std/mem/obj_pool.h>
+#include <std/sym/i_map.h>
 
 #include <limits.h>
 #include <algorithm>
@@ -2927,11 +2928,22 @@ HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vect
         struct Foo {
             AST2HIR& ctx;
             HIRModule& mod;
+            IntMap<bool> visitedAliases;
 
             Foo(AST2HIR& ctx, HIRModule& mod)
                 : ctx(ctx)
                 , mod(mod)
+                , visitedAliases(ctx.crate->pool)
             {
+            }
+
+            bool markAliasSeen(const void* alias) {
+                const auto key = reinterpret_cast<uintptr_t>(alias);
+                if (visitedAliases.find(key)) {
+                    return false;
+                }
+                visitedAliases.insert(key, true);
+                return true;
             }
 
             void pushTrait(HIRSimplePath sp) {
@@ -2950,6 +2962,9 @@ HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vect
             }
 
             void pushTraitAliasAst(const ASTTraitAlias& ta) {
+                if (!markAliasSeen(&ta)) {
+                    return;
+                }
                 for (const auto& e : ta.traits) {
                     if (const auto* pbe = e.ent.path->bindings.type.binding.opt_TraitAlias()) {
                         pushTraitAlias(*pbe);
@@ -2960,6 +2975,9 @@ HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vect
             }
 
             void pushTraitAliasHir(const HIRTraitAlias& ta) {
+                if (!markAliasSeen(&ta)) {
+                    return;
+                }
                 for (const auto& p : ta.traits) {
                     if (const auto* tap = ctx.crate->getTypeitemByPath(Span(), p.path.path).opt_TraitAlias()) {
                         pushTraitAliasHir(*tap);
