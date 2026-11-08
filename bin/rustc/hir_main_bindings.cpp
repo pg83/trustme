@@ -1267,20 +1267,24 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
         _(Unreachable, {})
         _(Goto, static_cast<unsigned int>(in.readCount()))
         _(If, {deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())})
-        _(Switch,
-          {deserialiseMirLvalue(),
-           deserialiseVectorC<unsigned int>([&]() {
-            return static_cast<unsigned int>(in.readCount());
-        }),
-           static_cast<unsigned int>(in.readCount()),
-           static_cast<unsigned int>(in.readCount())})
-        _(SwitchValue,
-          {deserialiseMirLvalue(),
-           static_cast<unsigned int>(in.readCount()),
-           deserialiseVectorC<unsigned int>([&]() {
-            return static_cast<unsigned int>(in.readCount());
-        }),
-           deserialiseMirSwitchvalues()})
+        case MIRTerminator::TAG_Switch: {
+            auto value = deserialiseMirLvalue();
+            auto targets = deserialiseVectorC<unsigned int>([&]() {
+                return static_cast<unsigned int>(in.readCount());
+            });
+            const auto validFlag = static_cast<unsigned int>(in.readCount());
+            const auto invalidTarget = static_cast<unsigned int>(in.readCount());
+            return MIRTerminator::make_Switch({mv$(value), mv$(targets), validFlag, invalidTarget});
+        }
+        case MIRTerminator::TAG_SwitchValue: {
+            auto value = deserialiseMirLvalue();
+            const auto defaultTarget = static_cast<unsigned int>(in.readCount());
+            auto targets = deserialiseVectorC<unsigned int>([&]() {
+                return static_cast<unsigned int>(in.readCount());
+            });
+            auto values = deserialiseMirSwitchvalues();
+            return MIRTerminator::make_SwitchValue({mv$(value), defaultTarget, mv$(targets), mv$(values)});
+        }
         _(Drop, {static_cast<MIRDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
         _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
         _(TailCall, {deserialiseMirTailCallTarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
