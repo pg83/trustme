@@ -3922,12 +3922,6 @@ void Context::equateTypesInner(const Span& sp, const HIRType* li, const HIRType*
                 ERROR(sp, E0000, StringView("Type mismatch between ") << this->ivars.fmtType(lT) << StringView(" and ") << this->ivars.fmtType(rT));
             }
             switch ((*lT).tag()) {
-                case HIRType::TAG_Infer: {
-                    UNREACHABLE();
-                }
-                case HIRType::TAG_Diverge: {
-                    break;
-                }
                 case HIRType::TAG_Primitive: {
                     auto& lE = (*lT).as_Primitive();
                     auto& rE = (*rT).as_Primitive();
