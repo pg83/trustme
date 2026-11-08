@@ -13377,6 +13377,16 @@ auto NextTraitGoalEvaluator::evaluateStructuralTrait(const Span& callSpan, Struc
 
 auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSpan, StructuralTrait builtin, const HIRSimplePath& trait, const HIRType* rawType) -> Certainty {
     const auto* type = resolve_.resolveType(rawType);
+    const auto* closure = type->is_NodeType() ? type->as_NodeType().opt_Closure() : nullptr;
+    if (closure && builtin != StructuralTrait::Sized) {
+        if (!closure->typeckCapturesKnown) {
+            captureWaits_++;
+            return Certainty::Ambiguous;
+        }
+        if (closure->typeckCaptureTypes.empty()) {
+            return Certainty::Proven;
+        }
+    }
     if (builtin == StructuralTrait::Sized) {
         switch (type->tag()) {
             case HIRType::TAG_Infer: {

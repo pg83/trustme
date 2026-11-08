@@ -2132,7 +2132,7 @@ namespace {
     }
 
     bool hasAbiIdentity(const HIRType* ty) {
-        return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
+        return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !(ty->flags & HIRType::HAS_NODE_TYPE);
     }
 
     bool TransmuteTypeChecker::check(const HIRType* sourceType, const HIRType* destinationType) {
