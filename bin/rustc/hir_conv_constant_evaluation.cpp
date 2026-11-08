@@ -890,11 +890,6 @@ struct HIREvaluator::MIREvalCallStackEntry {
     const TypeRepr* reprOfOrBug(const HIRType* ty) const;
 };
 
-static ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const MIREvalAllocationPtr& ap) {
-    os << MIREvalValueRef(ap);
-    return os;
-}
-
 static size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
     BUG_ASSERT(outPath.index < r->fields.size());
     size_t ofs = r->fields[outPath.index].offset;
