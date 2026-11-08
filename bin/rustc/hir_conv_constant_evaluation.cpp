@@ -4452,7 +4452,9 @@ auto MIREvalValueRef::writeBytes(const MIRTypeResolve& state, const void* data, 
 auto MIREvalValueRef::extWriteBytes(const MIRTypeResolve& state, size_t len) -> u8* {
     ensureLive(state);
     MIR_ASSERT(state, storage, StringView("Writing to invalid slot"));
-    MIR_ASSERT(state, storage.asValue().isWritable(), StringView("Writing to read-only slot"));
+    if (!storage.asValue().isWritable()) {
+        ERROR(state.sp, E0000, StringView("writing to read-only memory during constant evaluation"));
+    }
     return storage.asValue().extWriteBytes(ofs, len);
 }
 
