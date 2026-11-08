@@ -404,16 +404,9 @@ RcString HIRSimplePath::popComponent() {
 }
 
 void HIRSimplePath::updateCrateName(RcString v) {
-    if (!p) {
-        if (v != RcString()) {
-            *this = HIRSimplePath(std::move(v));
-        }
-        return;
-    }
+    BUG_ASSERT(p && p->members.size() >= 2);
     const auto& m = p->members;
-    if (v.c_str()[0] == '\0' && m.size() == 1) {
-        p = nullptr;
-    } else {
+    {
         auto chOld = contentHash(m[0]);
         auto chNew = contentHash(v);
         auto h1 = p->hash1 ^ key1(chOld, 0) ^ key1(chNew, 0);
