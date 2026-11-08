@@ -1617,7 +1617,10 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             ERROR(sp, E0000, StringView("Reached the recursion limit while auto-dereferencing ") << src);
         }
         if (solverResponse.effects.certainty == SolverCertainty::NoSolution) {
-            return CoerceResult::Equality;
+            bool pendingOpaque = false;
+            (void)context.revealOpaqueType(dst, src, &pendingOpaque);
+            (void)context.revealOpaqueType(src, dst, &pendingOpaque);
+            return pendingOpaque ? CoerceResult::Unknown : CoerceResult::Equality;
         }
         if (solverResponse.effects.certainty == SolverCertainty::Ambiguous) {
             applyOpenCoercionEffects(context, sp, solverResponse.effects);
@@ -7545,7 +7548,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
 {
 }
 
-const HIRType* Context::revealOpaqueType(const HIRType* type, const HIRType* relatedTo) const {
+const HIRType* Context::revealOpaqueType(const HIRType* type, const HIRType* relatedTo, bool* pending) const {
     type = ivars.getType(type);
     const size_t maxDepth = 1 + erasedTypeAliases.size() + rpitTypes.size() + crate.opaqueTypeDefiners.size();
     for (size_t depth = 0; depth < maxDepth; depth++) {
@@ -7564,6 +7567,9 @@ const HIRType* Context::revealOpaqueType(const HIRType* type, const HIRType* rel
                         return generic && generic->binding == binding.first;
                     });
                     if (!identity && relatedTo != ourType && ivars.typeContainsIvars(ourType)) {
+                        if (pending) {
+                            *pending = true;
+                        }
                         continue;
                     }
                     ASSERT_BUG(Span(), !matched, StringView("Multiple RPIT origins match ") << origin << StringView(" at index ") << index);
