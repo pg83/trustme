@@ -9,9 +9,3 @@
 [[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok);
 [[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp);
 [[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, std::initializer_list<eTokenType> exp);
-
-#define ASSERT(lex, cnd)                                                         \
-    do {                                                                         \
-        if (!(cnd))                                                              \
-            compileErrorBugCheck(lex, "Assertion failed: " __FILE__ " - " #cnd); \
-    } while (0)

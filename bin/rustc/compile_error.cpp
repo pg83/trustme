@@ -20,11 +20,6 @@ void compileErrorBugCheck(const char* message) {
     std::abort();
 }
 
-void compileErrorBugCheck(const TokenStream& lex, const char* message) {
-    sysO << lex.pointSpan() << StringView("BugCheck(") << message << StringView(")") << endL;
-    std::abort();
-}
-
 void compileErrorBugCheckAt(const char* file, int line, const char* condition) {
     sysE << file << StringView(":") << line << StringView(": BUG: assertion failed: ") << condition << endL;
     std::abort();
