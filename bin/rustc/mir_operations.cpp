@@ -6219,23 +6219,13 @@ namespace {
                     ++it;
                     continue;
                 }
-                // If the local was dropped, then ignore IF it's not a borrow (TODO: Only if there's drop glue?)
-                if (droppedLocals[idx] && !fcn.locals[idx]->is_Borrow()) {
+                if (droppedLocals[idx]) {
                     ++it;
                     continue;
                 }
                 DEBUG(state << StringView("Unread assignment, remove - ") << *it);
                 it = bb.statements.erase(it);
                 changed = true;
-            }
-            if (auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.is_Local()) {
-                auto idx = drop->slot.as_Local();
-                if (!readLocals[idx] && fcn.locals[idx]->is_Borrow()) {
-                    auto target = drop->target;
-                    DEBUG(state << StringView("Drop of unread value, replace with Goto(bb") << target << StringView(")"));
-                    bb.terminator = MIRTerminator::make_Goto(target);
-                    changed = true;
-                }
             }
         }
 
