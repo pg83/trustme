@@ -41,8 +41,6 @@ namespace {
 
         virtual void visit(ASTExprNodeGeneratorBlock& n) override;
 
-        virtual void visit(ASTExprNodeMacro& n) override;
-
         virtual void visit(ASTExprNodeAsm& n) override;
 
         virtual void visit(ASTExprNodeAsm2& n) override;
@@ -60,8 +58,6 @@ namespace {
         virtual void visit(ASTExprNodeCallObject& n) override;
 
         virtual void visit(ASTExprNodeLoop& n) override;
-
-        virtual void visit(ASTExprNodeFor& n) override;
 
         void visitIfletConditions(std::vector<ASTIfLetCondition>& conds);
 
@@ -1036,10 +1032,6 @@ auto RustPrinter::visit(ASTExprNodeGeneratorBlock& n) -> void {
     ASTNodeVisitor::visit(n.inner);
 }
 
-auto RustPrinter::visit(ASTExprNodeMacro& n) -> void {
-    BUG(n.span(), StringView("Unexpanded macro in AST dump"));
-}
-
 auto RustPrinter::visit(ASTExprNodeAsm& n) -> void {
     os << StringView("asm!( \"") << n.text << StringView("\"");
     os << StringView(" :");
@@ -1273,10 +1265,6 @@ auto RustPrinter::visit(ASTExprNodeLoop& n) -> void {
     }
 
     ASTNodeVisitor::visit(n.code);
-}
-
-auto RustPrinter::visit(ASTExprNodeFor& n) -> void {
-    BUG(n.span(), StringView("Unexpanded for loop in AST dump"));
 }
 
 auto RustPrinter::visitIfletConditions(std::vector<ASTIfLetCondition>& conds) -> void {
