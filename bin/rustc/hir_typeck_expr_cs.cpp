@@ -11388,12 +11388,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
     {
         auto& tuMatch = ty->as_Path().binding;
         switch (tuMatch.tag()) {
-            case HIRTypePathBinding::TAG_Unbound: {
-                break;
-            }
-            case HIRTypePathBinding::TAG_Opaque: {
-                break;
-            }
             case HIRTypePathBinding::TAG_Enum: {
                 const auto e = tuMatch.as_Enum();
                 const auto& varName = node.path.path.components().back();
@@ -11418,9 +11412,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeTupleVariant& node) -> void {
             }
             case HIRTypePathBinding::TAG_Union: {
                 BUG(sp, StringView("TupleVariant pointing to a union"));
-            }
-            case HIRTypePathBinding::TAG_ExternType: {
-                BUG(sp, StringView("TupleVariant pointing to a extern type"));
             }
         }
     }
@@ -11520,15 +11511,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
     {
         auto& tuMatch = ty->as_Path().binding;
         switch (tuMatch.tag()) {
-            case HIRTypePathBinding::TAG_Unbound: {
-                break;
-            }
-            case HIRTypePathBinding::TAG_Opaque: {
-                break;
-            }
-            case HIRTypePathBinding::TAG_ExternType: {
-                break;
-            }
             case HIRTypePathBinding::TAG_Enum: {
                 const auto e = tuMatch.as_Enum();
                 const auto& varName = tyPath.path.components().back();
@@ -11658,21 +11640,12 @@ auto ExprVisitorEnum::visit(HIRExprNodeUnitVariant& node) -> void {
     {
         auto& tuMatch = ty->as_Path().binding;
         switch (tuMatch.tag()) {
-            case HIRTypePathBinding::TAG_Unbound: {
-                break;
-            }
-            case HIRTypePathBinding::TAG_Opaque: {
-                break;
-            }
             case HIRTypePathBinding::TAG_Enum: {
                 const auto e = tuMatch.as_Enum();
                 generics = &e->params;
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
-                break;
-            }
-            case HIRTypePathBinding::TAG_ExternType: {
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {

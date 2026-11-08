@@ -4028,6 +4028,20 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
         }
 
         void visit(HIRExprNodeStructLiteral& node) override {
+            if (const auto* typePath = node.type->opt_Path(); typePath && typePath->path.data.is_UfcsUnknown()) {
+                auto data = node.type->cloneData();
+                auto& path = data.as_Path().path;
+                auto& ufcs = path.data.as_UfcsUnknown();
+                ufcs.type = upperVisitor.visitType(ufcs.type);
+                if (const auto* enumPath = ufcs.type->opt_Path(); enumPath && enumPath->binding.is_Enum()) {
+                    const auto& enm = *enumPath->binding.as_Enum();
+                    const auto index = enm.findVariant(ufcs.item);
+                    if (index != SIZE_MAX && (enm.data.is_Value() || !enm.data.as_Data()[index].isStruct)) {
+                        upperVisitor.visitPath(path, HIRVisitor::PathContext::VALUE);
+                        node.type = upperVisitor.crate.types.intern(std::move(data));
+                    }
+                }
+            }
             HIRExprVisitorDef::visit(node);
             const Span& sp = node.span();
             if (node.type->is_Path() && node.type->as_Path().path.data.is_Generic()) {
@@ -4037,6 +4051,12 @@ auto UfcsVisitor::visitExpr(HIRExprPtr& expr) -> void {
                 if (gp.path.components().size() > 1) {
                     const auto& ent = upperVisitor.crate.getTypeitemByPath(sp, gp.path, /*ign_crate*/ false, true);
                     if (ent.is_Enum()) {
+                        const auto& enm = ent.as_Enum();
+                        const auto index = enm.findVariant(gp.path.components().back());
+                        if (node.values.empty() && !node.baseValue && index != SIZE_MAX && (enm.data.is_Value() || enm.data.as_Data()[index].type == upperVisitor.crate.types.unit())) {
+                            replacement.reset(upperVisitor.crate.pool->make<HIRExprNodeUnitVariant>(sp, mv$(gp), false));
+                            return;
+                        }
                         DEBUG(static_cast<const void*>(&node) << StringView(": Tagging as an enum"));
                         node.isStruct = false;
                         auto enumPath = std::move(gp);
