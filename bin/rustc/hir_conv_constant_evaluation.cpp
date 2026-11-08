@@ -705,7 +705,21 @@ namespace {
     }
 
     void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn) {
-        Expander exp{wb};
+        struct SignatureExpander final: Expander {
+            const HIRExprPtr& body;
+
+            SignatureExpander(const WireBoard& wb, const HIRExprPtr& body)
+                : Expander(wb)
+                , body(body)
+            {
+            }
+
+            void visitExpr(HIRExprPtr& expr) override {
+                if (&expr != &body) {
+                    Expander::visitExpr(expr);
+                }
+            }
+        } exp{wb, fcn.code};
         exp.implParams = implParams;
         exp.visitFunction(ip, fcn);
     }
