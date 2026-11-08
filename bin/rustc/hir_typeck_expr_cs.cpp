@@ -6876,10 +6876,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRType* re
         count++;
         context.compactIvars(rootPtr->span());
     }
-    if (count == MAX_ITERATIONS) {
-        if (!context.hasRules()) {
-            BUG(rootPtr->span(), StringView("Typecheck ran for too many iterations, max - ") << MAX_ITERATIONS);
-        }
+    if (count == MAX_ITERATIONS && context.hasRules()) {
         WARNING(rootPtr->span(), W0000, StringView("Typecheck ran for too many iterations, max - ") << MAX_ITERATIONS);
     }
 
