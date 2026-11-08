@@ -528,6 +528,15 @@ const HIRTypeItem& HIRCrate::getTypeitemByPath(const Span& sp, const HIRSimplePa
         return **cached;
     }
 
+    if (!ignoreLastNode && path.crateName() == crateName && path.components().size() == 1) {
+        auto generated = std::find_if(newTypes.begin(), newTypes.end(), [&](const auto& item) {
+            return item.first == path.components().back();
+        });
+        if (generated != newTypes.end()) {
+            return generated->second->ent;
+        }
+    }
+
     const auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, ignoreLastNode);
 
     auto it = mod.modItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
