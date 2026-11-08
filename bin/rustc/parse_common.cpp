@@ -2284,6 +2284,13 @@ namespace {
             ParseWhereClause(lex, params);
         }
 
+        if (!firstAttrsUsed && !args.empty()) {
+            if (firstKeep) {
+                args.front().attrs = mv$(firstAttrs);
+            } else {
+                args.erase(args.begin());
+            }
+        }
         auto rv = ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
         if (argsTrailingComma) {
             rv.setArgsTrailingComma();

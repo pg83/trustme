@@ -1256,11 +1256,7 @@ namespace {
         }
         for (size_t i = 0; i < e.args().size(); i++) {
             auto& arg = e.args()[i];
-            if (!ExpandAttrsCfgOnly(es, arg.attrs)) {
-                e.args().erase(e.args().begin() + i);
-                i--;
-                continue;
-            }
+            BUG_ASSERT(ExpandAttrsCfgOnly(es, arg.attrs));
             ExpandPattern(es, mod, arg.pat, false);
             ExpandType(es, mod, arg.ty);
             ExpandAttrs(es, arg.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
