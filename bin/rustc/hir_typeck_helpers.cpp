@@ -4878,8 +4878,6 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                     H::expandAssociatedTypesParams(sp, *this, pe.trait.params, effects);
                     break;
                 }
-                case HIRPathData::TAG_UfcsUnknown:
-                    UNREACHABLE();
             }
             // TODO: Should this re-populate `def`? Not right now, assuming it's set once only
             break;

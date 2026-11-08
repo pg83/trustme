@@ -1032,9 +1032,6 @@ HIRTypeDataFunctionPointer HIRType::Data_NamedFunction::decay(HIRTypeInterner& t
                     ppMethod = &pe.params;
                     break;
                 }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    BUG(sp, StringView("UfcsUnknown seen"));
-                }
             }
             MonomorphStatePtr ms{types, tySelf, ppImpl, ppMethod};
             const auto& f = *fp;

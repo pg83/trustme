@@ -827,12 +827,6 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
                     expandAssociatedTypesParams(sp, e2.params);
                     break;
                 }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    auto& e2 = e.path.data.as_UfcsUnknown();
-                    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
-                    expandAssociatedTypesParams(sp, e2.params);
-                    break;
-                }
             }
             return crate.types.intern(mv$(data));
         }
