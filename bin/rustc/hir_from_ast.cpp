@@ -317,10 +317,6 @@ namespace {
 
         virtual void visit(ASTExprNodeGeneratorBlock& v) override;
 
-        virtual void visit(ASTExprNodeMacro& v) override;
-
-        virtual void visit(ASTExprNodeMacroDefinition& v) override;
-
         virtual void visit(ASTExprNodeAsm& v) override;
 
         virtual void visit(ASTExprNodeAsm2& v) override;
@@ -346,8 +342,6 @@ namespace {
         virtual void visit(ASTExprNodeCallObject& v) override;
 
         virtual void visit(ASTExprNodeLoop& v) override;
-
-        void visit(ASTExprNodeFor& v) override;
 
         std::vector<HIRExprNodeMatch::Guard> ifletToGuards(std::vector<ASTIfLetCondition>& guards);
 
@@ -4459,14 +4453,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeGeneratorBlock& v) -> void {
     rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), mv$(rv), RcString::newInterned("fuse"), HIRPathParams(), std::vector<HIRExprNodeP>()));
 }
 
-auto LowerHIRExprNodeVisitor::visit(ASTExprNodeMacro& v) -> void {
-    BUG(v.span(), StringView("Hit ExprNode_Macro"));
-}
-
-auto LowerHIRExprNodeVisitor::visit(ASTExprNodeMacroDefinition& v) -> void {
-    BUG(v.span(), StringView("Hit ExprNode_MacroDefinition outside a block"));
-}
-
 auto LowerHIRExprNodeVisitor::visit(ASTExprNodeAsm& v) -> void {
     std::vector<HIRExprNodeAsm::ValRef> outputs;
     std::vector<HIRExprNodeAsm::ValRef> inputs;
@@ -4950,10 +4936,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeLoop& v) -> void {
     auto code = lower(v.code);
     leaveLoopLabel(label);
     rv.reset(ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), mv$(code)));
-}
-
-auto LowerHIRExprNodeVisitor::visit(ASTExprNodeFor& v) -> void {
-    BUG(v.span(), StringView("Encountered still-sugared for loop"));
 }
 
 auto LowerHIRExprNodeVisitor::ifletToGuards(std::vector<ASTIfLetCondition>& guards) -> std::vector<HIRExprNodeMatch::Guard> {
