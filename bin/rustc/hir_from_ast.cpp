@@ -1046,9 +1046,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         case ASTPatternData::TAG_MaybeBind: {
             BUG(pat.span(), StringView("Encountered MaybeBind pattern"));
         }
-        case ASTPatternData::TAG_Macro: {
-            BUG(pat.span(), StringView("Encountered Macro pattern"));
-        }
         case ASTPatternData::TAG_Any: {
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
         }

@@ -2060,9 +2060,6 @@ namespace {
                 }
                 break;
             }
-            case ASTPatternData::TAG_Macro: {
-                BUG(pat.span(), StringView("Resolve_Absolute_Pattern - Encountered Macro - ") << pat);
-            }
             case ASTPatternData::TAG_Any: {
                 break;
             }

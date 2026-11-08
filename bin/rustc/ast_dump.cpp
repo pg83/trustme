@@ -565,11 +565,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
             os << v.name << StringView(" /*?*/");
             break;
         }
-        case ASTPattern::Data::TAG_Macro: {
-            auto& v = p.data().as_Macro();
-            os << *v.inv;
-            break;
-        }
         case ASTPattern::Data::TAG_Box: {
             {
                 const auto& v = p.data().as_Box();
