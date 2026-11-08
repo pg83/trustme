@@ -131,12 +131,7 @@ Ordering MIRLValue::RefCommon::ord(const MIRLValue::RefCommon& x) const {
     if (rv != OrdEqual) {
         return rv;
     }
-    for (size_t i = 0; i < std::min(wrapperCount_, x.wrapperCount_); i++) {
-        rv = lv_->wrappers[i].ord(x.lv_->wrappers[i]);
-        if (rv != OrdEqual) {
-            return rv;
-        }
-    }
+    BUG_ASSERT(wrapperCount_ == 0 || x.wrapperCount_ == 0);
     return (rv = ::ord(wrapperCount_, x.wrapperCount_));
 }
 
