@@ -7716,11 +7716,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeBlock& node) -> void {
 }
 
 auto ExprVisitorRevisit::visit(HIRExprNodeLet& node) -> void {
-    if (!node.value) {
-        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
-        this->completed = true;
-        return;
-    }
     const auto* valueType = this->context.getType(node.value->resType);
     const auto* infer = valueType->opt_Infer();
     if (!node.value->diverges && infer && infer->tyClass == HIRInferClass::None) {
