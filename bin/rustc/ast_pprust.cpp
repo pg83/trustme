@@ -723,10 +723,6 @@ void Printer::spaceIfNotBol() {
 void Printer::breakOffsetIfNotBol(i64 n, i64 off) {
     if (!this->isBeginningOfLine()) {
         this->breakOffset(n, off);
-    } else if (off != 0) {
-        if (!this->bufEmpty() && buf_.back().token.isHardbreak()) {
-            buf_.mutBack().token = makeBreak(off, SIZE_INFINITY, 0);
-        }
     }
 }
 
