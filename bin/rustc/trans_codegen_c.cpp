@@ -5865,12 +5865,19 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
         return;
     }
 
+    const bool escapeDollar = usesIntelCompilerAsmDialect() && e.tpl.find("$$") < e.tpl.size();
+    if (escapeDollar) {
+        of << indent << StringView("extern __attribute__((visibility(\"hidden\"))) char trustme_asm_dollar asm(\"__trustme_asm_dollar$\");\n");
+    }
     of << indent << StringView("__asm__ ");
     if (isVolatile) {
         of << StringView("__volatile__");
     }
     const bool emitAttSyntax = usesIntelCompilerAsmDialect() && !isIntel;
     of << StringView("(\"") << (emitAttSyntax ? ".att_syntax prefix; " : "");
+    if (escapeDollar) {
+        of << StringView(".irpc trustme_dollar, %c[trustme_dollar];\\n.if '\\\\trustme_dollar' == 36;\\n");
+    }
     // TODO: Use a more powerful parser that can properly handle the differences between rustc/llvm and GCC
     for (auto it = e.tpl.begin(); it != e.tpl.end(); ++it) {
         if (*it == '\n') {
@@ -5891,6 +5898,9 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
             of << StringView("%%%");
         } else if (*it == '%' && !isdigit(*(it + 1))) {
             of << StringView("%%");
+        } else if (*it == '$' && it + 1 != e.tpl.end() && *(it + 1) == '$') {
+            of << (escapeDollar ? "\\\\trustme_dollar\\\\()" : "$");
+            ++it;
         } else if (*it == '$' && isdigit(*(it + 1)) && *(it + 2) != 'x') {
             of << (emitAttSyntax ? "%%%" : "%");
         }
@@ -5903,6 +5913,9 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
         } else {
             of << *it;
         }
+    }
+    if (escapeDollar) {
+        of << StringView("; .endif; .endr; ");
     }
     of << (emitAttSyntax ? "; .intel_syntax noprefix; " : "") << StringView("\"");
     of << StringView(": ");
@@ -5937,6 +5950,12 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
         of << StringView("\"") << H::convertReg(v.first.c_str()) << StringView("\" (");
         emitLvalue(v.second);
         of << StringView(")");
+    }
+    if (escapeDollar) {
+        if (!e.inputs.empty()) {
+            of << StringView(",");
+        }
+        of << StringView(" [trustme_dollar] \"i\" (&trustme_asm_dollar)");
     }
     of << StringView(": ");
     for (unsigned int i = 0; i < e.clobbers.size(); i++) {
