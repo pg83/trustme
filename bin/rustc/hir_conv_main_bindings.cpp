@@ -4496,11 +4496,7 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
             }
             ty = expanded;
             if (std::find(stack.begin(), stack.end(), ty) != stack.end()) {
-                std::sort(stack.mutBegin(), stack.mutEnd());
-                DEBUG(StringView("Loop detected, picking ") << ty);
-                ty = std::move(stack[0]);
-                ty = HIRVisitor::visitType(ty);
-                break;
+                ERROR(sp, E0000, StringView("cycle detected while normalizing associated types: ") << ty);
             }
             if (ty->is_Path()) {
                 stack.pushBack(ty);
