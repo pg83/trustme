@@ -3005,12 +3005,6 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
         armCode.push_back(std::move(ac));
     }
 
-    if (armRules.empty()) {
-        builder.setCurBlock(firstCmpBlock);
-        builder.endBlock(MIRTerminator::make_Unreachable({}));
-        return;
-    }
-
     for (const auto& armRule : armRules) {
         if (armRule.rules.size() != armRules[0].rules.size()) {
             fallBackOnSimple = true;
