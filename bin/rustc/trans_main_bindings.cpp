@@ -3686,10 +3686,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                             const auto& path = e;
                             switch (path.data.tag()) {
                                 case HIRPathData::TAG_Generic: {
-                                    auto& pe = path.data.as_Generic();
-                                    MIR_ASSERT(localMirRes, pe.params.types.empty(), StringView("Path params on static - ") << path);
-                                    const auto& s = tv.resolve.hirCrate().getStaticByPath(localMirRes.sp, pe.path);
-                                    ty = s.type;
+                                    ty = monomorphOuter(localMirRes.getStaticType(path));
                                     break;
                                 }
                                 case HIRPathData::TAG_UfcsKnown: {
