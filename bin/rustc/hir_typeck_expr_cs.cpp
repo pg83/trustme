@@ -11512,8 +11512,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                     ERROR(sp, E0000, StringView("Enum literals cannot have a base value"));
                 }
                 if (var.type == this->context.crate.types.unit()) {
-                    ASSERT_BUG(node.span(), node.values.size() == 0, StringView("Values provided for unit-like variant"));
-                    ASSERT_BUG(node.span(), !node.baseValue, StringView("Values provided for unit-like variant"));
+                    if (!node.values.empty()) {
+                        ERROR(node.span(), E0000, StringView("unit variant has no fields: ") << tyPath);
+                    }
                     return;
                 }
                 const auto& str = *var.type->as_Path().binding.as_Struct();
