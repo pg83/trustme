@@ -43,16 +43,8 @@ public:
         return ::ord(name_.name, x.name_.name);
     }
 
-    bool operator==(const ASTLifetimeRef& x) const {
-        return ord(x) == OrdEqual;
-    }
-
     bool operator!=(const ASTLifetimeRef& x) const {
         return ord(x) != OrdEqual;
     }
-
-    bool operator<(const ASTLifetimeRef& x) const {
-        return ord(x) == OrdLess;
-    };
 
 };
