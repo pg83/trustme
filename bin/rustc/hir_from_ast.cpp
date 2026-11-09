@@ -2372,6 +2372,7 @@ std::vector<HIRSimplePath> AST2HIR::LowerHIRDefineOpaque(HIRItemPath p, const HI
     std::vector<HIRSimplePath> defineOpaque;
     if (const auto* attr = attrs.get("define_opaque")) {
         TTStream tokens(attr->span(), ParseState(), attr->data());
+        tokens.parseState().wb = wb;
         tokens.getTokenCheck(TOK_PAREN_OPEN);
         while (tokens.lookahead(0) != TOK_PAREN_CLOSE) {
             auto opaquePath = ParsePath(tokens, PATH_GENERIC_NONE);
