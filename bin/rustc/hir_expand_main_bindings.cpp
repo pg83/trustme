@@ -6534,6 +6534,9 @@ auto StaticBorrowOuterVisitor::visitCrate(HIRCrate& crate) -> void {
                 promoted->value.state->itemGenerics = &promoted->params;
                 newEnt = HIRValueItem(promoted);
             }
+            auto& type = newEnt.is_Constant() ? newEnt.as_Constant()->type : newEnt.as_Static()->type;
+            auto& value = newEnt.is_Constant() ? newEnt.as_Constant()->value : newEnt.as_Static()->value;
+            type = HIRExpandClosuresExpr(resolve_.board(), crate, type, value);
             auto inserted = mod.valueItems.insert(std::make_pair(newStaticPair.path.components().back(), crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), std::move(newEnt)})));
             ASSERT_BUG(Span(), inserted.second, StringView("Duplicate promoted value ") << newStaticPair.path);
         }

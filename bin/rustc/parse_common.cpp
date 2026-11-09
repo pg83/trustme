@@ -3695,7 +3695,7 @@ ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
             }
             break;
         case TOK_RWORD_CONST:
-            if (LOOK_AHEAD(lex) != TOK_BRACE_OPEN && LOOK_AHEAD(lex) != TOK_INTERPOLATED_BLOCK) {
+            if (LOOK_AHEAD(lex) != TOK_BRACE_OPEN && LOOK_AHEAD(lex) != TOK_INTERPOLATED_BLOCK && !isClosureStart(lex)) {
                 PUTBACK(tok, lex);
                 if (!localMod) {
                     localMod = lex.parseState().getCurrentMod().addAnon();
@@ -3890,6 +3890,10 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 ret = ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Unsafe);
                 break;
             case TOK_RWORD_CONST:
+                if (isClosureStart(lex)) {
+                    PUTBACK(tok, lex);
+                    return ParseExprBlockLineStmt(lex, *addSilence);
+                }
                 ret = ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Const);
                 break;
             case TOK_BRACE_OPEN:

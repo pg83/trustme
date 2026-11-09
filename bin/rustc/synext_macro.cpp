@@ -1737,6 +1737,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     Token tok;
     auto lex = TTStream(sp, ParseState(), tt);
     lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
 
     std::vector<std::pair<Span, std::string>> rawLines;
     do {

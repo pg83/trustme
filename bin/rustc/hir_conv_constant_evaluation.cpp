@@ -3150,6 +3150,14 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
     const auto& state = localState.state;
+    if (auto* known = fcnPath->data.opt_UfcsKnown()) {
+        const auto* node = known->type->opt_NodeType();
+        const auto* closure = node ? node->opt_Closure() : nullptr;
+        if (closure && closure->objPtr) {
+            auto objectPath = localState.ms.monomorphGenericpath(state.sp, closure->objPathBase, false);
+            known->type = resolve.hirCrate().types.path(mv$(objectPath), closure->objPtr);
+        }
+    }
     resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
     MonomorphState fcnMs(resolve.hirCrate().types);
     const HIRGenericParams* implParamsDef = nullptr;
