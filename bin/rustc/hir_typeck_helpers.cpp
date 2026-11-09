@@ -13257,7 +13257,7 @@ auto NextTraitGoalEvaluator::evaluateBuiltinSizedCopyClone(Candidate* candidate,
             case HIRType::TAG_TraitObject:
                 return Certainty::NoSolution;
             case HIRType::TAG_Generic:
-                return Certainty::NoSolution;
+                return type->as_Generic().group() == GENERICHrtb ? Certainty::Proven : Certainty::NoSolution;
             case HIRType::TAG_ErasedType:
                 return type->as_ErasedType().isSized ? Certainty::Proven : Certainty::NoSolution;
             case HIRType::TAG_Array:
@@ -13451,6 +13451,9 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
                 break;
         }
         if (const auto* generic = type->opt_Generic()) {
+            if (generic->group() == GENERICHrtb) {
+                return Certainty::Proven;
+            }
             const HIRGenericParams* definition = nullptr;
             if (generic->group() == GENERICImpl) {
                 definition = resolve_.implGenerics_;
