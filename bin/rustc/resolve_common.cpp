@@ -881,11 +881,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
         static const HIRCrate& getCrate(const Span& sp, const ASTCrate& crate, const HIRSimplePath& p) {
             return *crate.externCrates.at(p.crateName()).hir;
         }
-
-        static const HIRModule& getModForHirPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& p) {
-            const auto& hirCrate = *crate.externCrates.at(p.crateName()).hir;
-            return hirCrate.getModByPath(sp, p, /*ignore_last*/ true, /*ingore_crate*/ true);
-        }
     };
 
     switch (ns) {
