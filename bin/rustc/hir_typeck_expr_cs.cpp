@@ -11509,7 +11509,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeStructLiteral& node) -> void {
                 const auto& enm = *e;
                 auto idx = enm.findVariant(varName);
                 ASSERT_BUG(sp, idx != SIZE_MAX, StringView(""));
-                ASSERT_BUG(sp, enm.data.is_Data(), StringView(""));
+                if (!enm.data.is_Data()) {
+                    ERROR(sp, E0000, StringView("enum variant has no fields: ") << tyPath);
+                }
                 const auto& var = enm.data.as_Data()[idx];
                 if (node.baseValue) {
                     ERROR(sp, E0000, StringView("Enum literals cannot have a base value"));

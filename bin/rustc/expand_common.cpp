@@ -100,7 +100,13 @@ namespace {
 
         ASTModule& curMod();
 
-        bool expandAttrs(ASTExprNode*& node, ASTAttributeList& attrs, bool* hasSemicolon = nullptr);
+        enum class AttrExpansion {
+            Unchanged,
+            Replaced,
+            Pending,
+        };
+
+        AttrExpansion expandAttrs(ASTExprNode*& node, ASTAttributeList& attrs, bool* hasSemicolon = nullptr);
 
         ASTExprNode* visit(ASTExprNode* cnode) override;
 
@@ -2401,9 +2407,9 @@ auto CExpandExpr::curMod() -> ASTModule& {
     return *expandState.modstack.item;
 }
 
-bool CExpandExpr::expandAttrs(ASTExprNode*& node, ASTAttributeList& attrs, bool* hasSemicolon) {
+auto CExpandExpr::expandAttrs(ASTExprNode*& node, ASTAttributeList& attrs, bool* hasSemicolon) -> AttrExpansion {
     bool replaced = false;
-    ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+    const bool pending = ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (!node) {
             return;
         }
@@ -2426,7 +2432,10 @@ bool CExpandExpr::expandAttrs(ASTExprNode*& node, ASTAttributeList& attrs, bool*
         }
         node = d.handle(sp, a, expandState.wb, crate, node);
     }));
-    return replaced;
+    if (replaced) {
+        return AttrExpansion::Replaced;
+    }
+    return pending ? AttrExpansion::Pending : AttrExpansion::Unchanged;
 }
 
 auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
@@ -2443,7 +2452,8 @@ auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
                work, since the attribute is on a parent of the macro invocation". */
             this->unusedAttributes = ApplyLintLevelOverrides(*expandState.wb.settings, overrides, LINT_UNUSED_ATTRIBUTES, this->unusedAttributesLevel());
         }
-        if (this->expandAttrs(cnode, attrs)) {
+        const auto attrsExpansion = this->expandAttrs(cnode, attrs);
+        if (attrsExpansion == AttrExpansion::Replaced) {
             cnode = this->visit(cnode);
             this->unusedAttributes = outerUnusedAttributes;
             this->inAssignLhs = outerAssignLhs;
@@ -2451,6 +2461,11 @@ auto CExpandExpr::visit(ASTExprNode* cnode) -> ASTExprNode* {
         }
         if (cnode) {
             cnode->attrs() = mv$(attrs);
+        }
+        if (attrsExpansion == AttrExpansion::Pending) {
+            this->unusedAttributes = outerUnusedAttributes;
+            this->inAssignLhs = outerAssignLhs;
+            return cnode;
         }
     }
     if (cnode) {
@@ -2667,7 +2682,8 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             if (const auto* invocation = AttrsInertHere(it->node)) {
                 ExpandAttrsOnMacroInvocation(expandState, attrs, *invocation, this->unusedAttributesLevel());
             }
-            if (this->expandAttrs(it->node, attrs, &it->hasSemicolon)) {
+            const auto attrsExpansion = this->expandAttrs(it->node, attrs, &it->hasSemicolon);
+            if (attrsExpansion == AttrExpansion::Replaced) {
                 if (!it->node) {
                     it = node.nodes.erase(it);
                 }
@@ -2678,6 +2694,10 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
                 continue;
             }
             it->node->attrs() = std::move(attrs);
+            if (attrsExpansion == AttrExpansion::Pending) {
+                ++it;
+                continue;
+            }
 
             BUG_ASSERT(it->node == nodeMac);
 
