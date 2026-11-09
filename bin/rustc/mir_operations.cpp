@@ -5288,67 +5288,6 @@ namespace {
             }
         }
 
-        // TODO: Is this now defunct after the handling of Terminator::If above?
-        for (auto& bb : fcn.blocks) {
-            auto bbidx = &bb - &fcn.blocks.front();
-            if (!bb.terminator.is_If()) {
-                continue;
-            }
-            const auto& te = bb.terminator.as_If();
-
-            if (te.cond.is_Local())
-                ;
-            else {
-                continue;
-            }
-
-            struct HasCond final: public LvalueVisitor {
-                const MIRLValue& cond;
-
-                explicit HasCond(const MIRLValue& cond)
-                    : cond(cond)
-                {
-                }
-
-                bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
-                    return lv == cond;
-                }
-            } hasCond{te.cond};
-
-            bool valKnown = false;
-            bool knownVal;
-            for (unsigned int i = bb.statements.size(); i--;) {
-                if (bb.statements[i].is_Assign()) {
-                    const auto& se = bb.statements[i].as_Assign();
-
-                    // TODO: What if the condition is a field/index and something else is edited?
-                    if (optVisitMirLvalues(se.src, hasCond)) {
-                        break;
-                    }
-
-                    if (se.dst != te.cond) {
-                        continue;
-                    }
-                    if (se.src.is_Constant() && se.src.as_Constant().is_Bool()) {
-                        valKnown = true;
-                        knownVal = se.src.as_Constant().as_Bool().v;
-                    } else {
-                        valKnown = false;
-                    }
-                    break;
-                } else {
-                    if (optVisitMirLvalues(bb.statements[i], hasCond)) {
-                        break;
-                    }
-                }
-            }
-            if (valKnown) {
-                DEBUG(StringView("bb") << bbidx << StringView(": Condition known to be ") << knownVal);
-                bb.terminator = MIRTerminator::make_Goto(knownVal ? te.bbTrue : te.bbFalse);
-                changed = true;
-            }
-        }
-
         return changed;
     }
 
