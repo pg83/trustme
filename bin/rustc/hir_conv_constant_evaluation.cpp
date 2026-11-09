@@ -4410,7 +4410,7 @@ auto MIREvalValueRef::copyFrom(const MIRTypeResolve& state, const MIREvalValueRe
     }
     const auto* src = other.storage.asValue().getBytes(other.ofs, len, /*check_mask*/ false);
     MIR_ASSERT(state, src, StringView("Invalid read ") << other.storage << StringView(" - ") << other.ofs << StringView("+") << len);
-    storage.asValue().writeBytes(this->ofs, src, len);
+    memcpy(extWriteBytes(state, len), src, len);
     storage.asValue().writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
     for (size_t i = 0; i < len; i++) {
         if (auto r = other.storage.asValue().getReloc(other.ofs + i)) {
