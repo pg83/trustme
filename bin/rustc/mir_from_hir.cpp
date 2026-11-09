@@ -7726,11 +7726,6 @@ PatternBinding::PatternBinding(fieldPathT field, const HIRPatternBinding& bindin
 {
 }
 
-MirBuilder::ScopeDef::ScopeDef(const Span& span)
-    : span(span)
-{
-}
-
 MirBuilder::ScopeDef::ScopeDef(const Span& span, ScopeType data)
     : span(span)
     , data(mv$(data))

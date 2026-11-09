@@ -161,8 +161,6 @@ class MirBuilder {
         bool complete = false;
         ScopeType data;
 
-        ScopeDef(const Span& span);
-
         ScopeDef(const Span& span, ScopeType data);
     };
 
