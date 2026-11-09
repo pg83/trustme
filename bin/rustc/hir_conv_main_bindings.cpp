@@ -4301,8 +4301,13 @@ auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, con
         HIRImplMatcherScratch scratch;
         if (impl.matchesType(lookupType, HIRResolvePlaceholdersNop(), scratch)) {
             const auto standsForInference = [&](const HIRType* type) {
+                type = resolve_.expandAssociatedTypes(Span(), type);
                 return visitTyWith(type, [&](const HIRType* inner) {
                     if (inner->is_Infer()) {
+                        return true;
+                    }
+                    const auto* path = inner->opt_Path();
+                    if (path && path->path.data.is_UfcsUnknown()) {
                         return true;
                     }
                     const auto* generic = inner->opt_Generic();
