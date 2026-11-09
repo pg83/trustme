@@ -249,14 +249,8 @@ namespace {
         virtual void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
 
         virtual bool isWritable() const = 0;
-        virtual u8* extWriteBytes(size_t ofs, size_t len) = 0;
-
-        void writeBytes(size_t ofs, const void* data, size_t len);
-
-        virtual void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) = 0;
 
         virtual MIREvalRelocPtr getReloc(size_t ofs) const = 0;
-        virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
     };
 
     struct MIREvalRelocPtr {
@@ -330,13 +324,7 @@ namespace {
 
         bool isWritable() const override;
 
-        u8* extWriteBytes(size_t ofs, size_t len) override;
-
-        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
-
         MIREvalRelocPtr getReloc(size_t ofs) const override;
-
-        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
     };
 
     struct MIREvalStaticRef final: public IValue {
@@ -365,13 +353,7 @@ namespace {
 
         bool isWritable() const override;
 
-        u8* extWriteBytes(size_t ofs, size_t len) override;
-
-        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
-
         MIREvalRelocPtr getReloc(size_t ofs) const override;
-
-        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
 
         const HIRPath& path() const;
     };
@@ -789,13 +771,15 @@ struct HIREvaluator::MIREvalAllocation final: public IValue {
 
     bool isWritable() const override;
 
-    u8* extWriteBytes(size_t ofs, size_t len) override;
+    void writeBytes(size_t ofs, const void* data, size_t len);
 
-    void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override;
+    u8* extWriteBytes(size_t ofs, size_t len);
+
+    void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len);
 
     MIREvalRelocPtr getReloc(size_t ofs) const override;
 
-    void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
+    void setReloc(size_t ofs, MIREvalRelocPtr ptr);
 
     const HIRType* getType() const;
 
@@ -3927,7 +3911,7 @@ auto MIREvalPtr<T>::operator*() const -> const T& {
     return *ptr;
 }
 
-auto IValue::writeBytes(size_t ofs, const void* data, size_t len) -> void {
+auto MIREvalAllocation::writeBytes(size_t ofs, const void* data, size_t len) -> void {
     memcpy(extWriteBytes(ofs, len), data, len);
 }
 
@@ -4037,20 +4021,8 @@ auto MIREvalConstant::isWritable() const -> bool {
     return false;
 }
 
-auto MIREvalConstant::extWriteBytes(size_t ofs, size_t len) -> u8* {
-    abort();
-}
-
-auto MIREvalConstant::writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) -> void {
-    abort();
-}
-
 auto MIREvalConstant::getReloc(size_t ofs) const -> MIREvalRelocPtr {
     return MIREvalRelocPtr();
-}
-
-auto MIREvalConstant::setReloc(size_t ofs, MIREvalRelocPtr ptr) -> void {
-    abort();
 }
 
 MIREvalAllocation::MIREvalAllocation(u8* data, size_t len, const HIRType* ty)
@@ -4315,14 +4287,6 @@ auto MIREvalStaticRef::isWritable() const -> bool {
     return false;
 }
 
-auto MIREvalStaticRef::extWriteBytes(size_t ofs, size_t len) -> u8* {
-    abort();
-}
-
-auto MIREvalStaticRef::writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) -> void {
-    abort();
-}
-
 auto MIREvalStaticRef::getReloc(size_t ofs) const -> MIREvalRelocPtr {
     if (encoded) {
         for (const auto& r : encoded->relocations) {
@@ -4338,10 +4302,6 @@ auto MIREvalStaticRef::getReloc(size_t ofs) const -> MIREvalRelocPtr {
         }
     }
     return MIREvalRelocPtr();
-}
-
-auto MIREvalStaticRef::setReloc(size_t ofs, MIREvalRelocPtr ptr) -> void {
-    abort();
 }
 
 auto MIREvalStaticRef::path() const -> const HIRPath& {
@@ -4411,10 +4371,10 @@ auto MIREvalValueRef::copyFrom(const MIRTypeResolve& state, const MIREvalValueRe
     const auto* src = other.storage.asValue().getBytes(other.ofs, len, /*check_mask*/ false);
     MIR_ASSERT(state, src, StringView("Invalid read ") << other.storage << StringView(" - ") << other.ofs << StringView("+") << len);
     memcpy(extWriteBytes(state, len), src, len);
-    storage.asValue().writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
+    storage.asAllocation()->writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
     for (size_t i = 0; i < len; i++) {
         if (auto r = other.storage.asValue().getReloc(other.ofs + i)) {
-            storage.asValue().setReloc(this->ofs + i, std::move(r));
+            storage.asAllocation()->setReloc(this->ofs + i, std::move(r));
         }
     }
 }
@@ -4442,7 +4402,7 @@ auto MIREvalValueRef::writeBytes(const MIRTypeResolve& state, const void* data, 
     MIR_ASSERT(state, storage, StringView("Writing to invalid slot"));
     MIR_ASSERT(state, storage.asValue().isWritable(), StringView("Writing to read-only slot"));
     if (len > 0) {
-        storage.asValue().writeBytes(ofs, data, len);
+        storage.asAllocation()->writeBytes(ofs, data, len);
     }
 }
 
@@ -4452,7 +4412,7 @@ auto MIREvalValueRef::extWriteBytes(const MIRTypeResolve& state, size_t len) -> 
     if (!storage.asValue().isWritable()) {
         ERROR(state.sp, E0000, StringView("writing to read-only memory during constant evaluation"));
     }
-    return storage.asValue().extWriteBytes(ofs, len);
+    return storage.asAllocation()->extWriteBytes(ofs, len);
 }
 
 auto MIREvalValueRef::writeByte(const MIRTypeResolve& state, u8 v) -> void {
@@ -4499,11 +4459,11 @@ auto MIREvalValueRef::writeSint(const MIRTypeResolve& state, unsigned bits, S128
 
 auto MIREvalValueRef::writePtr(const MIRTypeResolve& state, u64 val, MIREvalRelocPtr reloc) -> void {
     writeUint(state, TargetGetPointerBits(), U128(val));
-    storage.asValue().setReloc(ofs, std::move(reloc));
+    storage.asAllocation()->setReloc(ofs, std::move(reloc));
 }
 
 auto MIREvalValueRef::setReloc(MIREvalRelocPtr reloc) -> void {
-    storage.asValue().setReloc(ofs, std::move(reloc));
+    storage.asAllocation()->setReloc(ofs, std::move(reloc));
 }
 
 auto MIREvalValueRef::extReadBytes(const MIRTypeResolve& state, size_t len) const -> const u8* {
