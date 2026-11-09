@@ -4668,12 +4668,27 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             auto& innerPe = e.type->as_Path().path.data.as_UfcsKnown();
             const auto& trait = crate.getTraitByPath(sp, innerPe.trait.path);
             const auto& atyDef = trait.types.at(innerPe.item);
-            auto mstate = MonomorphStatePtr(crate.types, innerPe.type, &innerPe.trait.params, &innerPe.params);
+            auto itemParams = innerPe.params.clone();
+            if (itemParams.values.empty() && itemParams.types.size() > atyDef.generics.types.size() && itemParams.types.size() <= atyDef.generics.paramCount()) {
+                HIRPathParamsBuilder classified;
+                for (size_t i = 0; i < itemParams.types.size(); i++) {
+                    const auto* argument = itemParams.types[i];
+                    if (atyDef.generics.paramKindAt(i) == HIRGenericParamKind::Value && argument->is_Infer() && argument->as_Infer().index == ~0u) {
+                        classified.values.push_back(HIRConstGeneric::make_Infer({}));
+                    } else {
+                        classified.types.push_back(argument);
+                    }
+                }
+                itemParams = HIRPathParams(mv$(classified));
+            }
+            fixParamCount(crate.types, sp, HIRGenericPath(innerPe.trait.path + innerPe.item), atyDef.generics, itemParams, inExpr, innerPe.type);
+            const auto* boundSelf = crate.types.path(HIRPath(innerPe.type, innerPe.trait.clone(), innerPe.item, itemParams.clone()), e.type->as_Path().binding.clone());
+            auto mstate = MonomorphStatePtr(crate.types, innerPe.type, &innerPe.trait.params, &itemParams);
             for (const auto& t : atyDef.traitBounds) {
                 auto traitPath = mstate.monomorphGenericpath(sp, t.path, /*allow_infer*/ true);
                 DEBUG(StringView("Searching ATY bound: ") << traitPath);
-                auto candidateData = HIRPath::Data::make_UfcsUnknown({e.type, e.item, e.params.clone()});
-                if (!this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), *t.traitPtr, candidateData)) {
+                auto candidateData = HIRPath::Data::make_UfcsUnknown({boundSelf, e.item, e.params.clone()});
+                if (!this->locateInTraitAndSet(pc, traitPath, *t.traitPtr, candidateData)) {
                     continue;
                 }
                 if (pc == HIRVisitor::PathContext::VALUE && !traitInScope(candidateData.as_UfcsKnown().trait.path)) {
