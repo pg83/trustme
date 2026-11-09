@@ -2774,7 +2774,9 @@ auto Expander::visitPatternPathBinding(const Span& sp, HIRPath& path) -> HIRPatt
         return HIRPattern::PathBinding::make_Union(&unn);
     }
 
-    ASSERT_BUG(sp, ti.is_Struct(), StringView("Pattern path ") << gp.path << StringView(" didn't point to a struct or union (") << ti.tagStr() << StringView(")"));
+    if (!ti.is_Struct()) {
+        ERROR(sp, E0000, StringView("Pattern path ") << gp.path << StringView(" didn't point to a struct or union (") << ti.tagStr() << StringView(")"));
+    }
     const auto& str = ti.as_Struct();
 
     resizeParams(gp.params, str.params.types.size(), str.params.values.size());
