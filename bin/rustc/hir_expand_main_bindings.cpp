@@ -556,6 +556,8 @@ namespace {
 
         void visitConstgeneric(HIRConstGeneric&) override;
 
+        void visitGlobalAssembly(HIRGlobalAssembly& item) override;
+
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -5161,6 +5163,23 @@ auto ClosureOuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
 }
 
 auto ClosureOuterVisitor::visitConstgeneric(HIRConstGeneric&) -> void {
+}
+
+auto ClosureOuterVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) -> void {
+    HIRVisitor::visitGlobalAssembly(item);
+    for (auto& operand : item.operands) {
+        if (auto* value = operand.opt_Const()) {
+            auto& expr = *value->value.as_Unevaluated()->expr;
+            indexMutableAnonymousNodes(expr, out, resolve_.hirCrate().types);
+            ClosureExprVisitorExtract ev(resolve_, selfType, expr.bindings, expr, out, "global_asm");
+            ev.visitRoot(*expr);
+
+            MonomorphiserNop mm(resolve_.hirCrate().types);
+            ClosureExprVisitorFixup fixup{resolve_.board(), nullptr, mm, &out};
+            fixup.visitRoot(expr);
+            value->type = fixup.visitType(value->type);
+        }
+    }
 }
 
 auto ClosureOuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
