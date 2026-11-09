@@ -938,10 +938,15 @@ void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate) {
         });
     }
 
+    crate.allTypeImpls = {};
+    for (auto& group : crate.allTraitImpls) {
+        group.second = {};
+    }
     pushIndexImpls(crate, crate);
     for (const auto& ec : crate.extCrates) {
         pushIndexImpls(crate, *ec.second.data);
     }
+    crate.implIndexReady = true;
 }
 
 void ConvertHIRIndexInherentMethods(const WireBoard& wb, const HIRCrate& crate) {

@@ -866,6 +866,8 @@ public:
     std::map<HIRSimplePath, ImplGroup<const HIRTraitImpl*>> allTraitImpls;
     std::map<HIRSimplePath, ImplGroup<const HIRMarkerImpl*>> allMarkerImpls;
 
+    bool implIndexReady = false;
+
     mutable stl::IntMap<ImplGroup<const HIRTraitImpl*>*>* allTraitImplsByPath = nullptr;
     mutable stl::IntMap<ImplGroup<const HIRMarkerImpl*>*>* allMarkerImplsByPath = nullptr;
 

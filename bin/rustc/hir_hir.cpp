@@ -960,7 +960,7 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
 }
 
 bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const {
-    if (this->allTraitImpls.size() > 0) {
+    if (implIndexReady) {
         if (const auto* group = this->traitImplsForOpt(trait)) {
             if (findImplsForType(*group, type, tyRes, implMatcherScratch, callback)) {
                 return true;
@@ -993,7 +993,7 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRType* type,
 }
 
 void HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const {
-    if (this->allMarkerImpls.size() > 0) {
+    if (implIndexReady) {
         if (const auto* group = this->markerImplsForOpt(trait)) {
             findImplsForType(*group, type, tyRes, implMatcherScratch, callback);
             findImplsList(group->generic, type, tyRes, implMatcherScratch, callback);
@@ -1008,7 +1008,7 @@ void HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRType* t
 }
 
 bool HIRCrate::findTypeImplsCb(const HIRType* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const {
-    if (allTraitImpls.size() > 0) {
+    if (implIndexReady) {
         if (findImplsForType(this->allTypeImpls, type, tyRes, implMatcherScratch, callback)) {
             return true;
         }
