@@ -5041,7 +5041,7 @@ auto CTestHandler::wantsAllAttrs() const -> bool {
 }
 
 auto CTestHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
-    if (!i.is_Function()) {
+    if (crate.testHarness && !i.is_Function()) {
         ERROR(sp, E0000, StringView("#[test] can only be put on functions - found on ") << i.tagStr());
     }
 
@@ -5075,7 +5075,7 @@ auto CTestHandlerSP::stage() const -> AttrStage {
 
 auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
-        ERROR(sp, E0000, StringView("#[should_panic] can only be put on functions - found on ") << i.tagStr());
+        WARNING(sp, W0000, StringView("`#[should_panic]` only has an effect on functions"));
     }
 }
 
@@ -5085,6 +5085,6 @@ auto CTestHandlerIgnore::stage() const -> AttrStage {
 
 auto CTestHandlerIgnore::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (!i.is_Function()) {
-        ERROR(sp, E0000, StringView("#[ignore] can only be put on functions - found on ") << i.tagStr());
+        WARNING(sp, W0000, StringView("`#[ignore]` only has an effect on functions"));
     }
 }
