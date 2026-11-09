@@ -5842,9 +5842,14 @@ auto Expander::visitPathParams(HIRPathParams& p) -> void {
             if (idx >= paramsDef.values.size()) {
                 ERROR(sp, E0000, StringView("Unexpected const generic argument"));
             }
-            const auto& ty = paramsDef.values[idx].type;
+            const HIRType* ty = paramsDef.values[idx].type;
             if (monomorphiseTypeNeeded(ty)) {
-                continue;
+                const HIRPathParams actualParams(next);
+                MonomorphStatePtr monomorph(crate.types, nullptr, &actualParams, &actualParams);
+                ty = monomorph.monomorphType(sp, ty);
+                if (monomorphiseTypeNeeded(ty)) {
+                    continue;
+                }
             }
             evalulateConstGeneric(sp, ty, v);
         }
