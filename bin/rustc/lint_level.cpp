@@ -21,9 +21,7 @@ ThinVector<RcString> LintNamesOf(const ASTAttribute& attribute) {
             break;
         }
         if (tok == TOK_PAREN_OPEN) {
-            depth += 1;
-            atName = false;
-            continue;
+            ERROR(attribute.span(), E0000, StringView("malformed lint attribute input"));
         }
         if (tok == TOK_PAREN_CLOSE) {
             depth -= 1;
