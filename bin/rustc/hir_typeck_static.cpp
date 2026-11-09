@@ -446,30 +446,18 @@ void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) c
     };
 
     expandAssociatedTypesPath(sp, input);
-    switch (input.data.tag()) {
-        case HIRPathData::TAG_Generic:
-            revealParams(input.data.as_Generic().params);
-            break;
-        case HIRPathData::TAG_UfcsInherent: {
-            auto& path = input.data.as_UfcsInherent();
-            path.type = revealOpaqueTypes(sp, path.type);
-            revealParams(path.params);
-            revealParams(path.implParams);
-            break;
-        }
-        case HIRPathData::TAG_UfcsKnown: {
-            auto& path = input.data.as_UfcsKnown();
-            path.type = revealOpaqueTypes(sp, path.type);
-            revealParams(path.trait.params);
-            revealParams(path.params);
-            break;
-        }
-        case HIRPathData::TAG_UfcsUnknown: {
-            auto& path = input.data.as_UfcsUnknown();
-            path.type = revealOpaqueTypes(sp, path.type);
-            revealParams(path.params);
-            break;
-        }
+    if (input.data.is_Generic()) {
+        revealParams(input.data.as_Generic().params);
+    } else if (input.data.is_UfcsInherent()) {
+        auto& path = input.data.as_UfcsInherent();
+        path.type = revealOpaqueTypes(sp, path.type);
+        revealParams(path.params);
+        revealParams(path.implParams);
+    } else {
+        auto& path = input.data.as_UfcsKnown();
+        path.type = revealOpaqueTypes(sp, path.type);
+        revealParams(path.trait.params);
+        revealParams(path.params);
     }
     expandAssociatedTypesPath(sp, input);
 }
@@ -495,30 +483,19 @@ void StaticTraitResolve::evaluatePathParams(const Span& sp, HIRPathParams& param
 
 void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& input) const {
     TRACE_FUNCTION_FR(input, input);
-    switch (input.data.tag()) {
-        case HIRPathData::TAG_Generic:
-            this->expandAssociatedTypesParams(sp, input.data.as_Generic().params);
-            break;
-        case HIRPathData::TAG_UfcsInherent: {
-            auto& path = input.data.as_UfcsInherent();
-            path.type = this->expandAssociatedTypesInner(sp, path.type);
-            this->expandAssociatedTypesParams(sp, path.params);
-            path.implParams = path.implParams.mapTypes([&](const HIRType* argument) { return this->expandAssociatedTypesInner(sp, argument); });
-            break;
-        }
-        case HIRPathData::TAG_UfcsKnown: {
-            auto& path = input.data.as_UfcsKnown();
-            path.type = this->expandAssociatedTypesInner(sp, path.type);
-            this->expandAssociatedTypesParams(sp, path.trait.params);
-            this->expandAssociatedTypesParams(sp, path.params);
-            break;
-        }
-        case HIRPathData::TAG_UfcsUnknown: {
-            auto& path = input.data.as_UfcsUnknown();
-            path.type = this->expandAssociatedTypesInner(sp, path.type);
-            this->expandAssociatedTypesParams(sp, path.params);
-            break;
-        }
+    ASSERT_BUG(sp, !input.data.is_UfcsUnknown(), StringView("Unresolved UFCS value path during associated-type expansion: ") << input);
+    if (input.data.is_Generic()) {
+        this->expandAssociatedTypesParams(sp, input.data.as_Generic().params);
+    } else if (input.data.is_UfcsInherent()) {
+        auto& path = input.data.as_UfcsInherent();
+        path.type = this->expandAssociatedTypesInner(sp, path.type);
+        this->expandAssociatedTypesParams(sp, path.params);
+        path.implParams = path.implParams.mapTypes([&](const HIRType* argument) { return this->expandAssociatedTypesInner(sp, argument); });
+    } else {
+        auto& path = input.data.as_UfcsKnown();
+        path.type = this->expandAssociatedTypesInner(sp, path.type);
+        this->expandAssociatedTypesParams(sp, path.trait.params);
+        this->expandAssociatedTypesParams(sp, path.params);
     }
 }
 
