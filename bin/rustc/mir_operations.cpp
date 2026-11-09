@@ -4399,6 +4399,30 @@ namespace {
 
         // TODO: Use ValState to do full constant propagation across blocks
 
+        Vector<u8> borrowedLocals;
+        borrowedLocals.zero(fcn.locals.length());
+        struct MarkBorrowedLocals final: public MIRVisitor {
+            Vector<u8>& locals;
+
+            explicit MarkBorrowedLocals(Vector<u8>& locals)
+                : locals(locals)
+            {
+            }
+
+            bool visitLvalue(const MIRLValue& lv, MIRValUsage usage) override {
+                if (usage == MIRValUsage::Borrow && lv.root.is_Local()) {
+                    locals.mut(lv.root.as_Local()) = 1;
+                }
+                return false;
+            }
+        } markBorrowed{borrowedLocals};
+        for (const auto& bb : fcn.blocks) {
+            for (const auto& statement : bb.statements) {
+                markBorrowed.visitStmt(statement);
+            }
+            markBorrowed.visitTerminator(bb.terminator);
+        }
+
         for (auto& bb : fcn.blocks) {
             auto bbidx = &bb - &fcn.blocks.front();
 
@@ -5207,7 +5231,7 @@ namespace {
                 optVisitMirLvalues(stmt, forgetWritten);
 
                 if (const auto* e = stmt.opt_Assign()) {
-                    if (e->dst.is_Local()) {
+                    if (e->dst.is_Local() && borrowedLocals[e->dst.as_Local()] == 0) {
                         if (const auto* ce = e->src.opt_Constant()) {
                             knownValues.insert(std::make_pair(e->dst.clone(), ce->clone()));
                             DEBUG(state << stmt);
