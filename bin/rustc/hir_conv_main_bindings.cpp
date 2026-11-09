@@ -716,6 +716,25 @@ namespace {
 }
 
 namespace {
+    void invalidateImplRelations(const WireBoard& wb) {
+        wb.solverCache->overlaps.index.visit([](auto& head) { head = nullptr; });
+        wb.solverCache->specializations.index.visit([](auto& head) { head = nullptr; });
+    }
+
+    void prepareUFCSHeaders(const WireBoard& wb, HIRCrate& crate) {
+        struct Headers final: UfcsVisitor {
+            explicit Headers(const WireBoard& wb)
+                : UfcsVisitor(wb, false)
+            {
+            }
+
+            void visitConstgeneric(HIRConstGeneric&) override {
+            }
+        } headers(wb);
+        headers.visitCrate(crate);
+        invalidateImplRelations(wb);
+    }
+
     void bindExternalBody(const MIRLazyBody& body, MIRFunction& mir) {
         const auto& wb = *body.wb;
         {
@@ -829,6 +848,7 @@ void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
 }
 
 void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate) {
+    prepareUFCSHeaders(wb, crate);
     ReceiverValidator(wb, crate).validate();
 }
 
@@ -875,26 +895,10 @@ void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
         expandList(implGroup.second.generic);
     }
 
-    struct Headers final: UfcsVisitor {
-        explicit Headers(const WireBoard& wb)
-            : UfcsVisitor(wb, false)
-        {
-        }
-
-        void visitConstgeneric(HIRConstGeneric&) override {
-        }
-    } headers(wb);
-    /* Resolving a constant's UFCS receiver can evaluate its array length and
-       typecheck a call before the regular visitor reaches that callee's header. */
-    headers.visitCrate(crate);
-    const auto invalidateRelations = [&]() {
-        wb.solverCache->overlaps.index.visit([](auto& head) { head = nullptr; });
-        wb.solverCache->specializations.index.visit([](auto& head) { head = nullptr; });
-    };
-    invalidateRelations();
+    prepareUFCSHeaders(wb, crate);
     UfcsVisitor exp{wb, false};
     exp.visitCrate(crate);
-    invalidateRelations();
+    invalidateImplRelations(wb);
 }
 
 void ConvertHIRResolveUFCS(const WireBoard& wb, HIRCrate& crate) {
