@@ -1,5 +1,7 @@
 #include "hir_typeck_helpers.h"
 
+#include "hir_typeck_expr_visit.h"
+
 #include "output.h"
 #include "settings.h"
 #include "wire_board.h"
@@ -15022,6 +15024,62 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRSimplePath& trait, con
     return rv;
 }
 
+void TypecheckImplCoherence(const WireBoard& wb, HIRCrate& crate) {
+    const Span sp;
+    HMTypeInferrence ivars(crate.types);
+    const HIRSimplePath visPath(crate.crateName, {});
+    TraitResolution resolve(ivars, wb, nullptr, nullptr, visPath, nullptr);
+    TraitResolution::NextTraitGoalEvaluator evaluator(resolve, crate);
+    const auto visitGroup = [](const auto& group, const auto& visit) {
+        for (const auto& entry : group.named) {
+            for (const auto& impl : entry.second) {
+                visit(*impl);
+            }
+        }
+        for (const auto& impl : group.nonNamed) {
+            visit(*impl);
+        }
+        for (const auto& impl : group.generic) {
+            visit(*impl);
+        }
+    };
+    struct LocalImpl {
+        HIRSimplePath trait;
+        const HIRTraitImpl* impl;
+    };
+    Vector<LocalImpl> locals;
+    for (const auto& entry : crate.traitImpls) {
+        visitGroup(entry.second, [&](const HIRTraitImpl& impl) {
+            locals.pushBack({entry.first, &impl});
+        });
+    }
+    Vector<const HIRTraitImpl*> others;
+    for (const auto& local : locals) {
+        const auto* all = crate.traitImplsForOpt(local.trait);
+        BUG_ASSERT(all);
+        others.clear();
+        visitGroup(*all, [&](const HIRTraitImpl& impl) {
+            others.pushBack(&impl);
+        });
+        for (const auto* other : others) {
+            const auto& left = *local.impl;
+            const auto& right = *other;
+            if (&left == &right || left.isReservation || right.isReservation) {
+                continue;
+            }
+            if (!evaluator.evaluateOverlap(sp, local.trait, left, right)) {
+                continue;
+            }
+            const bool leftSpecializes = evaluator.specializes(local.trait, left, right);
+            const bool rightSpecializes = evaluator.specializes(local.trait, right, left);
+            if (leftSpecializes != rightSpecializes) {
+                continue;
+            }
+            ERROR(sp, E0000, StringView("conflicting implementations of ") << local.trait << StringView(" for ") << left.type << StringView(" and ") << right.type);
+        }
+    }
+}
+
 auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) -> bool {
     ASSERT_BUG(callSpan, !span_, StringView("nested coherence overlap session"));
     ASSERT_BUG(callSpan, !coherenceMode, StringView("coherence mode leaked before overlap probe"));
@@ -15046,11 +15104,15 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     auto goalType = leftMonomorph.monomorphType(callSpan, left.type, true);
     auto goalParams = leftMonomorph.monomorphPathParams(callSpan, left.traitArgs, true);
 
+    CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars, true, alphaExistentialScopeBase_);
+    const auto canonical = canonicalizeGoal(goalParams, goalType, nullptr, canonicalizer);
+    leftParams = canonicalizer.monomorphPathParams(callSpan, leftParams, true);
+
     HIRPathParams rightParams;
     bool rightHeadNormalizationAmbiguity = false;
     ThinVector<SolverTypeEquality> rightHeadEqualities;
     ThinVector<SolverValueEquality> rightHeadValueEqualities;
-    const auto rightRelation = this->unifyImplHead(right.params, right.traitArgs, right.type, goalParams, goalType, rightParams, rightHeadNormalizationAmbiguity, rightHeadEqualities, rightHeadValueEqualities, crate.getTraitByPath(callSpan, trait).params);
+    const auto rightRelation = this->unifyImplHead(right.params, right.traitArgs, right.type, canonical.params, canonical.type, rightParams, rightHeadNormalizationAmbiguity, rightHeadEqualities, rightHeadValueEqualities, crate.getTraitByPath(callSpan, trait).params);
     if (rightRelation == Certainty::NoSolution) {
         return false;
     }
@@ -15073,7 +15135,15 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     };
 
     const auto& traitDef = crate.getTraitByPath(callSpan, trait);
-    pushCandidate(frameIndex, SolverImpl(std::move(leftParams), traitDef, trait, left), true, Certainty::Proven, nullptr, {}, false, CandidateSource::TraitImpl);
+    ThinVector<SolverTypeEquality> leftHeadEqualities;
+    for (const auto& equality : rightHeadEqualities) {
+        leftHeadEqualities.push_back(equality);
+    }
+    ThinVector<SolverValueEquality> leftHeadValueEqualities;
+    for (const auto& equality : rightHeadValueEqualities) {
+        leftHeadValueEqualities.push_back({equality.left.clone(), equality.right.clone()});
+    }
+    pushCandidate(frameIndex, SolverImpl(std::move(leftParams), traitDef, trait, left), rightRelation == Certainty::Proven, rightRelation, nullptr, {}, false, CandidateSource::TraitImpl, rightHeadNormalizationAmbiguity, std::move(leftHeadEqualities), std::move(leftHeadValueEqualities));
     pushCandidate(frameIndex, SolverImpl(std::move(rightParams), traitDef, trait, right), rightRelation == Certainty::Proven, rightRelation, nullptr, {}, false, CandidateSource::TraitImpl, rightHeadNormalizationAmbiguity, std::move(rightHeadEqualities), std::move(rightHeadValueEqualities));
 
     const auto& candidates = frames[frameIndex]->candidates;
@@ -15443,7 +15513,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 return resolve_.typeContainsIvars(closure->returnType);
             });
         };
-        if (unresolvedProjection || selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (aliasHoldsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
+        if (unresolvedProjection || selfIsTypeVariable || holdsOpaque || (selfIsAlias && !definitelyRigidAlias(resolvedType) && (aliasHoldsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams))) || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
             return emitForcedAmbiguity();
         }
         return false;

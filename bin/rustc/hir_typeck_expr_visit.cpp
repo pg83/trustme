@@ -51,6 +51,7 @@ void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRType* resu
 void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate) {
     OuterVisitor visitor{wb, crate};
     visitor.visitCrate(crate);
+    TypecheckImplCoherence(wb, crate);
 }
 
 TypeckModuleState::TypeckModuleState(const WireBoard& wb)
