@@ -1972,7 +1972,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                             MIR_TODO(state, StringView("RValue::Cast to ") << castType << StringView(", val = ") << inval);
                     }
                     break;
-                } break;
+                }
                 case HIRType::TAG_Pointer: {
                     auto& de = (*castType).as_Pointer();
                     if (const auto* e = srcTy->opt_NamedFunction()) {
@@ -4527,22 +4527,22 @@ auto MIREvalValueRef::readFloat(const MIRTypeResolve& state, unsigned bits) cons
             F16 vF16;
             readBytes(state, &vF16, sizeof(vF16));
             return FloatValue(static_cast<float>(vF16));
-        } break;
+        }
         case 32: {
             float vF32 = 0;
             readBytes(state, &vF32, sizeof(vF32));
             return vF32;
-        } break;
+        }
         case 64: {
             double vF64 = 0;
             readBytes(state, &vF64, sizeof(vF64));
             return vF64;
-        } break;
+        }
         case 128: {
             F128 vF;
             readBytes(state, &vF, sizeof(vF));
             return vF;
-        } break;
+        }
         default:
             MIR_BUG(state, StringView("Unexpected float size: ") << bits);
     }

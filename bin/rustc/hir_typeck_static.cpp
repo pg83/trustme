@@ -1434,7 +1434,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
             } else {
                 BUG(sp, StringView("Unknown generic binding on ") << ty);
             }
-            break;
         }
         case HIRType::TAG_ErasedType: {
             auto& e = (*ty).as_ErasedType();
@@ -1443,7 +1442,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
             } else {
                 return MetadataType::Unknown;
             }
-            break;
         }
         case HIRType::TAG_Path: {
             auto& e = (*ty).as_Path();
@@ -1519,7 +1517,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
             } else {
                 return MetadataType::None;
             }
-            break;
         }
         case HIRType::TAG_Slice: {
             return MetadataType::Slice;

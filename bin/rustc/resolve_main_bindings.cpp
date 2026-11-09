@@ -1185,7 +1185,6 @@ namespace {
                             markValuePathType(path, mode);
                             return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                         }
-                        break;
                     }
                     case ASTPathBindingType::TAG_Struct: {
                         path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
@@ -4536,7 +4535,6 @@ namespace {
                 } else {
                     return basePath + path;
                 }
-                break;
             }
             case ASTPathClass::TAG_Self: {
                 DEBUG(StringView("Self ") << path);
@@ -4562,7 +4560,6 @@ namespace {
                 } else {
                     return basePath + path;
                 }
-                break;
             }
             case ASTPathClass::TAG_Super: {
                 auto& e = path.cls.as_Super();
@@ -5177,7 +5174,7 @@ namespace {
                                 }
                             }
                             break;
-                        } break;
+                        }
                         default:
                             BUG(sp2, StringView("Wildcard import expanded to an invalid item class - ") << bindings->type.binding.tagStr());
                     }

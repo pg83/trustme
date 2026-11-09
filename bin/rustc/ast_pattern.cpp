@@ -78,7 +78,6 @@ bool PatternContainsNever(const ASTPattern& pat) {
             return H::any(e);
         }
     }
-    return false;
 }
 
 ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)

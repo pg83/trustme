@@ -892,14 +892,14 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             of << StringView("\"") << FmtEscaped(ve[i]) << StringView("\" = ") << e.targets[i] << StringView(",");
                         }
                         break;
-                    } break;
+                    }
                     case MIRSwitchValues::TAG_Unsigned: {
                         auto& ve = e.values.as_Unsigned();
                         for (size_t i = 0; i < ve.length(); i++) {
                             of << ve[i] << StringView(" = ") << e.targets[i] << StringView(",");
                         }
                         break;
-                    } break;
+                    }
                     case MIRSwitchValues::TAG_Signed: {
                         auto& ve = e.values.as_Signed();
                         for (size_t i = 0; i < ve.length(); i++) {
@@ -1120,7 +1120,7 @@ void stl::output<ZeroCopyOutput, Fmt<const HIRType*>>(ZeroCopyOutput& os, Fmt<co
                 }
                 os << StringView(") -> ") << fmt(x.wb, e.rettype);
                 break;
-            } break;
+            }
             case HIRType::TAG_NodeType:
                 BUG(Span(), StringView("Unexpected type in trans: ") << x.e);
         }

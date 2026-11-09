@@ -114,7 +114,7 @@ namespace {
                         return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
                     }
                 }
-            } break;
+            }
             case HIRVisitor::PathContext::TRAIT:
                 // TODO: treat PathContext::TRAIT differently
             case HIRVisitor::PathContext::TYPE: {
@@ -143,7 +143,7 @@ namespace {
                         return e.params;
                     }
                 }
-            } break;
+            }
         }
         UNREACHABLE();
     }

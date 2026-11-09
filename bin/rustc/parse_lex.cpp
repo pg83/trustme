@@ -1528,7 +1528,7 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape, bool byteLiteral) {
             }
             tmp[1] = static_cast<char>(ch.v);
             return std::strtol(tmp, NULL, 16);
-        } break;
+        }
         case 'u': {
             if (byteLiteral) {
                 compileErrorGeneric(*this, "Unicode escapes are not allowed in byte literals");

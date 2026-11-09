@@ -4195,7 +4195,7 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             }
             of << StringView(";\n");
             break;
-        } break;
+        }
         case MIRStatement::TAG_SaveDropFlag: {
             auto& e = stmt.as_SaveDropFlag();
             of << indent << StringView("if(df") << e.idx << StringView(") { ");

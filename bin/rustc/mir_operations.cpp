@@ -278,7 +278,6 @@ namespace {
             }
         } else {
             MIR_BUG(state, StringView("get_literal_for_const - Not a constant - ") << path);
-            return {nullptr, nullptr};
         }
     }
 
@@ -358,7 +357,6 @@ namespace {
 
                     return MIRRValue::make_Array({mv$(lvals)});
                 }
-                break;
             }
             case HIRType::TAG_Path: {
                 auto& te = (*ty).as_Path();
@@ -537,7 +535,6 @@ namespace {
                     auto lval = mutator.inTemporary(state.crate.types.primitive(HIRCoreType::Usize), MIRRValue(MIRConstant::make_Uint({v, HIRCoreType::Usize})));
                     return MIRRValue::make_Cast({mv$(lval), mv$(ty)});
                 }
-                break;
             }
             case HIRType::TAG_Borrow: {
                 auto& te = (*ty).as_Borrow();
@@ -1779,7 +1776,6 @@ namespace {
                 return f->code.getMirOpt();
             }
         }
-        return nullptr;
     }
 
     void visitBlocksMut(MIRTypeResolve& state, MIRFunction& fcn, const MIRBlockCallback& cb) {
@@ -2772,7 +2768,7 @@ namespace {
                                         MIR_BUG(state, StringView("Failed to find usage of _") << varIdx << StringView(" in asm! statement"));
                                     }
                                     break;
-                                } break;
+                                }
                                 default:
                                     MIR_BUG(state, StringView("Impossibility: Value set in ") << setStmt);
                             }
@@ -6464,7 +6460,7 @@ namespace {
                                 numUsed += 1;
                             }
                             break;
-                        } break;
+                        }
                         default:
                             DEBUG(state << StringView("BB") << bbIdx << StringView("/TERM ") << srcBb.terminator << StringView(" - Wrong terminator type"));
                             break;

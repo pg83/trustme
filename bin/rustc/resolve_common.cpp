@@ -344,7 +344,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 }
                 return getModuleHir(ecIt->second.hir->rootModule, path, 0, ignoreLast, outPath);
             }
-            break;
         }
     }
     UNREACHABLE();
@@ -426,7 +425,6 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
                     DEBUG(StringView("Found HIR ") << e->tagStr() << StringView(", not module"));
                     return ResolveModuleRef();
                 }
-                break;
             }
             case ResolveItemRefType::TAG_HirRoot: {
                 const auto e = r.as_HirRoot();

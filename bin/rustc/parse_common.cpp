@@ -1327,14 +1327,9 @@ namespace {
                     break;
                 default: {
                     auto name = tok.ident();
-                    if (true /*is_refutable*/) {
-                        BUG_ASSERT(bindType == ASTPatternBinding::Type::MOVE);
-                        BUG_ASSERT(isMut == false);
-                        return ASTPattern(ASTPattern::TagMaybeBind(), lex.endSpan(ps), mv$(name));
-                    } else {
-                        return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(name), bindType, isMut);
-                    }
-                    UNREACHABLE();
+                    BUG_ASSERT(bindType == ASTPatternBinding::Type::MOVE);
+                    BUG_ASSERT(isMut == false);
+                    return ASTPattern(ASTPattern::TagMaybeBind(), lex.endSpan(ps), mv$(name));
                 }
             }
         } else {

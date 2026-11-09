@@ -1073,7 +1073,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                 BUG_ASSERT(trailing.size() == 0);
                 return HIRPattern(mv$(bindings), HIRPattern::Data::make_Tuple({mv$(leading)}));
             }
-            break;
         }
         case ASTPatternData::TAG_StructTuple: {
             auto& e = pat.data().as_StructTuple();
@@ -1110,7 +1109,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             } else {
                 return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), true})};
             }
-            break;
         }
         case ASTPatternData::TAG_ValueLeftInc: {
             auto& e = pat.data().as_ValueLeftInc();
@@ -5394,7 +5392,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                     rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::CONSTANT));
                 }
                 break;
-            } break;
+            }
             default:
                 auto p = ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value);
                 ASSERT_BUG(v.span(), !p.data.is_Generic(), StringView("Unknown binding for PathValue but path is generic - ") << v.path);

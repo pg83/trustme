@@ -381,7 +381,7 @@ namespace {
                 BUG_ASSERT(lex.parseState().module);
                 const auto& curMod = *lex.parseState().module;
                 return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
-            } break;
+            }
             case MacroPatEnt::PAT_IDENT:
                 if (lex.lookaheadIsDollarCrate(0)) {
                     return InterpolatedFragment(takeDollarCrate(lex));
@@ -3312,7 +3312,6 @@ Token MacroExpander::realGetToken() {
                         return rv;
                     }
                 }
-                break;
             }
             case MacroExpansionEnt::TAG_NamedValue: {
                 const auto e = ent.as_NamedValue();
@@ -3377,7 +3376,7 @@ Token MacroExpander::realGetToken() {
                                 return Token(*frag);
                             }
                         }
-                    } break;
+                    }
                 }
                 break;
             }

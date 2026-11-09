@@ -662,7 +662,6 @@ std::string Token::toStr() const {
                     }
                     return FMT(data_.as_Integer().intval << coretypeName(data_.as_Integer().datatype));
             }
-            break;
         }
         case TOK_FLOAT:
             if (data_.as_Float().spelling != RcString()) {

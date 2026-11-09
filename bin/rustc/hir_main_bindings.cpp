@@ -3456,7 +3456,7 @@ auto HirSerialiser::serialiseType(const HIRType* ty) -> void {
                 out.writeBool(range.endInclusive);
             }
             break;
-        } break;
+        }
         case HIRType::TAG_NodeType:
             BUG(Span(), StringView("Encountered invalid type when serialising - ") << ty);
     }

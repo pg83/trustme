@@ -2385,7 +2385,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                             default:
                                 return HIRCompare::Unequal;
                         }
-                        break;
                     }
                     case HIRType::TAG_Infer: {
                         auto& re = (*right).as_Infer();
@@ -2414,7 +2413,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
                             default:
                                 return HIRCompare::Unequal;
                         }
-                        break;
                     }
                     case HIRType::TAG_Infer: {
                         auto& re = (*right).as_Infer();

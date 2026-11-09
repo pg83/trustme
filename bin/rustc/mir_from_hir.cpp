@@ -6546,7 +6546,6 @@ outOfLoop:
                 ASSERT_BUG(sp, idx < slotStates.size(), StringView("Slot ") << idx << StringView(" out of range for state table"));
                 return slotStates.at(idx);
             }
-            break;
         case SlotType::Argument:
             ASSERT_BUG(sp, idx < argStates.size(), StringView("Argument ") << idx << StringView(" out of range for state table"));
             return argStates.at(idx);
