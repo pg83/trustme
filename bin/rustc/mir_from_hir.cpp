@@ -7001,7 +7001,7 @@ bool MirBuilder::slotHasDropGlue(const Span& sp, const ScopeDropSlot& slot) {
     return slotDropGlue_[slot.index] == 2;
 }
 
-void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
+void MirBuilder::dropScopeValues(ScopeDef& sd) {
     switch (sd.data.tag()) {
         case ScopeType::TAG_Owning: {
             auto& e = sd.data.as_Owning();
@@ -7015,10 +7015,6 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
                 if (buildingCleanup) {
                     auto state = getSlotState(sd.span, slot.index, slotType).clone();
                     DEBUG(lvalue << StringView(" - ") << state);
-                    dropValueFromState(sd.span, state, mv$(lvalue));
-                } else if (preserveStates) {
-                    auto state = getSlotState(sd.span, slot.index, slotType).clone();
-                    DEBUG(lvalue << StringView(" - ") << state << StringView(" (branch)"));
                     dropValueFromState(sd.span, state, mv$(lvalue));
                 } else {
                     auto& state = getSlotStateMut(sd.span, slot.index, slotType);

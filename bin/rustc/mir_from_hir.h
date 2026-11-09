@@ -403,7 +403,7 @@ private:
 
     void dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv);
 
-    void dropScopeValues(ScopeDef& sd, bool preserveStates = false);
+    void dropScopeValues(ScopeDef& sd);
 
     stl::Vector<u8> slotDropGlue_;
     bool slotHasDropGlue(const Span& sp, const ScopeDropSlot& slot);
