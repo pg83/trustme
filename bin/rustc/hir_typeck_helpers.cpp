@@ -224,14 +224,13 @@ namespace {
 
     struct InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
-        const std::vector<std::pair<RcString, RcString>>& goalNames;
-        const CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
+        const CanonicalizeTraitGoal* const goalCanonicalizer;
         mutable std::vector<std::pair<HIRGenericRef, const HIRType*>> typeValues;
         mutable std::vector<std::pair<HIRGenericRef, HIRConstGeneric>> values;
 
         bool isGoalPlaceholder(const HIRGenericRef& generic) const;
 
-        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const std::vector<std::pair<RcString, RcString>>& goalNames, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
+        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const CanonicalizeTraitGoal* goalCanonicalizer);
 
         const HIRType* monomorphType(const Span& sp, const HIRType* ty, bool allowInfer = true) const override;
 
@@ -9759,18 +9758,12 @@ auto InstantiateTraitResponseForCaller::isGoalPlaceholder(const HIRGenericRef& g
         }
         return false;
     }
-    for (const auto& entry : goalNames) {
-        if (entry.first == generic.name) {
-            return true;
-        }
-    }
     return false;
 }
 
-InstantiateTraitResponseForCaller::InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const std::vector<std::pair<RcString, RcString>>& goalNames, const CanonicalizeTraitGoal* goalCanonicalizer)
+InstantiateTraitResponseForCaller::InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const CanonicalizeTraitGoal* goalCanonicalizer)
     : Monomorphiser(types)
     , ivars(ivars)
-    , goalNames(goalNames)
     , goalCanonicalizer(goalCanonicalizer)
 {
 }
@@ -15445,7 +15438,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                         if (canonicalApplicable) {
                             canonicalResponse.slots = extractSlotValues(responseGoal, *canonicalApplicable, responseCanonicalizer);
                         }
-                        InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, responseCanonicalizer.placeholderNames(), &responseCanonicalizer);
+                        InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, &responseCanonicalizer);
                         auto callerResponse = monomorphSolverResponse(canonicalResponse, instantiator);
                         const auto* callerApplicable = canonicalApplicable ? monomorphSolverImpl(*canonicalApplicable, instantiator) : nullptr;
                         if (!callerApplicable) {
@@ -15608,7 +15601,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             const auto* nestedApplicable = applicable ? monomorphSolverImpl(*applicable, mapper) : nullptr;
             return visitResponse(std::move(nestedResponse), nestedApplicable);
         }
-        InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, canonicalizer.placeholderNames(), &canonicalizer);
+        InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, &canonicalizer);
         auto callerResponse = monomorphSolverResponse(response, instantiator);
         const auto* callerApplicable = applicable ? monomorphSolverImpl(*applicable, instantiator) : nullptr;
         return visitResponse(std::move(callerResponse), callerApplicable);
