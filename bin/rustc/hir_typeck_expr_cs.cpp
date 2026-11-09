@@ -10001,10 +10001,6 @@ auto IvarCoercionIndex::buildComponents() -> void {
             }
         }
     };
-    /* ...and the variables a node keeps of its own, outside its operands' types: a
-       value call's argument variables and signature, a path or method call's
-       argument types, an index's index type, a cast's or unsizing's target, a
-       constructor's field types. */
     const auto collectType = [&](const HIRType* type) {
         if (type) {
             collectIvars(type, members, true);
@@ -10020,10 +10016,6 @@ auto IvarCoercionIndex::buildComponents() -> void {
             for (const auto* type : call.argTypes) {
                 collectType(type);
             }
-        } else if (kind == HIRExprNodeCallPath::kind) {
-            for (const auto* type : static_cast<const HIRExprNodeCallPath&>(node).cache.argTypes) {
-                collectType(type);
-            }
         } else if (kind == HIRExprNodeCallMethod::kind) {
             for (const auto* type : static_cast<const HIRExprNodeCallMethod&>(node).cache.argTypes) {
                 collectType(type);
@@ -10032,16 +10024,6 @@ auto IvarCoercionIndex::buildComponents() -> void {
             collectType(static_cast<const HIRExprNodeIndex&>(node).cache.indexTy);
         } else if (kind == HIRExprNodeCast::kind) {
             collectType(static_cast<const HIRExprNodeCast&>(node).dstType);
-        } else if (kind == HIRExprNodeUnsize::kind) {
-            collectType(static_cast<const HIRExprNodeUnsize&>(node).dstType);
-        } else if (kind == HIRExprNodeTupleVariant::kind) {
-            for (const auto* type : static_cast<const HIRExprNodeTupleVariant&>(node).argTypes) {
-                collectType(type);
-            }
-        } else if (kind == HIRExprNodeStructLiteral::kind) {
-            for (const auto* type : static_cast<const HIRExprNodeStructLiteral&>(node).valueTypes) {
-                collectType(type);
-            }
         }
     };
     Vector<std::pair<unsigned int, OrderPlace>> pendingNodes;
