@@ -712,15 +712,9 @@ public:
         return rv;
     }
 
-    virtual void visitFunction(MIRTypeResolve& state, typename Dec<MIRFunction>::Type& fcn) {
-        if constexpr (std::is_const_v<typename Dec<MIRFunction>::Type>) {
-            for (const auto& type : fcn.locals) {
-                visitType(type);
-            }
-        } else {
-            for (auto& type : stl::mutRange(fcn.locals)) {
-                type = visitType(type);
-            }
+    void visitFunction(MIRTypeResolve& state, typename Dec<MIRFunction>::Type& fcn) requires(std::is_const_v<typename Dec<MIRFunction>::Type>) {
+        for (const auto& type : fcn.locals) {
+            visitType(type);
         }
 
         for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
