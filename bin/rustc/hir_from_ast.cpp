@@ -1181,6 +1181,9 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
     const ASTAbsolutePath* ap = nullptr;
     switch (pc) {
         case FromASTPathClass::Value:
+            if (path.bindings.value.is_Unbound() && path.bindings.type.binding.is_EnumVar()) {
+                ERROR(sp, E0000, StringView("named-field enum variant cannot be used as a value: ") << path);
+            }
             ASSERT_BUG(sp, !path.bindings.value.is_Unbound(), StringView("Encountered unbound value path - ") << path);
             ap = &path.bindings.value.path;
             break;
@@ -5310,9 +5313,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                 ASSERT_BUG(v.span(), e.struct_ || e.hir, StringView("PathValue bound to a struct but pointer not set - ") << v.path);
                 bool isTupleConstructor = false;
                 if (e.struct_) {
-                    if (e.struct_->data.is_Struct()) {
-                        ERROR(v.span(), E0000, StringView("Named value referring to a struct that isn't tuple-like or unit-like - ") << v.path);
-                    }
                     isTupleConstructor = e.struct_->data.is_Tuple();
                 } else {
                     const auto& str = *e.hir;
@@ -5339,16 +5339,8 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                 unsigned int varIdx;
                 if (e.enum_) {
                     const auto& enm = *e.enum_;
-                    auto it = std::find_if(enm.variants().begin(), enm.variants().end(), [&](const auto& x) {
-                        return x.name == varName;
-                    });
-                    BUG_ASSERT(it != enm.variants().end());
-
-                    varIdx = static_cast<unsigned int>(it - enm.variants().begin());
-                    if (it->data.is_Struct()) {
-                        ERROR(v.span(), E0000, StringView("Named value referring to an enum that isn't tuple-like or unit-like - ") << v.path);
-                    }
-                    isTupleConstructor = it->data.is_Tuple();
+                    varIdx = e.idx;
+                    isTupleConstructor = enm.variants().at(varIdx).data.is_Tuple();
                 } else {
                     const auto& enm = *e.hir;
                     auto idx = enm.findVariant(varName);
