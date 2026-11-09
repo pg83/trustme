@@ -9152,6 +9152,9 @@ auto ExprVisitorApply::visit(HIRExprNodeStructLiteral& node) -> void {
                 ASSERT_BUG(sp, enm.data.is_Data(), StringView(""));
                 const auto& var = enm.data.as_Data()[idx];
 
+                if (var.type == this->context.crate.types.unit()) {
+                    ERROR(node.span(), E0000, StringView("unit variant has no default fields: ") << tyPath);
+                }
                 const auto& str = *var.type->as_Path().binding.as_Struct();
                 if (str.data.is_Tuple()) {
                     HIRExprVisitorDef::visit(node);
