@@ -13980,14 +13980,8 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     const HIRGenericParams* implParamsDef = markerImpl ? &markerImpl->params : (traitImpl ? &traitImpl->params : associatedDefinition ? &associatedDefinition->generics : nullptr);
     if (!implParamsDef) {
         if (associated && !markerImpl && !traitImpl) {
-            HIRTraitPath::assocListT declaredElsewhere;
-            for (const auto& requirement : *associated) {
-                if (requirement.second.sourceTrait.path != trait && candidate->impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) == nullptr) {
-                    declaredElsewhere.insert({requirement.first, requirement.second.clone()});
-                }
-            }
-            if (!declaredElsewhere.empty()) {
-                const auto assocResult = matchAssociatedTypes(trait, *candidate, &declaredElsewhere, &materializeHead);
+            if (!associated->empty()) {
+                const auto assocResult = matchAssociatedTypes(trait, *candidate, associated, &materializeHead);
                 if (assocResult == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
