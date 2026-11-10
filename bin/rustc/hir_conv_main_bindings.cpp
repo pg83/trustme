@@ -1229,9 +1229,6 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
         return false;
     }
     for (const auto& bound : trait.params.bounds) {
-        if (!bound.is_TraitBound()) {
-            continue;
-        }
         const auto& tb = bound.as_TraitBound();
         if (tb.type == interner().self() && tb.trait.path.path == sized) {
             return true;
@@ -2077,9 +2074,6 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
                     enumSupertraitsIn(*pt.traitPtr, monomorphTp(pt));
                 }
                 for (const auto& b : tr.params.bounds) {
-                    if (!b.is_TraitBound()) {
-                        continue;
-                    }
                     const auto& be = b.as_TraitBound();
                     if (be.type != tySelf) {
                         continue;
@@ -2175,9 +2169,6 @@ auto VisitorEnumSuperTraits::visitTrait(HIRItemPath ip, HIRTrait& tr) -> void {
         e.enumSupertraitsIn(*pt.traitPtr, pt.clone());
     }
     for (const auto& b : tr.params.bounds) {
-        if (!b.is_TraitBound()) {
-            continue;
-        }
         const auto& be = b.as_TraitBound();
         if (be.type != tySelf) {
             continue;

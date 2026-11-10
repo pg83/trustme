@@ -3373,9 +3373,6 @@ bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Da
         }
     }
     for (const auto& bound : traitRef.params.bounds) {
-        if (!bound.is_TraitBound()) {
-            continue;
-        }
         const auto& be = bound.as_TraitBound();
 
         if (!be.type->is_Path()) {
