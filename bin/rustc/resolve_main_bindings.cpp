@@ -3143,7 +3143,10 @@ namespace {
                 auto& s = e.data.as_Struct();
                 for (auto& field : s.ents) {
                     ResolveAbsoluteType(itemContext, field.type);
-                    ResolveAbsoluteExpr(itemContext, field.defaultValue);
+                    if (field.defaultValue) {
+                        auto _h = itemContext.enterRootblock();
+                        ResolveAbsoluteExpr(itemContext, field.defaultValue);
+                    }
                 }
                 break;
             }
