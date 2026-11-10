@@ -1920,7 +1920,7 @@ namespace {
             case MacroPatEnt::PAT_TT:
                 return consumeTt(lex);
             case MacroPatEnt::PAT_PATH:
-                return consumePath(lex, true);
+                return !opensAngle(lex.next()) && consumePath(lex, true);
             case MacroPatEnt::PAT_TYPE:
                 return consumeType(lex);
             case MacroPatEnt::PAT_EXPR:
