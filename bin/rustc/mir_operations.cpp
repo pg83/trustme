@@ -7697,8 +7697,3 @@ void stl::output<ZeroCopyOutput, OptimiseStmtRef>(ZeroCopyOutput& os, OptimiseSt
     os << StringView("BB") << x.bbIdx << StringView("/") << x.stmtIdx;
     return;
 }
-
-template <>
-void stl::output<ZeroCopyOutput, Vector<OptimiseStmtRef>>(ZeroCopyOutput& out, const Vector<OptimiseStmtRef>& values) {
-    outCont(out, values);
-}
