@@ -326,7 +326,8 @@ auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const W
         if (u->entries.size() == 1 && u->entries.back().path.isAbsolute() && u->entries.back().path.cls.as_Absolute().crate == CRATE_BUILTINS && u->entries.back().path.cls.as_Absolute().nodes.size() == 1)
             ;
         else {
-            ERROR(sp, E0000, StringView("Use of #[macro_export] on non-macro - ") << i.tagStr());
+            WARNING(sp, W0000, StringView("Use of #[macro_export] on non-macro - ") << i.tagStr());
+            return;
         }
         const auto& p = u->entries.back().path.cls.as_Absolute();
         const auto& name = p.nodes.front().name();
@@ -336,11 +337,12 @@ auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const W
     } else if (i.is_MacroInv()) {
         const auto& mac = i.as_MacroInv();
         if (!(mac.path().isTrivial() && mac.path().asTrivial() == "macro_rules")) {
-            ERROR(sp, E0000, StringView("#[macro_export] is only valid on macro_rules!"));
+            WARNING(sp, W0000, StringView("#[macro_export] is only valid on macro_rules!"));
+            return;
         }
         exportMacroRules(sp, wb, crate, mod, mac.inputIdent(), localInnerMacros);
     } else {
-        ERROR(sp, E0000, StringView("Use of #[macro_export] on non-macro - ") << i.tagStr());
+        WARNING(sp, W0000, StringView("Use of #[macro_export] on non-macro - ") << i.tagStr());
     }
 }
 

@@ -2008,7 +2008,7 @@ namespace {
             }
             if (cfgFailed) {
                 i->data = ASTItem::make_None({});
-            } else if (isMacroExport) {
+            } else if (isMacroExport && (i->data.is_MacroInv() || i->data.is_Macro())) {
                 if (i->data.is_MacroInv() && i->data.as_MacroInv().path().isTrivial() && i->data.as_MacroInv().path().asTrivial() == "macro_rules") {
                     const auto& macInv = i->data.as_MacroInv();
                     DEBUG(StringView("macro_rules marked with #[macro_export] moved to the crate root - ") << macInv.inputIdent());
@@ -2019,8 +2019,6 @@ namespace {
 
                     DEBUG(StringView("macro item export: ") << i->name);
                     i->data.as_Macro()->exported = true;
-                } else {
-                    ERROR(i->span, E0000, StringView("#[macro_export] on non-macro_rules - ") << i->data.tagStr());
                 }
             } else if (auto* e = i->data.opt_Module()) {
                 Expand_Mod_Early(wb, crate, *e, newRootItems);
