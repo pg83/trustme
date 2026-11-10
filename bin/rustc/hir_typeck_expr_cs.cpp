@@ -149,8 +149,6 @@ namespace {
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
-        void visit(HIRExprNodeGeneratorWrapper& node) override;
-
         void visitCallcache(const Span& sp, HIRExprCallCache& cache);
 
         void visit(HIRExprNodeCallPath& node) override;
@@ -9063,10 +9061,6 @@ auto ExprVisitorApply::visit(HIRExprNodeAsyncBlock& node) -> void {
     inClosure = true;
     HIRExprVisitorDef::visit(node);
     inClosure = wasInClosure;
-}
-
-auto ExprVisitorApply::visit(HIRExprNodeGeneratorWrapper& node) -> void {
-    BUG(node.span(), StringView(""));
 }
 
 auto ExprVisitorApply::visitCallcache(const Span& sp, HIRExprCallCache& cache) -> void {
