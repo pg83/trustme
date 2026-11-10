@@ -4352,9 +4352,6 @@ auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, con
             const MonomorphStatePtr monomorph(crate.types, lookupType, &implParams, nullptr);
             for (const auto& implBound : impl.params.bounds) {
                 const auto* traitBound = implBound.opt_TraitBound();
-                if (!traitBound) {
-                    continue;
-                }
                 const auto* boundType = monomorph.monomorphType(Span(), traitBound->type);
                 const auto boundTrait = monomorph.monomorphTraitpath(Span(), traitBound->trait, true);
                 bool open = standsForInference(boundType);

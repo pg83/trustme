@@ -796,9 +796,6 @@ static void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& 
                     bool rv = true;
                     DEBUG(StringView("Bounds = ") << fcn.params.fmtBounds());
                     for (const auto& b : fcn.params.bounds) {
-                        if (!b.is_TraitBound()) {
-                            continue;
-                        }
                         const auto& be = b.as_TraitBound();
 
                         auto bTyMono = resolve.monomorphExpand(sp, be.type, cbMonomorph);

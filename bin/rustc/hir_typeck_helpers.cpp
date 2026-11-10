@@ -5613,9 +5613,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         auto monomorph = MonomorphStatePtr(crate.types, environmentType, &environmentTrait.params, nullptr);
         for (const auto& declaredBound : environmentInfo.traitPtr->params.bounds) {
             const auto* declaredTrait = declaredBound.opt_TraitBound();
-            if (!declaredTrait) {
-                continue;
-            }
             if (!declaredTraitMayMatch(declaredTraitMayMatch, declaredTrait->trait, true)) {
                 continue;
             }
@@ -14726,9 +14723,6 @@ auto NextTraitGoalEvaluator::appendResponseObligations(ThinVector<SolverObligati
     };
     for (const auto& bound : params->bounds) {
         const auto* traitBound = bound.opt_TraitBound();
-        if (!traitBound) {
-            continue;
-        }
         const HIRType* type;
         HIRTraitPath trait;
         if (candidate->markerImpl) {
