@@ -855,14 +855,6 @@ namespace {
         Token tok;
         ASTPath path;
 
-        if (lex.lookahead(0) == TOK_INTERPOLATED_PATH && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
-            GET_TOK(tok, lex);
-            if (tok.fragPath().isTrivial() && tok.fragPath().asTrivial() == "gen") {
-                bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
-                return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
-            }
-            PUTBACK(tok, lex);
-        }
         if (lex.lookahead(0) == TOK_IDENT && lex.lookaheadEdition(0) >= ASTEdition::Rust2024 && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
             GET_TOK(tok, lex);
             if (tok.ident().name == "gen") {
@@ -956,6 +948,7 @@ namespace {
             case TOK_DOUBLE_COLON:
             case TOK_IDENT:
             case TOK_INTERPOLATED_PATH: {
+                const bool isInterpolatedPath = tok.type() == TOK_INTERPOLATED_PATH;
                 auto pathSpan = lex.tokenStartSpan(tok);
                 PUTBACK(tok, lex);
                 path = ParsePath(lex, PATH_GENERIC_EXPR);
@@ -972,7 +965,7 @@ namespace {
                             return rv;
                         }
                     case TOK_BRACE_OPEN:
-                        if (!CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
+                        if (!isInterpolatedPath && !CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
                             return ParseExprValStructLiteral(lex, std::move(path));
                         } else {
                             DEBUG(StringView("Not parsing struct literal"));
