@@ -812,11 +812,6 @@ auto AsyncDropPollBuilder::CoroutineDropCloner::cloneLval(const MIRLValue& src) 
     if (src.root.is_Return()) {
         auto rv = src.clone();
         rv.root = MIRLValue::Storage::newLocal(returnLocal);
-        for (auto& wrapper : rv.wrappers) {
-            if (wrapper.is_Index()) {
-                wrapper = MIRLValue::Wrapper::newIndex(mapLocal(wrapper.as_Index()));
-            }
-        }
         return rv;
     }
     return MIRCloner::cloneLval(src);

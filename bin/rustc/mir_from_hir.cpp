@@ -970,15 +970,17 @@ namespace {
                     const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings_;
                     const std::map<unsigned, unsigned>& dropFlagMapping;
                     unsigned dropFlagsField;
+                    MIRFunction& function_;
 
                     std::vector<MIRStatement> newStatements;
                     unsigned bbIdx = 0;
                     unsigned stmtIdx = 0;
 
-                    Rewriter(const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
+                    Rewriter(MIRFunction& function, const std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
                         : mappings_(mappings)
                         , dropFlagMapping(dropFlagMapping)
                         , dropFlagsField(dropFlagsField)
+                        , function_(function)
                     {
                     }
 
@@ -998,7 +1000,15 @@ namespace {
                             if (w.is_Index()) {
                                 auto it = mappings_.find(w.as_Index());
                                 if (it != mappings_.end()) {
-                                    TODO(Span(), StringView(""));
+                                    const auto* type = function_.locals[w.as_Index()];
+                                    const auto index = static_cast<unsigned>(function_.locals.length());
+                                    function_.locals.pushBack(type);
+                                    auto place = MIRLValue::newArgument(0);
+                                    place.wrappers.push_back(MIRLValue::Wrapper::newField(0));
+                                    place.wrappers.push_back(MIRLValue::Wrapper::newDeref());
+                                    place.wrappers.insert(place.wrappers.end(), it->second.begin(), it->second.end());
+                                    newStatements.push_back(MIRStatement::make_Assign({MIRLValue::newLocal(index), std::move(place)}));
+                                    w = MIRLValue::Wrapper::newIndex(index);
                                 }
                             }
                         }
@@ -1084,7 +1094,7 @@ namespace {
                     }
                 };
 
-                Rewriter(mappings, dropFlagMapping, dropFlagsFieldIdx).rewriteFcn(fcn);
+                Rewriter(fcn, mappings, dropFlagMapping, dropFlagsFieldIdx).rewriteFcn(fcn);
 
                 auto dropImplBody = MIRFunctionPointer(new MIRFunction());
                 {
