@@ -3786,14 +3786,6 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 PUTBACK(tok, lex);
                 ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Bare, lifetime);
                 break;
-            case TOK_RWORD_UNSAFE:
-                ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Unsafe, lifetime);
-                break;
-            case TOK_RWORD_CONST:
-                ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Const, lifetime);
-                break;
-                // TODO: Can these have labels?
-
             default:
                 parseErrorUnexpected(lex, tok);
         }
