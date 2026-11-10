@@ -38,13 +38,9 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     const HIRPathParams* ppImpl;
     const HIRPathParams* ppMethod;
 
-    const HIRPathParams* ppHrb;
-
     explicit MonomorphStatePtr(HIRTypeInterner& types);
 
-    MonomorphStatePtr(HIRTypeInterner& types, const HIRType* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP = nullptr, const HIRPathParams* paramsH = nullptr);
-
-    MonomorphStatePtr(MonomorphStatePtr&& x);
+    MonomorphStatePtr(HIRTypeInterner& types, const HIRType* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP = nullptr);
 
     MonomorphStatePtr(const MonomorphStatePtr& x);
 
@@ -54,7 +50,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     const HIRPathParams* getMethodParams() const override;
 
-    const HIRPathParams* getHrbParams() const override;
 };
 
 struct MonomorphState: public MonomorphiserPP {
@@ -82,5 +77,4 @@ struct MonomorphState: public MonomorphiserPP {
 
     const HIRPathParams* getMethodParams() const override;
 
-    const HIRPathParams* getHrbParams() const override;
 };

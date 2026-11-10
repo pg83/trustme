@@ -7,26 +7,19 @@ MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types)
     , selfTy(nullptr)
     , ppImpl(nullptr)
     , ppMethod(nullptr)
-    , ppHrb(nullptr)
 {
 }
 
-MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRType* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP, const HIRPathParams* paramsH)
+MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRType* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP)
     : MonomorphiserPP(types)
     , selfTy(selfTy)
     , ppImpl(paramsI)
     , ppMethod(paramsM)
-    , ppHrb(paramsH)
-{
-}
-
-MonomorphStatePtr::MonomorphStatePtr(MonomorphStatePtr&& x)
-    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb)
 {
 }
 
 MonomorphStatePtr::MonomorphStatePtr(const MonomorphStatePtr& x)
-    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb)
+    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr)
 {
 }
 
@@ -110,10 +103,6 @@ const HIRPathParams* MonomorphStatePtr::getMethodParams() const {
     return ppMethod;
 }
 
-const HIRPathParams* MonomorphStatePtr::getHrbParams() const {
-    return ppHrb;
-}
-
 const HIRType* MonomorphState::getSelfType() const {
     return selfTy;
 }
@@ -124,10 +113,6 @@ const HIRPathParams* MonomorphState::getImplParams() const {
 
 const HIRPathParams* MonomorphState::getMethodParams() const {
     return ppMethod;
-}
-
-const HIRPathParams* MonomorphState::getHrbParams() const {
-    return nullptr;
 }
 
 template <>

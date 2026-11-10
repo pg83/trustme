@@ -509,10 +509,6 @@ const HIRType* MonomorphiserPP::getType(const Span& sp, const HIRGenericRef& ty)
                 }
                 break;
             case GENERICHrtb:
-                if (const auto* p = this->getHrbParams()) {
-                    ASSERT_BUG(sp, ty.idx() < p->types.size(), StringView("HRTB type param ") << ty << StringView(" out of range for (max ") << p->types.size() << StringView(")"));
-                    return p->types[ty.idx()];
-                }
                 return types.generic(ty.name, ty.binding);
             default:
                 BUG(sp, StringView("Unexpected type param ") << ty);
@@ -540,10 +536,6 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
             }
             break;
         case GENERICHrtb:
-            if (const auto* p = this->getHrbParams()) {
-                ASSERT_BUG(sp, val.idx() < p->values.size(), StringView("HRTB value param ") << val << StringView(" out of range for (max ") << p->values.size() << StringView(")"));
-                return p->values[val.idx()].clone();
-            }
             return val;
         default:
             BUG(sp, StringView("Unexpected value param ") << val);

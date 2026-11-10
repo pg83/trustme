@@ -139,8 +139,6 @@ namespace {
 
         const HIRPathParams* getMethodParams() const override;
 
-        const HIRPathParams* getHrbParams() const override;
-
         bool hasUnevaluatedValues() const;
     };
 
@@ -7574,10 +7572,6 @@ auto ParamsSet::getImplParams() const -> const HIRPathParams* {
 
 auto ParamsSet::getMethodParams() const -> const HIRPathParams* {
     return fcnParams;
-}
-
-auto ParamsSet::getHrbParams() const -> const HIRPathParams* {
-    return nullptr;
 }
 
 auto ParamsSet::hasUnevaluatedValues() const -> bool {

@@ -4006,8 +4006,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.params, &pe.params);
                 this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
                     DEBUG(StringView("Bound on ATY: ") << bound);
-                    auto ppHrb = HIRPathParams();
-                    monomorphCb.ppHrb = &ppHrb;
                     const auto& bParams = bound.path.params;
                     HIRPathParams paramsMonoO;
                     const HIRPathParams* bParamsMono = &bParams;
@@ -4044,8 +4042,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                             callback.visit(SolverImpl(type, &bound.path.params, nullptr, bound.constness));
                         }
                     }
-                    monomorphCb.ppHrb = nullptr;
-
                     bool rv = false;
                     bool ret = false;
                     this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.path.path, *bParamsMono, type, [&](const HIRTraitPath& iTp) {

@@ -278,7 +278,3 @@ const HIRPathParams* TransParams::getImplParams() const {
 const HIRPathParams* TransParams::getMethodParams() const {
     return &ppMethod;
 }
-
-const HIRPathParams* TransParams::getHrbParams() const {
-    return nullptr;
-}

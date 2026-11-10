@@ -56,8 +56,6 @@ public:
     virtual const HIRType* getSelfType() const = 0;
     virtual const HIRPathParams* getImplParams() const = 0;
     virtual const HIRPathParams* getMethodParams() const = 0;
-    virtual const HIRPathParams* getHrbParams() const = 0;
-
     const HIRType* getType(const Span& sp, const HIRGenericRef& ty) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 

@@ -52,7 +52,6 @@ struct TransParams: public MonomorphiserPP {
 
     const HIRPathParams* getMethodParams() const override;
 
-    const HIRPathParams* getHrbParams() const override;
 };
 
 struct CachedFunction {
