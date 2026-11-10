@@ -403,7 +403,7 @@ auto TypecheckVisitor::getCurrentTraitGp() const -> HIRGenericPath {
     BUG_ASSERT(currentTrait);
     HIRPathParamsBuilder params;
     for (unsigned int i = 0; i < currentTrait->params.types.size(); i++) {
-        params.types.push_back(crate.types.generic(currentTrait->params.types[i].name, i));
+        params.types.push_back(crate.types.generic(currentTrait->params.types[i].name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(i))));
     }
     return HIRGenericPath(currentTraitPath_->getSimplePath(), HIRPathParams(mv$(params)));
 }

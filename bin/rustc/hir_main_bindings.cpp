@@ -18,6 +18,8 @@
 using namespace stl;
 
 namespace {
+    constexpr u16 WIDE_GENERIC_BINDING = 0xFFFD;
+
     const size_t SIMPLE_PATH_EMPTY = 0xFFFFFFFE;
     const size_t SIMPLE_PATH_FRESH = 0xFFFFFFFF;
     const size_t NO_REGION = ~size_t(0);
@@ -719,7 +721,10 @@ namespace {
 }
 
 HIRGenericRef HirDeserialiser::deserialiseGenericref() {
-    return HIRGenericRef{in.readIstring(), in.readU16()};
+    auto name = in.readIstring();
+    const auto encoded = in.readU16();
+    const auto binding = encoded == WIDE_GENERIC_BINDING ? in.readU32() : encoded;
+    return HIRGenericRef{mv$(name), binding};
 }
 
 HIRArraySize HirDeserialiser::deserialiseArraysize() {
@@ -3310,7 +3315,12 @@ auto HirSerialiser::serialise(i64 v) -> void {
 auto HirSerialiser::serialise(const HIRGenericRef& ge) -> void {
     ASSERT_BUG(Span(), !ge.isSolverExistential(), StringView("solver existential escaped into serialised HIR: ") << ge);
     out.writeString(ge.name);
-    out.writeU16(ge.binding);
+    if (ge.binding <= UINT16_MAX && ge.binding != WIDE_GENERIC_BINDING) {
+        out.writeU16(static_cast<u16>(ge.binding));
+    } else {
+        out.writeU16(WIDE_GENERIC_BINDING);
+        out.writeU32(ge.binding);
+    }
 }
 
 auto HirSerialiser::serialiseArraysize(const HIRArraySize& as) -> void {

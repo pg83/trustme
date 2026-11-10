@@ -887,7 +887,7 @@ bool HIRTraitImpl::headWithin(const Span& sp, HIRTypeInterner& types, const HIRT
             }
         }
         for (size_t i = 0; i < parent.params.values.size(); i++) {
-            if (parentMatcher.mappedValue(i)) {
+            if (parentMatcher.mappedValue(HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(i)))) {
                 count++;
             }
         }
@@ -1642,11 +1642,11 @@ ImplMatcher::ImplMatcher(Vector<const HIRType*>& buf, const HIRGenericParams& im
 }
 
 auto ImplMatcher::matchTy(const HIRGenericRef& g, const HIRType* ty, tCbResolveType resolveCb) -> HIRCompare {
-    BUG_ASSERT(g.binding < implTypes.length());
-    if (implTypes[g.binding]) {
-        return implTypes[g.binding]->compareWithPlaceholders(Span(), ty, resolveCb);
+    BUG_ASSERT(g.group() == GENERICImpl && g.idx() < implTypes.length());
+    if (implTypes[g.idx()]) {
+        return implTypes[g.idx()]->compareWithPlaceholders(Span(), ty, resolveCb);
     }
-    implTypes.mut(g.binding) = ty;
+    implTypes.mut(g.idx()) = ty;
     return HIRCompare::Equal;
 }
 
@@ -1691,7 +1691,7 @@ ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplM
 
 auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) const -> const HIRType* {
     if (generic.group() == 0) {
-        auto mapped = matcher.mappedType(generic.binding);
+        auto mapped = matcher.mappedType(generic.idx());
         if (mapped) {
             return mapped;
         }

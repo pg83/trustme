@@ -285,7 +285,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, BoundIndex& in
 
 const HIRType* TraitResolveCommon::getConstParamType(const Span& sp, unsigned binding) const {
     const HIRGenericParams* p;
-    switch (binding >> 8) {
+    switch (HIRGenericRef::groupOf(binding)) {
         case 0:
             p = implGenerics_;
             break;
@@ -295,8 +295,8 @@ const HIRType* TraitResolveCommon::getConstParamType(const Span& sp, unsigned bi
         default:
             TODO(sp, StringView("Typecheck const generics - look up the type"));
     }
-    auto slot = binding & 0xFF;
-    ASSERT_BUG(sp, p, StringView("No generic list for ") << (binding >> 8) << StringView(":") << slot);
+    auto slot = HIRGenericRef::indexOf(binding);
+    ASSERT_BUG(sp, p, StringView("No generic list for ") << (HIRGenericRef::groupOf(binding)) << StringView(":") << slot);
     ASSERT_BUG(sp, slot < p->values.size(), StringView("Generic param index out of range"));
     return p->values.at(slot).type;
 }

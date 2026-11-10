@@ -886,7 +886,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                     if (!selfIsSized) {
                         ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
                     }
-                    paramIdx = 0xFFFF;
+                    paramIdx = ~0u;
                 } else {
                     paramIdx = ge.idx();
                     if (paramIdx >= rv.types.size() || rv.types[paramIdx].name != (e.type->data.is_Generic() ? e.type->data.as_Generic().name : e.type->data.as_Path()->cls.as_Local().name)) {
@@ -896,7 +896,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
 
                 auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
                 if (trait.path == pathSized) {
-                    if (paramIdx == 0xFFFF) {
+                    if (paramIdx == ~0u) {
                         BUG_ASSERT(selfIsSized);
                         *selfIsSized = false;
                     } else {
@@ -1886,7 +1886,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Generic: {
             auto& e = ty->data.as_Generic();
-            BUG_ASSERT(e.index < 0x10000);
             return crate->types.generic(e.name, e.index);
         }
     }

@@ -10,14 +10,19 @@ HIRGenericRef::HIRGenericRef(RcString name, u32 binding)
 {
 }
 
-HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx)
+HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, u32 idx)
     : name(std::move(name))
-    , binding(group * 256 + idx)
+    , binding(makeBinding(group, idx))
 {
-    BUG_ASSERT(idx < 256);
 }
 
-HIRGenericRef HIRGenericRef::newSolverExistential(u32 scope, u16 idx) {
+u32 HIRGenericRef::makeBinding(unsigned group, u32 index) {
+    BUG_ASSERT(group < 256);
+    BUG_ASSERT(index <= MAX_INDEX);
+    return (group << 8) | (index & 0xFF) | ((index >> 8) << 16);
+}
+
+HIRGenericRef HIRGenericRef::newSolverExistential(u32 scope, u32 idx) {
     BUG_ASSERT(scope != 0);
     auto result = HIRGenericRef(RcString(), GENERICPlaceholder, idx);
     result.solverScope = scope;
@@ -25,7 +30,10 @@ HIRGenericRef HIRGenericRef::newSolverExistential(u32 scope, u16 idx) {
 }
 
 Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
-    auto rv = ::ord(binding, x.binding);
+    auto rv = ::ord(group(), x.group());
+    if (!rv) {
+        rv = ::ord(idx(), x.idx());
+    }
     if (rv) {
         return rv;
     }

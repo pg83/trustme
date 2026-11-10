@@ -81,7 +81,7 @@ const HIRType* OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGener
     for (size_t i = 0; i < params.types.size(); i++) {
         if (params.types[i] == type) {
             ASSERT_BUG(sp, i < alias.generics.types.size(), StringView("Opaque alias type parameter count mismatch"));
-            return types.generic(alias.generics.types[i].name, i);
+            return types.generic(alias.generics.types[i].name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(i)));
         }
     }
     return type;
@@ -92,7 +92,7 @@ HIRConstGeneric OpaqueAliasParamMonomorph::getValue(const Span& sp, const HIRGen
         const auto* param = params.values[i].opt_Generic();
         if (param && *param == generic) {
             ASSERT_BUG(sp, i < alias.generics.values.size(), StringView("Opaque alias const parameter count mismatch"));
-            return HIRGenericRef(alias.generics.values[i].name, i);
+            return HIRGenericRef(alias.generics.values[i].name, GENERICImpl, static_cast<u32>(i));
         }
     }
     return MonomorphiserNop::getValue(sp, generic);

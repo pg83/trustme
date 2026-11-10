@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "ast_crate.h"
 #include "wire_board.h"
+#include "hir_generic_ref.h"
 #include "pop_on_drop.h"
 #include "main_bindings.h"
 #include "macro_rules_macro_rules.h"
@@ -50,7 +51,7 @@ namespace {
             UnusedPlaceholder,
             Hrb,
         } level;
-        unsigned short index;
+        u32 index;
 
         unsigned int toBinding() const;
     };
@@ -5843,11 +5844,10 @@ void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
 #include "resolve_ctx_ent_tu.cpp"
 
 auto GenericSlot::toBinding() const -> unsigned int {
-    if ((level == Level::Method || level == Level::Hrb) && index != 0xFFFF) {
-        return (unsigned int)index + 256 * static_cast<unsigned int>(level);
-    } else {
-        return (unsigned int)index;
+    if (index == ~0u) {
+        return GENERICSelf;
     }
+    return HIRGenericRef::makeBinding(static_cast<unsigned>(level), index);
 }
 
 auto Context::typePool() const -> ObjPool& {
@@ -5872,7 +5872,7 @@ auto Context::push(const ASTHigherRankedBounds& params) -> void {
         data.lifetimes.push_back(NamedI<GenericSlot>{params.lifetimes[i].name(), GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
     }
     for (size_t i = 0; i < params.types.length(); i++) {
-        data.types.push_back(Named<GenericSlot>{params.types[i], GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
+        data.types.push_back(Named<GenericSlot>{params.types[i], GenericSlot{GenericSlot::Level::Hrb, static_cast<u32>(i)}});
     }
 
     nameContext.push_back(mv$(e));
@@ -5914,13 +5914,13 @@ auto Context::push(/*const */ ASTGenericParams& params, GenericSlot::Level level
     auto& data = e.as_Generic();
 
     if (hasSelf) {
-        data.types.push_back(Named<GenericSlot>{selfName(), GenericSlot{level, GENERICSelf}});
+        data.types.push_back(Named<GenericSlot>{selfName(), GenericSlot{level, ~0u}});
         nameContext.push_back(Ent::make_ConcreteSelf(nullptr));
     }
     if (!params.params.empty()) {
         unsigned short lftIdx = 0;
-        unsigned short tyIdx = 0;
-        unsigned short valIdx = 0;
+        u32 tyIdx = 0;
+        u32 valIdx = 0;
         for (const auto& e : params.params) {
             switch (e.tag()) {
                 case GenericParam::TAG_None: {

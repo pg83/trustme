@@ -3488,7 +3488,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
         for (size_t i = 0; i < paramsDef.types.size(); i++) {
             if (paramsDef.types[i].isSized) {
-                const HIRType* ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
+                const HIRType* ty = context.crate.types.generic("", HIRGenericRef::makeBinding(isImplLevel ? GENERICImpl : GENERICItem, static_cast<u32>(i)));
                 context.requireSized(sp, ms.getType(Span(), ty->as_Generic()));
             }
         }
@@ -7177,7 +7177,7 @@ void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 } else {
                     TODO(sp, StringView("Handle 'Self' when monomorphising"));
                 }
-            } else if (e.binding < 256) {
+            } else if (e.group() == GENERICImpl) {
                 if (hasImplParams) {
                     auto idx = e.idx();
                     ASSERT_BUG(sp, idx < implParams.types.size(), StringView("Generic param (impl) out of input range - ") << e << StringView(" >= ") << implParams.types.size());
@@ -7185,7 +7185,7 @@ void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 } else {
                     BUG(sp, StringView("Impl-level parameter on free function (") << e << StringView(")"));
                 }
-            } else if (e.binding < 512) {
+            } else if (e.group() == GENERICItem) {
                 auto idx = e.idx();
                 ASSERT_BUG(sp, idx < fcnParams.types.size(), StringView("Generic param out of input range - ") << e << StringView(" >= ") << fcnParams.types.size());
                 return context.getType(fcnParams.types[idx]);
@@ -7197,12 +7197,12 @@ void visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         }
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& e) const override {
-            if (e.binding < 256) {
+            if (e.group() == GENERICImpl) {
                 ASSERT_BUG(sp, hasImplParams, StringView("Impl-level value parameter on free function (") << e << StringView(")"));
                 auto idx = e.idx();
                 ASSERT_BUG(sp, idx < implParams.values.size(), StringView("Generic value (impl) out of input range - ") << e << StringView(" >= ") << implParams.values.size());
                 return context.ivars.getValue(implParams.values[idx]).clone();
-            } else if (e.binding < 512) {
+            } else if (e.group() == GENERICItem) {
                 auto idx = e.idx();
                 ASSERT_BUG(sp, idx < fcnParams.values.size(), StringView("Generic value out of input range - ") << e << StringView(" >= ") << fcnParams.values.size());
                 return context.ivars.getValue(fcnParams.values[idx]).clone();
@@ -9491,7 +9491,7 @@ auto ConstExprEquate::equateValue(const HIRConstGeneric& left, const HIRConstGen
 
 auto ConstExprEquate::getParam(const HIRConstGenericUnevaluated& value, unsigned int binding) const -> const HIRConstGeneric* {
     const HIRPathParams* params = nullptr;
-    switch (binding >> 8) {
+    switch (HIRGenericRef::groupOf(binding)) {
         case GENERICImpl:
             params = &value.paramsImpl;
             break;
@@ -9501,7 +9501,7 @@ auto ConstExprEquate::getParam(const HIRConstGenericUnevaluated& value, unsigned
         default:
             return nullptr;
     }
-    const unsigned int index = binding & 0xFF;
+    const unsigned int index = HIRGenericRef::indexOf(binding);
     return index < params->values.size() ? &params->values[index] : nullptr;
 }
 

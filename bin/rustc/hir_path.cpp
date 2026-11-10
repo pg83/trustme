@@ -63,7 +63,7 @@ namespace {
 
     const HIRConstGeneric* getUnevaluatedParam(const HIRConstGenericUnevaluated& value, unsigned int binding) {
         const HIRPathParams* params = nullptr;
-        switch (binding >> 8) {
+        switch (HIRGenericRef::groupOf(binding)) {
             case GENERICImpl:
                 params = &value.paramsImpl;
                 break;
@@ -73,7 +73,7 @@ namespace {
             default:
                 return nullptr;
         }
-        const unsigned int index = binding & 0xFF;
+        const unsigned int index = HIRGenericRef::indexOf(binding);
         return index < params->values.size() ? &params->values[index] : nullptr;
     }
 

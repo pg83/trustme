@@ -4185,13 +4185,13 @@ const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const H
     HIRPathParamsBuilder params;
     params.types.reserve(definition.types.size());
     for (size_t i = 0; i < definition.types.size(); i++) {
-        ASSERT_BUG(sp, i < 256, StringView("Too many candidate type parameters"));
-        params.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i))));
+        ASSERT_BUG(sp, i <= HIRGenericRef::MAX_INDEX, StringView("Too many candidate type parameters"));
+        params.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u32>(i))));
     }
     params.values.reserve(definition.values.size());
     for (size_t i = 0; i < definition.values.size(); i++) {
-        ASSERT_BUG(sp, i < 256, StringView("Too many candidate value parameters"));
-        params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
+        ASSERT_BUG(sp, i <= HIRGenericRef::MAX_INDEX, StringView("Too many candidate value parameters"));
+        params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u32>(i)));
     }
     bucket->push_back(SolverExistentials{&definition, goalSlots, HIRPathParams(std::move(params))});
     return bucket->back().params;
@@ -4199,7 +4199,7 @@ const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const H
 
 const HIRType* TraitResolution::unknownExistentials(const Span& sp, const HIRType* input) const {
     u32 scope = 0;
-    u16 index = 0;
+    u32 index = 0;
     return cloneTyWith(crate.types, sp, input, [&](const HIRType* inner) -> const HIRType* {
         const auto* infer = inner->opt_Infer();
         if (!infer || infer->index != ~0u) {
@@ -4209,7 +4209,7 @@ const HIRType* TraitResolution::unknownExistentials(const Span& sp, const HIRTyp
             scope = SOLVER_IMPL_EXISTENTIAL_SCOPE | ++this->board().id;
             ASSERT_BUG(sp, (this->board().id & SOLVER_IMPL_EXISTENTIAL_SCOPE) == 0, StringView("solver existential scope exhausted"));
         }
-        ASSERT_BUG(sp, index < 256, StringView("Too many unknowns in a probed type"));
+        ASSERT_BUG(sp, index <= HIRGenericRef::MAX_INDEX, StringView("Too many unknowns in a probed type"));
         return crate.types.generic(HIRGenericRef::newSolverExistential(scope, index++));
     });
 }
@@ -9518,7 +9518,7 @@ auto CanonicalizeTraitGoal::originalSolverGeneric(const HIRGenericRef& generic) 
     if (slot >= solverScopes_.length()) {
         return {};
     }
-    return HIRGenericRef::newSolverExistential(solverScopes_[slot], static_cast<u16>(generic.idx()));
+    return HIRGenericRef::newSolverExistential(solverScopes_[slot], generic.idx());
 }
 
 auto CanonicalizeTraitGoal::alphaSolverEnvironment() const -> const SolverGoalEnvironment& {
@@ -9641,7 +9641,7 @@ auto CanonicalizeTraitGoal::getType(const Span&, const HIRGenericRef& generic) c
         }
         for (size_t i = 0; i < solverScopes_.length(); i++) {
             if (solverScopes_[i] == generic.solverScope) {
-                return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(i), static_cast<u16>(generic.idx())));
+                return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(i), generic.idx()));
             }
         }
         if (frozen_ || sealed_ || solverScopes_.length() >= 256) {
@@ -9651,7 +9651,7 @@ auto CanonicalizeTraitGoal::getType(const Span&, const HIRGenericRef& generic) c
         const auto slot = solverScopes_.length();
         solverScopes_.pushBack(generic.solverScope);
         environment_.scopeClasses.pushBack(0);
-        return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), static_cast<u16>(generic.idx())));
+        return types.generic(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), generic.idx()));
     }
     return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(canonicalPlaceholderName(generic.name), generic.binding) : types.generic(generic);
 }
@@ -9663,7 +9663,7 @@ auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) 
         }
         for (size_t i = 0; i < solverScopes_.length(); i++) {
             if (solverScopes_[i] == generic.solverScope) {
-                return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(i), static_cast<u16>(generic.idx())));
+                return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(i), generic.idx()));
             }
         }
         if (frozen_ || sealed_ || solverScopes_.length() >= 256) {
@@ -9673,7 +9673,7 @@ auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) 
         const auto slot = solverScopes_.length();
         solverScopes_.pushBack(generic.solverScope);
         environment_.scopeClasses.pushBack(0);
-        return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), static_cast<u16>(generic.idx())));
+        return HIRConstGeneric(HIRGenericRef::newSolverExistential(alphaScopeBase_ + static_cast<u32>(slot), generic.idx()));
     }
     return HIRConstGeneric(generic.isPlaceholder() && !generic.isSolverExistential() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
 }
@@ -10670,12 +10670,12 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
                 } else if (infer->index != ~0u && !isAliasInputInfer(infer->index)) {
                     for (size_t i = 0; i < foreignTypes.size(); i++) {
                         if (foreignTypes[i] == type) {
-                            return MonomorphiserNop::types.generic(foreignTypeName_, GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                            return MonomorphiserNop::types.generic(foreignTypeName_, HIRGenericRef::makeBinding(GENERICPlaceholder, static_cast<u32>(i)));
                         }
                     }
                     const auto slot = foreignTypes.size();
                     foreignTypes.push_back(type);
-                    return MonomorphiserNop::types.generic(foreignTypeName_, GENERICPlaceholder * 256 + static_cast<unsigned>(slot));
+                    return MonomorphiserNop::types.generic(foreignTypeName_, HIRGenericRef::makeBinding(GENERICPlaceholder, static_cast<u32>(slot)));
                 }
             }
             return MonomorphiserNop::monomorphType(sp, type, allowInfer);
@@ -10691,12 +10691,12 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
                 } else if (infer->index != ~0u && !isAliasInputInfer(infer->index)) {
                     for (size_t i = 0; i < foreignValues.size(); i++) {
                         if (foreignValues[i] == value) {
-                            return HIRConstGeneric(HIRGenericRef(foreignValueName_, GENERICPlaceholder * 256 + static_cast<unsigned>(i)));
+                            return HIRConstGeneric(HIRGenericRef(foreignValueName_, HIRGenericRef::makeBinding(GENERICPlaceholder, static_cast<u32>(i))));
                         }
                     }
                     const auto slot = foreignValues.size();
                     foreignValues.push_back(value.clone());
-                    return HIRConstGeneric(HIRGenericRef(foreignValueName_, GENERICPlaceholder * 256 + static_cast<unsigned>(slot)));
+                    return HIRConstGeneric(HIRGenericRef(foreignValueName_, HIRGenericRef::makeBinding(GENERICPlaceholder, static_cast<u32>(slot))));
                 }
             }
             return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
@@ -10924,8 +10924,8 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         }
 
         const HIRType* getType(const Span& sp, const HIRGenericRef& generic) const override {
-            if (generic.name == foreignTypeName_ && generic.binding >= GENERICPlaceholder * 256) {
-                const auto slot = generic.binding - GENERICPlaceholder * 256;
+            if (generic.name == foreignTypeName_ && generic.isPlaceholder()) {
+                const auto slot = generic.idx();
                 if (slot < foreignTypes_.size()) {
                     return foreignTypes_[slot];
                 }
@@ -10934,8 +10934,8 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         }
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
-            if (generic.name == foreignValueName_ && generic.binding >= GENERICPlaceholder * 256) {
-                const auto slot = generic.binding - GENERICPlaceholder * 256;
+            if (generic.name == foreignValueName_ && generic.isPlaceholder()) {
+                const auto slot = generic.idx();
                 if (slot < foreignValues_.size()) {
                     return foreignValues_[slot].clone();
                 }
@@ -11763,13 +11763,13 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     HIRPathParamsBuilder existentials;
     existentials.types.reserve(implParamsDef.types.size());
     for (size_t i = 0; i < implParamsDef.types.size(); i++) {
-        ASSERT_BUG(span(), i < 256, StringView("Too many candidate type parameters"));
-        existentials.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i))));
+        ASSERT_BUG(span(), i <= HIRGenericRef::MAX_INDEX, StringView("Too many candidate type parameters"));
+        existentials.types.push_back(crate.types.generic(HIRGenericRef::newSolverExistential(scope, static_cast<u32>(i))));
     }
     existentials.values.reserve(implParamsDef.values.size());
     for (size_t i = 0; i < implParamsDef.values.size(); i++) {
-        ASSERT_BUG(span(), i < 256, StringView("Too many candidate value parameters"));
-        existentials.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
+        ASSERT_BUG(span(), i <= HIRGenericRef::MAX_INDEX, StringView("Too many candidate value parameters"));
+        existentials.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u32>(i)));
     }
     const HIRPathParams stableExistentials(std::move(existentials));
 

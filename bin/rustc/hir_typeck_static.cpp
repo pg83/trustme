@@ -880,21 +880,21 @@ const HIRType* StaticTraitResolve::normalizeForItemLookup(const Span& sp, const 
     }
     unsigned placeholders = 0;
     const auto placeholder = [&]() {
-        return HIRGenericRef(RcString::newInterned("_"), GENERICPlaceholder, static_cast<u16>(placeholders++));
+        return HIRGenericRef(RcString::newInterned("_"), GENERICPlaceholder, placeholders++);
     };
     input = rewriteTyWith(
         crate.types,
         input,
         [&](const HIRType* type) -> const HIRType* {
             const auto* infer = type->opt_Infer();
-            if (infer && infer->index == ~0u && placeholders < 256) {
+            if (infer && infer->index == ~0u && placeholders <= HIRGenericRef::MAX_INDEX) {
                 return crate.types.generic(placeholder());
             }
             return nullptr;
         },
         [&](const HIRConstGeneric& value) {
             const auto* infer = value.opt_Infer();
-            if (infer && infer->index == ~0u && placeholders < 256) {
+            if (infer && infer->index == ~0u && placeholders <= HIRGenericRef::MAX_INDEX) {
                 return HIRConstGeneric::make_Generic(placeholder());
             }
             return value.clone();
@@ -1388,8 +1388,8 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
             if (e.binding == 0xFFFF) {
                 ASSERT_BUG(sp, implGenerics_, StringView("Use of `Self` with no self type (no impl generics)"));
                 return selfMetadata;
-            } else if ((e.binding >> 8) == 0) {
-                auto idx = e.binding & 0xFF;
+            } else if (e.group() == GENERICImpl) {
+                auto idx = e.idx();
                 ASSERT_BUG(sp, implGenerics_, StringView("Encountered generic ") << ty << StringView(" without impl generics available"));
                 ASSERT_BUG(sp, idx < implGenerics_->types.size(), StringView("Encountered generic ") << ty << StringView(" out of range of impl generic spec"));
                 if (implGenerics_->types[idx].isSized) {
@@ -1397,8 +1397,8 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
                 } else {
                     return MetadataType::Unknown;
                 }
-            } else if ((e.binding >> 8) == 1) {
-                auto idx = e.binding & 0xFF;
+            } else if (e.group() == GENERICItem) {
+                auto idx = e.idx();
                 ASSERT_BUG(sp, itemGenerics_, StringView("Encountered generic ") << ty << StringView(" without item generics available"));
                 ASSERT_BUG(sp, idx < itemGenerics_->types.size(), StringView("Encountered generic ") << ty << StringView(" out of range of item generic spec"));
                 if (itemGenerics_->types[idx].isSized) {

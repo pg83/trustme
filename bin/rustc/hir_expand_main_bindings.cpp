@@ -4740,7 +4740,7 @@ auto ClosureExprVisitorExtract::FrozenMonomorph::getType(const Span& sp, const H
     for (size_t i = 0; i < sourceParams.types.size(); i++) {
         const auto* source = sourceParams.types[i]->opt_Generic();
         if (source && *source == generic) {
-            return types.generic(generic.name, i);
+            return types.generic(generic.name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(i)));
         }
     }
     return MonomorphiserNop::getType(sp, generic);
@@ -4750,7 +4750,7 @@ auto ClosureExprVisitorExtract::FrozenMonomorph::getValue(const Span& sp, const 
     for (size_t i = 0; i < sourceParams.values.size(); i++) {
         const auto* source = sourceParams.values[i].opt_Generic();
         if (source && *source == generic) {
-            return HIRGenericRef(generic.name, i);
+            return HIRGenericRef(generic.name, GENERICImpl, static_cast<u32>(i));
         }
     }
     return MonomorphiserNop::getValue(sp, generic);
@@ -4843,14 +4843,14 @@ auto ClosureExprVisitorExtract::Monomorph::getType(const Span& sp, const HIRGene
         const auto& t = constructorPathParams.types[i];
         if (t->is_Generic() && t->as_Generic() == ge) {
             rv = i;
-            DEBUG(StringView("Use param: ") << types.generic(params.types[rv].name, rv));
+            DEBUG(StringView("Use param: ") << types.generic(params.types[rv].name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(rv))));
             break;
         }
     }
     if (rv == SIZE_MAX) {
         ASSERT_BUG(sp, !frozen, StringView("get_type would add a new param after freeze - ") << ge);
         rv = constructorPathParams.types.size();
-        DEBUG(StringView("Add param: ") << types.generic(ge.name, rv) << StringView(" <- ") << ge);
+        DEBUG(StringView("Add param: ") << types.generic(ge.name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(rv))) << StringView(" <- ") << ge);
         constructorPathParams.types.push_back(types.generic(ge.name, ge.binding));
         params.types.push_back(
             HIRTypeParamDef{
@@ -4862,7 +4862,7 @@ auto ClosureExprVisitorExtract::Monomorph::getType(const Span& sp, const HIRGene
         params.paramKinds.pushBack(HIRGenericParamKind::Type);
     }
     ASSERT_BUG(sp, rv < params.types.size(), ge << StringView(" -> ") << rv << StringView(" < ") << params.types.size());
-    return types.generic(params.types[rv].name, rv);
+    return types.generic(params.types[rv].name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(rv)));
 }
 
 auto ClosureExprVisitorExtract::Monomorph::getValue(const Span& sp, const HIRGenericRef& ge) const -> HIRConstGeneric {
@@ -4882,7 +4882,7 @@ auto ClosureExprVisitorExtract::Monomorph::getValue(const Span& sp, const HIRGen
         params.values.back().name = ge.name;
         params.paramKinds.pushBack(HIRGenericParamKind::Value);
     }
-    return HIRConstGeneric::make_Generic({params.values[rv].name, static_cast<u32>(rv)});
+    return HIRConstGeneric::make_Generic({params.values[rv].name, GENERICImpl, static_cast<u32>(rv)});
 }
 
 auto ClosureExprVisitorExtract::Monomorph::monomorphType(const Span& sp, const HIRType* tpl, bool allowInfer) const -> const HIRType* {
@@ -6212,25 +6212,25 @@ auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParam
     unsigned ofsImplT = params.types.size();
     for (const auto& tyDef : resolve_.implGenerics().types) {
         unsigned i = &tyDef - &resolve_.implGenerics().types.front();
-        constructorPathParams.types.push_back(resolve_.hirCrate().types.generic(tyDef.name, 0 * 256 + i));
+        constructorPathParams.types.push_back(resolve_.hirCrate().types.generic(tyDef.name, HIRGenericRef::makeBinding(GENERICImpl, i)));
         params.types.push_back(HIRTypeParamDef{tyDef.name, resolve_.hirCrate().types.infer(), tyDef.isSized});
     }
     unsigned ofsImplV = params.values.size();
     for (const auto& vDef : resolve_.implGenerics().values) {
         unsigned i = &vDef - &resolve_.implGenerics().values.front();
-        constructorPathParams.values.push_back(HIRGenericRef(vDef.name, 0 * 256 + i));
+        constructorPathParams.values.push_back(HIRGenericRef(vDef.name, GENERICImpl, i));
         params.values.push_back(HIRValueParamDef{vDef.name, vDef.type});
     }
     unsigned ofsItemT = params.types.size();
     for (const auto& tyDef : resolve_.itemGenerics().types) {
         unsigned i = &tyDef - &resolve_.itemGenerics().types.front();
-        constructorPathParams.types.push_back(resolve_.hirCrate().types.generic(tyDef.name, 1 * 256 + i));
+        constructorPathParams.types.push_back(resolve_.hirCrate().types.generic(tyDef.name, HIRGenericRef::makeBinding(GENERICItem, i)));
         params.types.push_back(HIRTypeParamDef{tyDef.name, resolve_.hirCrate().types.infer(), tyDef.isSized});
     }
     unsigned ofsItemV = params.values.size();
     for (const auto& vDef : resolve_.itemGenerics().values) {
         unsigned i = &vDef - &resolve_.itemGenerics().values.front();
-        constructorPathParams.values.push_back(HIRGenericRef(vDef.name, 1 * 256 + i));
+        constructorPathParams.values.push_back(HIRGenericRef(vDef.name, GENERICItem, i));
         params.values.push_back(HIRValueParamDef{vDef.name, vDef.type});
     }
     for (size_t i = 0; i < resolve_.implGenerics().paramCount(); i++) {
@@ -6459,30 +6459,30 @@ auto StaticBorrowExprVisitorMutate::Monomorph::getType(const Span& sp, const HIR
     unsigned i;
     if (ge.binding == 0xFFFF) {
         i = 0;
-    } else if (ge.binding < 256) {
+    } else if (ge.group() == GENERICImpl) {
         i = ofsImplT + ge.idx();
-    } else if (ge.binding < 2 * 256) {
+    } else if (ge.group() == GENERICItem) {
         i = ofsItemT + ge.idx();
     } else {
         BUG(sp, StringView("Generic type ") << ge << StringView(" unknown"));
     }
     ASSERT_BUG(sp, i < params.types.size(), StringView("Item generic type binding OOR - ") << ge << StringView(" (") << i << StringView(" !< ") << params.types.size() << StringView(")"));
-    return types.generic(params.types[i].name, 256 + i);
+    return types.generic(params.types[i].name, HIRGenericRef::makeBinding(GENERICItem, i));
 }
 
 auto StaticBorrowExprVisitorMutate::Monomorph::getValue(const Span& sp, const HIRGenericRef& ge) const -> HIRConstGeneric {
     unsigned i;
     if (ge.binding == 0xFFFF) {
         BUG(sp, StringView("Binding 0xFFFF isn't valid for values"));
-    } else if (ge.binding < 256) {
+    } else if (ge.group() == GENERICImpl) {
         i = ofsImplV + ge.idx();
-    } else if (ge.binding < 2 * 256) {
+    } else if (ge.group() == GENERICItem) {
         i = ofsItemV + ge.idx();
     } else {
         BUG(sp, StringView("Generic value ") << ge << StringView(" unknown"));
     }
     ASSERT_BUG(sp, i < params.values.size(), StringView("Item generic value binding OOR - ") << ge << StringView(" (") << i << StringView(" !< ") << params.values.size() << StringView(")"));
-    return HIRGenericRef(params.values[i].name, 256 + i);
+    return HIRGenericRef(params.values[i].name, GENERICItem, i);
 }
 
 StaticBorrowExprVisitorMutate::MonomorphLifetimesStatic::MonomorphLifetimesStatic(HIRTypeInterner& types)
@@ -7617,7 +7617,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                         // TODO: Check the trait against m_type_indexes
                         if (isSelf /*&& pe.trait == trait_path*/ && hasItem) {
                             DEBUG(StringView("[clone_cb] t=") << t << StringView(" -> ") << it->second);
-                            return types.generic(RcString::newInterned(FMT(StringView("a#") << pe.item)), it->second);
+                            return types.generic(RcString::newInterned(FMT(StringView("a#") << pe.item)), HIRGenericRef::makeBinding(GENERICImpl, it->second));
                             DEBUG(StringView("[clone_cb] t=") << t << StringView("(") << isSelf << hasItem << StringView(")"));
                         }
                     }
@@ -7733,7 +7733,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     {
         unsigned int i = 0;
         for (const auto& tp : tr.params.types) {
-            params.types.push_back(crate.types.generic(tp.name, i));
+            params.types.push_back(crate.types.generic(tp.name, HIRGenericRef::makeBinding(GENERICImpl, i)));
             i++;
         }
         for (const auto& ty : tr.typeIndexes) {
@@ -7757,7 +7757,7 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     {
         unsigned int i = 0;
         for (const auto& vp : tr.params.values) {
-            params.values.push_back(HIRGenericRef(vp.name, i));
+            params.values.push_back(HIRGenericRef(vp.name, GENERICImpl, i));
             i++;
         }
     }
@@ -7820,7 +7820,7 @@ auto FixupVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
                     if (it != pt.typeBounds.end()) {
                         slot = it->second.type;
                     } else if (trait.typeIndexes.count(atyIdx.first) != 0) {
-                        slot = crate.types.generic(RcString(), trait.typeIndexes.at(atyIdx.first));
+                        slot = crate.types.generic(RcString(), HIRGenericRef::makeBinding(GENERICImpl, trait.typeIndexes.at(atyIdx.first)));
                     } else {
                         const HIRGenericPath* gp = nullptr;
                         for (const auto& pptraitPath : parentTrait.allParentTraits) {

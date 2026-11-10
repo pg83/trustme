@@ -26,20 +26,32 @@ struct HIRGenericRef {
 
     HIRGenericRef(RcString name, u32 binding);
 
-    HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx);
+    HIRGenericRef(RcString name, HIRGenericGroup group, u32 idx);
 
-    static HIRGenericRef newSolverExistential(u32 scope, u16 idx);
+    static constexpr u32 MAX_INDEX = 0x7FFFFF;
+
+    static u32 makeBinding(unsigned group, u32 index);
+
+    static unsigned indexOf(u32 binding) {
+        return (binding & 0xFF) | ((binding >> 16) << 8);
+    }
+
+    static unsigned groupOf(u32 binding) {
+        return (binding >> 8) & 0xFF;
+    }
+
+    static HIRGenericRef newSolverExistential(u32 scope, u32 idx);
 
     bool isSelf() const {
         return binding == 0xFFFF;
     }
 
     unsigned idx() const {
-        return binding & 0xFF;
+        return indexOf(binding);
     }
 
     unsigned group() const {
-        return binding >> 8;
+        return groupOf(binding);
     }
 
     bool isSolverExistential() const {

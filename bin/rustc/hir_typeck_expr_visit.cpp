@@ -130,10 +130,10 @@ auto OuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
 auto OuterVisitor::visitTrait(HIRItemPath p, HIRTrait& item) -> void {
     HIRPathParamsBuilder traitParams;
     for (size_t i = 0; i < item.params.types.size(); i++) {
-        traitParams.types.push_back(ms.crate.types.generic(item.params.types[i].name, i));
+        traitParams.types.push_back(ms.crate.types.generic(item.params.types[i].name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(i))));
     }
     for (size_t i = 0; i < item.params.values.size(); i++) {
-        traitParams.values.push_back(HIRGenericRef(item.params.values[i].name, i));
+        traitParams.values.push_back(HIRGenericRef(item.params.values[i].name, GENERICImpl, static_cast<u32>(i)));
     }
     HIRGenericPath traitGpath(p.getSimplePath(), HIRPathParams(mv$(traitParams)));
     auto _1 = this->ms.setCurrentTrait(traitGpath);

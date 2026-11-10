@@ -1427,7 +1427,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                 size_t idx = fcnPtr->params.types.size();
                 auto name = RcString::newInterned(FMT(StringView("erased$") << idx));
                 DEBUG(StringView("-> ") << name);
-                auto newTy = crate.types.generic(name, 256 + idx);
+                auto newTy = crate.types.generic(name, HIRGenericRef::makeBinding(GENERICItem, idx));
                 fcnPtr->params.types.push_back({name, crate.types.infer(), te->isSized});
                 fcnPtr->params.paramKinds.pushBack(HIRGenericParamKind::Type);
                 for (auto& trait : te->traits) {
@@ -2912,7 +2912,7 @@ auto Expander::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
             }
 
             auto name = RcString::newInterned(FMT(StringView("erased$") << erasedIndex));
-            auto erasedType = crate.types.generic(name, 256 + erasedIndex);
+            auto erasedType = crate.types.generic(name, HIRGenericRef::makeBinding(GENERICItem, erasedIndex));
             erasedIndex++;
             for (const auto& trait : erased->traits) {
                 collectTraitAliasBounds(Span(), trait, erasedType, item.params.bounds);
@@ -3319,7 +3319,7 @@ auto MarkingsVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
         auto& lastFieldTy = (str.data.is_Tuple() ? str.data.as_Tuple().back().ent : str.data.as_Named().back().ty);
         for (size_t i = 0; i < str.params.types.size(); i++) {
             const auto& param = str.params.types[i];
-            auto ty = crate.types.generic(param.name, i);
+            auto ty = crate.types.generic(param.name, HIRGenericRef::makeBinding(GENERICImpl, static_cast<u32>(i)));
             if (!param.isSized) {
                 if (visitTyWith(lastFieldTy, [&](const auto& t) {
                     return t == ty;

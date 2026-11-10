@@ -1911,7 +1911,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
             return HIRCompare::Fuzzy;
         }
         // HACK: If the RHS is a placeholder generic, allow it.
-        if (x->is_Generic() && (x->as_Generic().binding >> 8) == 2) {
+        if (x->is_Generic() && x->as_Generic().isPlaceholder()) {
             DEBUG(StringView("- Fuzzy match due to placeholder - ") << v << StringView(" = ") << x);
             return HIRCompare::Fuzzy;
         }
@@ -2344,10 +2344,10 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
         if (right->is_Path() && right->as_Path().binding.is_Unbound()) {
             return HIRCompare::Fuzzy;
         }
-        if (left->is_Generic() && (left->as_Generic().binding >> 8) == 2) {
+        if (left->is_Generic() && left->as_Generic().isPlaceholder()) {
             return HIRCompare::Fuzzy;
         }
-        if (right->is_Generic() && (right->as_Generic().binding >> 8) == 2) {
+        if (right->is_Generic() && right->as_Generic().isPlaceholder()) {
             return HIRCompare::Fuzzy;
         }
     }
@@ -2459,10 +2459,10 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
             auto& le = (*left).as_Generic();
             auto& re = (*right).as_Generic();
             if (le.binding != re.binding) {
-                if ((le.binding >> 8) == 2) {
+                if (le.isPlaceholder()) {
                     return HIRCompare::Fuzzy;
                 }
-                if ((re.binding >> 8) == 2) {
+                if (re.isPlaceholder()) {
                     return HIRCompare::Fuzzy;
                 }
                 return HIRCompare::Unequal;

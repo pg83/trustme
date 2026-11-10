@@ -3807,8 +3807,8 @@ ExprCaptureScan::ExprCaptureScan(HIRTypeInterner& types)
 }
 
 auto ExprCaptureScan::addSlot(u64 (&masks)[2], u32 binding) -> void {
-    const auto group = binding >> 8;
-    const auto idx = binding & 0xFF;
+    const auto group = HIRGenericRef::groupOf(binding);
+    const auto idx = HIRGenericRef::indexOf(binding);
     if (group > GENERICItem || idx >= 64) {
         out.unknown = true;
         return;

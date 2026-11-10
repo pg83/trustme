@@ -10,10 +10,10 @@ HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned l
     rv.types = ThinVector<const HIRType*>(this->types.size());
     rv.values = ThinVector<HIRConstGeneric>(this->values.size());
     for (size_t i = 0; i < this->types.size(); i++) {
-        rv.types[i] = types.generic(this->types[i].name, 256 * level + i);
+        rv.types[i] = types.generic(this->types[i].name, HIRGenericRef::makeBinding(level, static_cast<u32>(i)));
     }
     for (size_t i = 0; i < this->values.size(); i++) {
-        rv.values[i] = HIRGenericRef(this->values[i].name, 256 * level + i);
+        rv.values[i] = HIRGenericRef(this->values[i].name, HIRGenericRef::makeBinding(level, static_cast<u32>(i)));
     }
     return HIRPathParams(mv$(rv));
 }
