@@ -3353,18 +3353,11 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         case ASTItem::TAG_None: {
                             break;
                         }
-                        case ASTItem::TAG_MacroInv: {
-                            break;
-                        }
                         case ASTItem::TAG_Static: {
                             auto& e = (*item.data).as_Static();
-                            if (e.sClass() == ASTStatic::CONST) {
-                                // TODO: Check signature against the trait?
-                                auto constantParams = LowerHIRGenericParams(e.params(), nullptr);
-                                constants.insert(std::make_pair(item.name, HIRTraitImpl::ImplEnt<HIRConstant>{item.isSpecialisable, HIRConstant(mv$(constantParams), LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
-                            } else {
-                                TODO(item.sp, StringView("Associated statics in trait impl"));
-                            }
+                            // TODO: Check signature against the trait?
+                            auto constantParams = LowerHIRGenericParams(e.params(), nullptr);
+                            constants.insert(std::make_pair(item.name, HIRTraitImpl::ImplEnt<HIRConstant>{item.isSpecialisable, HIRConstant(mv$(constantParams), LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
                             break;
                         }
                         case ASTItem::TAG_Type: {
@@ -3435,17 +3428,10 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                     case ASTItem::TAG_None: {
                         break;
                     }
-                    case ASTItem::TAG_MacroInv: {
-                        break;
-                    }
                     case ASTItem::TAG_Static: {
                         auto& e = (*item.data).as_Static();
-                        if (e.sClass() == ASTStatic::CONST) {
-                            auto constantParams = LowerHIRGenericParams(e.params(), nullptr);
-                            constants.insert(std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRConstant>{getVis(item.vis), item.isSpecialisable, HIRConstant(mv$(constantParams), LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
-                        } else {
-                            TODO(item.sp, StringView("Associated statics in inherent impl"));
-                        }
+                        auto constantParams = LowerHIRGenericParams(e.params(), nullptr);
+                        constants.insert(std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRConstant>{getVis(item.vis), item.isSpecialisable, HIRConstant(mv$(constantParams), LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
                         break;
                     }
                     case ASTItem::TAG_Type: {

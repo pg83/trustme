@@ -758,7 +758,7 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
            module's inline statics into its items - `&Self::ANSI_FG_U8` in owo-colors'
            `const ANSI_FG: &str = bytes_to_str(&Self::ANSI_FG_U8)` of a const-generic
            impl, evaluated per instantiation at monomorphization - still sits among
-           them, as `getStaticByPath` reads it. */
+           them. */
         for (const auto& inlineStatic : mod.inlineStatics) {
             if (inlineStatic.first == path.components().back()) {
                 newValues.push_back(std::make_pair(inlineStatic.first, pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(inlineStatic.second.get())})));
@@ -817,11 +817,6 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
     if (it != m.valueItems.end()) {
         ASSERT_BUG(sp, it->second->ent.is_Static(), StringView("`static` path ") << path << StringView(" didn't point to a static - ") << it->second->ent.tagStr());
         return *it->second->ent.as_Static();
-    }
-    for (const auto& e : m.inlineStatics) {
-        if (e.first == path.components().back()) {
-            return *e.second;
-        }
     }
     if (path.crateName() == this->crateName && path.components().size() == 1) {
         auto i = std::find_if(newValues.begin(), newValues.end(), [&](const auto& v) {
