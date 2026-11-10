@@ -7618,7 +7618,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                         if (isSelf /*&& pe.trait == trait_path*/ && hasItem) {
                             DEBUG(StringView("[clone_cb] t=") << t << StringView(" -> ") << it->second);
                             return types.generic(RcString::newInterned(FMT(StringView("a#") << pe.item)), HIRGenericRef::makeBinding(GENERICImpl, it->second));
-                            DEBUG(StringView("[clone_cb] t=") << t << StringView("(") << isSelf << hasItem << StringView(")"));
                         }
                     }
                     return Monomorphiser::monomorphType(sp, t, allowInfer);

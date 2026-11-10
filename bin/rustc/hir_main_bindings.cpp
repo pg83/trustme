@@ -749,7 +749,6 @@ const HIRType* HirDeserialiser::deserialiseType() {
         DEBUG(StringView("#") << idx << StringView(""));
         rv = idx < regionTypeBase ? types[idx] : regionTypes[idx - regionTypeBase];
         return rv;
-        DEBUG(StringView("Fresh (=") << types.length() << StringView(")"));
     }
     auto _ = in.openObject("HIR::TypeData");
 

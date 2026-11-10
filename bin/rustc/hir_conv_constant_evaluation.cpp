@@ -4302,7 +4302,6 @@ auto MIREvalStaticRef::getReloc(size_t ofs) const -> MIREvalRelocPtr {
                 MIREvalRelocPtr reloc;
                 if (r.p) {
                     return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr, 0));
-                    TODO(Span(), StringView("Convert relocation pointer - ") << *r.p);
                 } else {
                     return MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
                 }

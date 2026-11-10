@@ -4273,7 +4273,6 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
 auto UfcsVisitor::locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) -> bool {
     if (this->locateItemInTrait(pc, trait, pd)) {
         return setFromTraitImpl(sp, pc, traitPath, trait, pd);
-        DEBUG(StringView("- Item ") << pd.as_UfcsUnknown().item << StringView(" not in trait ") << traitPath.path);
     }
 
     for (const auto& pt : trait.parentTraits) {
@@ -4286,7 +4285,6 @@ auto UfcsVisitor::locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContex
         if (this->locateItemInTrait(pc, *pt.traitPtr, pd)) {
             // TODO: Modify path parameters based on the current trait's params
             return setFromTraitImpl(sp, pc, pt.path, *pt.traitPtr, pd);
-            DEBUG(StringView("- Item ") << pd.as_UfcsUnknown().item << StringView(" not in trait ") << traitPath.path);
         }
     }
     return false;
