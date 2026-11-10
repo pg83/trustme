@@ -923,7 +923,7 @@ public:
     const HIREnum& getEnumByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;
     HIREnum& getEnumByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false);
     const HIRModule& getModByPath(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode = false, bool ignoreCrateName = false) const;
-    HIRModule& getModByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode = false, bool ignoreCrateName = false);
+    HIRModule& getModByPathMut(const Span& sp, const HIRSimplePath& path);
 
     const HIRValueItem& getValitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false) const;
     HIRValueItem& getValitemByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false);

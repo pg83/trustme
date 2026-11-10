@@ -197,6 +197,14 @@ namespace {
         return *mod;
     }
 
+    template <typename Item>
+    auto& requireModule(const Span& sp, Item& item, const HIRSimplePath& path) {
+        if (auto* module = item.opt_Module()) {
+            return *module;
+        }
+        BUG(sp, StringView("Module lookup path ") << path << StringView(" did not point to a module"));
+    }
+
     bool isUnboundedInfer(const HIRType* type) {
         if (const auto* e = type->opt_Infer()) {
             return e->tyClass == HIRInferClass::None;
@@ -606,37 +614,20 @@ const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& pat
         }
     } else {
         const auto& ti = this->getTypeitemByPath(sp, path, ignoreCrateName, ignoreLastNode);
-        if (auto* e = ti.opt_Module()) {
-            return *e;
-        } else {
-            if (ignoreLastNode) {
-                BUG(sp, StringView("Parent path of ") << path << StringView(" didn't point to a module"));
-            } else {
-                BUG(sp, StringView("Module path ") << path << StringView(" didn't point to a module"));
-            }
-        }
+        return requireModule(sp, ti, path);
     }
 }
 
-HIRModule& HIRCrate::getModByPathMut(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode, bool ignoreCrateName) {
-    if (ignoreLastNode) {
-        ASSERT_BUG(sp, path.components().size() > 0, StringView("get_mod_by_path received invalid path with ignore_last_node=true - ") << path);
-    }
-    if (path.components().size() == (ignoreLastNode ? 1 : 0)) {
-        if (!ignoreCrateName && path.crateName() != crateName) {
+HIRModule& HIRCrate::getModByPathMut(const Span& sp, const HIRSimplePath& path) {
+    if (path.components().empty()) {
+        if (path.crateName() != crateName) {
             ASSERT_BUG(sp, extCrates.count(path.crateName()) > 0, StringView("Crate '") << path.crateName() << StringView("' not loaded"));
             return extCrates.at(path.crateName()).data->rootModule;
         }
         return rootModule;
     }
-    auto& ti = getTypeitemByPathMut(sp, path, ignoreCrateName, ignoreLastNode);
-    if (auto* e = ti.opt_Module()) {
-        return *e;
-    }
-    if (ignoreLastNode) {
-        BUG(sp, StringView("Parent path of ") << path << StringView(" didn't point to a module"));
-    }
-    BUG(sp, StringView("Module path ") << path << StringView(" didn't point to a module"));
+    auto& ti = getTypeitemByPathMut(sp, path);
+    return requireModule(sp, ti, path);
 }
 
 const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& path) const {
