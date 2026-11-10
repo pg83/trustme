@@ -80,7 +80,7 @@ namespace {
 
         void visit(HIRExprNodeLet& node);
 
-        void bad_cast(const Span& sp, const HIRType* srcTy, const HIRType* tgtTy, const char* where);
+        [[noreturn]] void bad_cast(const Span& sp, const HIRType* srcTy, const HIRType* tgtTy, const char* where);
 
         void equateFunctionSignature(const Span& sp, const HIRTypeDataFunctionPointer& dst, const HIRTypeDataFunctionPointer& src);
 
@@ -7777,35 +7777,18 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCast& node) -> void {
             this->completed = true;
             return;
         }
-        case HIRType::TAG_Generic: {
-            bad_cast(sp, srcTy, tgtTy, "dst");
-            break;
-        }
-        case HIRType::TAG_TraitObject: {
-            bad_cast(sp, srcTy, tgtTy, "dst");
-            break;
-        }
-        case HIRType::TAG_ErasedType: {
-            bad_cast(sp, srcTy, tgtTy, "dst");
-            break;
-        }
         case HIRType::TAG_Array: {
             this->context.equateTypesCoerce(sp, tgtTy, node.value);
             this->completed = true;
             return;
         }
-        case HIRType::TAG_Slice: {
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_TraitObject:
+        case HIRType::TAG_ErasedType:
+        case HIRType::TAG_Slice:
+        case HIRType::TAG_Pattern:
+        case HIRType::TAG_Tuple:
             bad_cast(sp, srcTy, tgtTy, "dst");
-            break;
-        }
-        case HIRType::TAG_Pattern: {
-            bad_cast(sp, srcTy, tgtTy, "dst");
-            break;
-        }
-        case HIRType::TAG_Tuple: {
-            bad_cast(sp, srcTy, tgtTy, "dst");
-            break;
-        }
         case HIRType::TAG_Borrow: {
             if (!this->isFallback && (srcTy->is_Infer() || (srcTy->is_Borrow() && this->context.getType(srcTy->as_Borrow().inner)->is_Infer()))) {
                 return;
