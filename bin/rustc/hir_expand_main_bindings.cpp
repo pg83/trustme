@@ -747,7 +747,7 @@ namespace {
         NewTypes* currentNewTypes = nullptr;
         HIRSimplePath langSized_;
 
-        HIRSimplePath createType(bool isPublic, RcString name, HIRStruct value);
+        HIRSimplePath createType(bool isPublic, RcString name, HIRStruct value, const HIRStruct*& binding);
 
         VtableOuterVisitor(const WireBoard& wb);
 
@@ -7472,10 +7472,11 @@ auto VisitorImplTrait::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
     targetImpl = nullptr;
 }
 
-auto VtableOuterVisitor::createType(bool isPublic, RcString name, HIRStruct value) -> HIRSimplePath {
+auto VtableOuterVisitor::createType(bool isPublic, RcString name, HIRStruct value, const HIRStruct*& binding) -> HIRSimplePath {
     BUG_ASSERT(currentModulePath);
     BUG_ASSERT(currentNewTypes);
     auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{(isPublic ? HIRPublicity::newGlobal() : HIRPublicity::newNone()), HIRTypeItem(mv$(value))});
+    binding = &boxed->ent.as_Struct();
     auto result = (*currentModulePath + name).getSimplePath();
     currentNewTypes->push_back(std::make_pair(mv$(name), boxed));
     return result;
@@ -7762,12 +7763,13 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     }
     ASSERT_BUG(sp, args.types.size() == params.types.size() && args.values.size() == params.values.size(), StringView("Count mismatch args=") << args.fmtArgs() << StringView(" params=") << params);
     // TODO: Would like to have access to the publicity marker
-    auto itemPath = createType(true, RcString::newInterned(FMT(p.getName() << StringView("#vtable"))), HIRStruct(std::move(args), HIRStruct::Repr::C, HIRStruct::Data(mv$(fields))));
+    const HIRStruct* vtable = nullptr;
+    auto itemPath = createType(true, RcString::newInterned(FMT(p.getName() << StringView("#vtable"))), HIRStruct(std::move(args), HIRStruct::Repr::C, HIRStruct::Data(mv$(fields))), vtable);
     tr.vtablePath = itemPath;
     DEBUG(StringView("Vtable structure created - ") << itemPath);
     HIRGenericPath path(mv$(itemPath), std::move(params));
 
-    tr.values.insert(std::make_pair(RcString::newInterned("vtable#"), HIRTraitValueItem(HIRStatic(HIRLinkage(), false, crate.types.path(mv$(path), {}), {}))));
+    tr.values.insert(std::make_pair(RcString::newInterned("vtable#"), HIRTraitValueItem(HIRStatic(HIRLinkage(), false, crate.types.path(mv$(path), vtable), {}))));
 }
 
 auto VtableOuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
