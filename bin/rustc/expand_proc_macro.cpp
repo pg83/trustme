@@ -2780,7 +2780,12 @@ auto ProcMacroVisitor::visitStatic(const RcString& name, const ASTVisibility& vi
 auto ProcMacroVisitor::visitUse(const RcString& /*name*/, const ASTVisibility& vis, const ASTUseItem& item) -> void {
     this->visitVis(vis);
     pmi.sendRword("use");
-    this->visitUseTree(item, 0, item.entries.size(), 0, 0, true);
+    if (item.entries.empty()) {
+        pmi.sendSymbol("{");
+        pmi.sendSymbol("}");
+    } else {
+        this->visitUseTree(item, 0, item.entries.size(), 0, 0, true);
+    }
     pmi.sendSymbol(";");
 }
 
