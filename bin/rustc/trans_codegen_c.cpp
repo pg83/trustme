@@ -379,7 +379,7 @@ namespace {
         template <typename F>
         void emitOperationWithUnwind(const MIRUnwindAction& action, unsigned indentLevel, F f);
 
-        void emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel);
+        void emitBlockTerminator(const MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel);
 
         void emitCleanupRunner(MIRTypeResolve& localMirRes, const std::set<unsigned>& cleanupBlocks);
 
@@ -3684,7 +3684,7 @@ auto CodeGeneratorC::emitOperationWithUnwind(const MIRUnwindAction& action, unsi
     emitOperationWithUnwindCb(action, indentLevel, cb);
 }
 
-auto CodeGeneratorC::emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel) -> void {
+auto CodeGeneratorC::emitBlockTerminator(const MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel) -> void {
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     auto emitReturnBody = [&]() {
         if (localMirRes.retType == crate.types.unit()) {
@@ -6591,16 +6591,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
             if (retBlock == ~0u) {
                 of << indent << StringView("__builtin_unreachable();\n");
             } else {
-                const auto target = forwardedBlockTarget(retBlock);
-                if (blockIsInlinedReturn(target)) {
-                    of << indent << StringView("return");
-                    if (localMirRes.retType != crate.types.unit()) {
-                        of << StringView(" rv");
-                    }
-                    of << StringView(";\n");
-                } else if (target != fallthroughBlock) {
-                    of << indent << StringView("goto bb") << target << StringView(";\n");
-                }
+                emitBlockTerminator(localMirRes, MIRTerminator::make_Goto(retBlock), localMirRes.getCurBlock(), false, indentLevel);
             }
         }
         if (blockOpen) {

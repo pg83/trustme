@@ -3681,24 +3681,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                             break;
                         }
                         case MIRLValue::Storage::TAG_Static: {
-                            decltype(lv.root.as_Static()) e = lv.root.as_Static();
-                            // TODO: Monomorphise the path then hand to MIR::TypeResolve?
-                            const auto& path = e;
-                            switch (path.data.tag()) {
-                                case HIRPathData::TAG_Generic: {
-                                    ty = monomorphOuter(localMirRes.getStaticType(path));
-                                    break;
-                                }
-                                case HIRPathData::TAG_UfcsKnown: {
-                                    MIR_TODO(localMirRes, StringView("LValue::Static - UfcsKnown - ") << path);
-                                }
-                                case HIRPathData::TAG_UfcsUnknown: {
-                                    MIR_BUG(localMirRes, StringView("Encountered UfcsUnknown in LValue::Static - ") << path);
-                                }
-                                case HIRPathData::TAG_UfcsInherent: {
-                                    MIR_TODO(localMirRes, StringView("LValue::Static - UfcsInherent - ") << path);
-                                }
-                            }
+                            ty = monomorphOuter(localMirRes.getStaticType(lv.root.as_Static()));
                             break;
                         }
                     }
