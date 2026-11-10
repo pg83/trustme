@@ -3588,6 +3588,13 @@ ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
     auto itemAttrs = ParseItemAttrs(lex);
     GET_TOK(tok, lex);
 
+    const auto macroDefinition = [&](ASTItem& item) -> ASTExprNode* {
+        if (const auto* rules = item.opt_Macro()) {
+            return NEWNODE(ASTExprNodeMacroDefinition, (*rules)->definitionId, (*rules)->hygiene, (*rules)->definitionHygiene);
+        }
+        return nullptr;
+    };
+
     if (tok.type() == TOK_INTERPOLATED_STMT_ITEM) {
         if (!localMod) {
             localMod = lex.parseState().getCurrentMod().addAnon();
@@ -3598,8 +3605,9 @@ ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
         for (auto& attr : itemAttrs.items) {
             item.attrs.items.push_back(mv$(attr));
         }
+        auto* definition = macroDefinition(item.data);
         localMod->addItem(mv$(item));
-        return nullptr;
+        return definition;
     }
 
     if (tok.type() == TOK_IDENT && tok.ident().name == "union" && lex.lookahead(0) == TOK_IDENT) {
@@ -3674,7 +3682,7 @@ ASTExprNode* ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
                 lex.parseState().module = localMod.get();
             }
             ParseModItem(lex, *localMod, mv$(itemAttrs));
-            return nullptr;
+            return macroDefinition(localMod->items.back()->data);
         case TOK_RWORD_ASYNC:
             if (lex.lookahead(0) == TOK_RWORD_FN || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_FN)) {
                 PUTBACK(tok, lex);
@@ -5745,6 +5753,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 Ident::ModPath mp;
                 mp.crate = "";
                 mp.ents = modPath.nodes;
+                mrp->definitionHygiene = mrp->hygiene;
                 mrp->hygiene.setModPath(lex.typePool(), std::move(mp));
                 mrp->isMacroItem = true;
             }
