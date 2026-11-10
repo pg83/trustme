@@ -1482,31 +1482,42 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
 }
 
 auto BindVisitor::checkImplSignature(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs) -> void {
-    const auto checkType = [](const HIRType* type) {
-        if (type->is_Infer()) {
-            ERROR(Span(), E0000, StringView("the placeholder `_` is not allowed in impl signatures"));
+    struct Check final: HIRTypeVisitorCallback {
+        bool visit(const HIRType* type) override {
+            if (type->is_Infer()) {
+                ERROR(Span(), E0000, StringView("the placeholder `_` is not allowed in impl signatures"));
+            }
+            return false;
         }
-        return false;
-    };
-    /* Type traversal leaves inference inside constant expressions to type checking. */
-    visitTyWith(selfTy, checkType);
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override {
+            if (value.is_Infer()) {
+                ERROR(Span(), E0000, StringView("the placeholder `_` is not allowed in impl signatures"));
+            }
+            return false;
+        }
+    } check;
+    visitTyWithCb(selfTy, check);
     if (traitArgs) {
         for (const auto* type : traitArgs->types) {
-            visitTyWith(type, checkType);
+            visitTyWithCb(type, check);
+        }
+        for (const auto& value : traitArgs->values) {
+            check.visitConstGeneric(value);
         }
     }
     for (const auto& value : params.values) {
-        visitTyWith(value.type, checkType);
+        visitTyWithCb(value.type, check);
     }
     for (const auto* type : params.wellFormedTypes) {
-        visitTyWith(type, checkType);
+        visitTyWithCb(type, check);
     }
     for (const auto& bound : params.bounds) {
         switch (bound.tag()) {
             case HIRGenericBound::TAG_TraitBound: {
                 const auto& trait = bound.as_TraitBound();
-                visitTyWith(trait.type, checkType);
-                visitTraitPathTysWith(trait.trait, checkType);
+                visitTyWithCb(trait.type, check);
+                visitTraitPathTysWithCb(trait.trait, check);
                 break;
             }
         }

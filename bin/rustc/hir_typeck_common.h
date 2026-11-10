@@ -70,6 +70,10 @@ enum class SolverCertainty : u8 {
 
 struct HIRTypeVisitorCallback {
     virtual bool visit(const HIRType* type) = 0;
+
+    virtual bool visitConstGeneric(const HIRConstGeneric&) {
+        return false;
+    }
 };
 
 template <typename F>

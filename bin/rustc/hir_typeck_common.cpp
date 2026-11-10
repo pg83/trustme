@@ -48,6 +48,8 @@ namespace {
         const HIRType& getTyData(const HIRType* ty) const override;
 
         bool visitType(const HIRType* ty) override;
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override;
     };
 
     struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
@@ -949,6 +951,10 @@ auto TyVisitorCbConst::visitType(const HIRType* ty) -> bool {
         return true;
     }
     return TyVisitor::visitType(ty);
+}
+
+auto TyVisitorCbConst::visitConstGeneric(const HIRConstGeneric& value) -> bool {
+    return callback.visitConstGeneric(value);
 }
 
 TyVisitorGenericGroup::TyVisitorGenericGroup(HIRGenericGroup group)
