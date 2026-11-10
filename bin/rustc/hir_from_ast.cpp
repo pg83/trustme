@@ -79,6 +79,19 @@ namespace {
         void push(RcString name, HIRStruct value) override;
     };
 
+    struct ImplTraitNestingScope {
+        bool& current;
+        const bool previous;
+
+        ImplTraitNestingScope(bool& current, bool value): current(current), previous(current) {
+            current = value;
+        }
+
+        ~ImplTraitNestingScope() {
+            current = previous;
+        }
+    };
+
     struct AST2HIR {
         const WireBoard* wb = nullptr;
         HIRSimplePath pathSized;
@@ -91,6 +104,7 @@ namespace {
         ImplTraitSource implTraitSource;
         /* Distinguish syntax occurrences before aliases duplicate their arguments. */
         unsigned int nextErasedType = 0;
+        bool disallowNestedImplTrait = false;
 
         HIRPublicity LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis);
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
@@ -1489,6 +1503,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
         }
     };
 
+    ImplTraitNestingScope associatedNesting(disallowNestedImplTrait, false);
     for (const auto& e : path.nodes().back().args().entries) {
         switch (e.tag()) {
             case ASTPathParamEnt::TAG_Lifetime: {
@@ -1829,6 +1844,10 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             return crate->types.intern(HIRType::make_TraitObject(mv$(v)));
         }
         case TypeData::TAG_ErasedType: {
+            if (disallowNestedImplTrait) {
+                ERROR(ty->span(), E0000, StringView("nested `impl Trait` is not allowed"));
+            }
+            ImplTraitNestingScope nesting(disallowNestedImplTrait, true);
             auto& e = ty->data.as_ErasedType();
             const auto aliasIndex = implTraitSource.path ? implTraitSource.nextOpaqueIndex++ : 0;
 

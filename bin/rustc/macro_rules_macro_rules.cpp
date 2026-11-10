@@ -1564,8 +1564,8 @@ namespace {
                 if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
-                if (lex.next() == TOK_PAREN_OPEN && !consumeTt(lex)) {
-                    return false;
+                if (lex.next() == TOK_PAREN_OPEN) {
+                    consumeTt(lex);
                 }
                 return lex.next() == TOK_BRACE_OPEN && consumeTt(lex);
             case TOK_RWORD_USE:
