@@ -6440,6 +6440,9 @@ StaticBorrowExprVisitorMutate::Monomorph::Monomorph(HIRTypeInterner& types, cons
 }
 
 auto StaticBorrowExprVisitorMutate::Monomorph::getType(const Span& sp, const HIRGenericRef& ge) const -> const HIRType* {
+    if (ge.group() == GENERICHrtb) {
+        return types.generic(ge);
+    }
     unsigned i;
     if (ge.binding == 0xFFFF) {
         i = 0;
