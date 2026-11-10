@@ -4920,6 +4920,7 @@ auto CHandlerAllowInternalUnstable::stage() const -> AttrStage {
 }
 
 auto CHandlerAllowInternalUnstable::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    mi.parseParenIdentList([](const Span&, RcString) {});
 }
 
 auto DecoratorNoStd::stage() const -> AttrStage {
