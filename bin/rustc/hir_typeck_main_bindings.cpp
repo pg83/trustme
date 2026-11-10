@@ -577,6 +577,10 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
     HIRVisitor::visitTraitImpl(traitPath, impl);
     selfTypes.popBack();
 
+    if (const auto* object = impl.type->opt_TraitObject(); object && object->trait.path.path == traitPath) {
+        ERROR(sp, E0000, StringView("trait object ") << impl.type << StringView(" automatically implements trait ") << traitPath);
+    }
+
     if (traitPath == crate.getLangItemPathOpt("async_drop")) {
         const auto& dropTrait = crate.getLangItemPathOpt("drop");
         if (dropTrait.components().empty() || !resolve_.findImpl(sp, dropTrait, HIRPathParams{}, impl.type, [](SolverSelection) { return true; })) {
