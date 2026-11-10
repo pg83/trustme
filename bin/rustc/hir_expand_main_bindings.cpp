@@ -550,8 +550,6 @@ namespace {
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
-        void visitExpr(HIRExprPtr& exp) override;
-
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
 
         void visitConstgeneric(HIRConstGeneric&) override;
@@ -697,8 +695,6 @@ namespace {
         const HIRTraitImpl* currentTraitImpl = nullptr;
 
         UfcsOuterVisitor(const WireBoard& wb);
-
-        void visitExpr(HIRExprPtr& exp) override;
 
         void visitConstgeneric(HIRConstGeneric& c) override;
 
@@ -856,8 +852,6 @@ namespace {
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
-        void visitExpr(HIRExprPtr& exp) override;
-
         void visitConstgeneric(HIRConstGeneric& c) override;
 
         [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
@@ -959,8 +953,6 @@ namespace {
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-        void visitExpr(HIRExprPtr& exp) override;
 
         void visitConstgeneric(HIRConstGeneric& c) override;
 
@@ -5145,10 +5137,6 @@ auto ClosureOuterVisitor::visitModule(HIRItemPath p, HIRModule& mod) -> void {
     out.updateSourceModule(prevImpls, path);
 }
 
-auto ClosureOuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
-    BUG(Span(), StringView("visit_expr hit in ClosureOuterVisitor"));
-}
-
 [[nodiscard]] auto ClosureOuterVisitor::visitType(const HIRType* ty) -> const HIRType* {
     if (ty->is_Array()) {
         auto data = ty->cloneData();
@@ -6118,10 +6106,6 @@ auto StaticBorrowOuterVisitorMark::visitTraitImpl(const HIRSimplePath& traitPath
     selfType = nullptr;
 }
 
-auto StaticBorrowOuterVisitorMark::visitExpr(HIRExprPtr& exp) -> void {
-    BUG(Span(), StringView("visit_expr hit in StaticBorrowOuterVisitor"));
-}
-
 auto StaticBorrowOuterVisitorMark::visitConstgeneric(HIRConstGeneric& c) -> void {
     if (auto* e = c.opt_Unevaluated()) {
         auto& ep = (*e)->expr;
@@ -6674,10 +6658,6 @@ auto StaticBorrowOuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HI
 
     currentModule = nullptr;
     selfType = nullptr;
-}
-
-auto StaticBorrowOuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
-    BUG(Span(), StringView("visit_expr hit in StaticBorrowOuterVisitor"));
 }
 
 auto StaticBorrowOuterVisitor::visitConstgeneric(HIRConstGeneric& c) -> void {
@@ -7311,10 +7291,6 @@ UfcsOuterVisitor::UfcsOuterVisitor(const WireBoard& wb)
     : HIRVisitor(nullptr, wb.crate->types)
     , wb(wb)
     , crate(*wb.crate) {
-}
-
-auto UfcsOuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
-    BUG(Span(), StringView("visit_expr hit in UfcsOuterVisitor"));
 }
 
 auto UfcsOuterVisitor::visitConstgeneric(HIRConstGeneric& c) -> void {
