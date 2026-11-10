@@ -63,8 +63,6 @@ namespace {
         bool precIsArg = false;
         unsigned int prec = 0;
 
-        bool operator==(const FmtArgs& x) const;
-
         bool operator!=(const FmtArgs& x) const;
 
         friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const FmtArgs& x) {
@@ -934,14 +932,13 @@ namespace {
 
     void pushPath(std::vector<TokenTree>& toks, const ASTCrate& crate, std::initializer_list<const char*> il) {
         ASTAbsolutePath ap;
-        // TODO: Inject a path fragment (interpolated path), to avoid edition parsing quirks
         ASSERT_BUG(Span(), crate.loadStd == ASTCrate::LOAD_NONE || crate.extCratenameCore != "", StringView(""));
         ap.crate = crate.extCratenameCore;
         for (auto ent : il) {
             // TODO: This could be slow (looking up the interned string), but most of these are repeated a LOT
             ap.nodes.pushBack(RcString::newInterned(ent));
         }
-        toks.push_back(Token(InterpolatedFragment(std::move(ap))));
+        toks.push_back(Token::fromParsedPath(ASTPath(mv$(ap)), Span()));
     }
 
     void pushToks(std::vector<TokenTree>& toks, Token t1) {
@@ -2842,10 +2839,6 @@ auto CExpanderModulePath::expand(const Span& sp, const WireBoard& wb, const ASTC
         pathStr += comp.c_str();
     }
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(pathStr), {}))));
-}
-
-auto FmtArgs::operator==(const FmtArgs& x) const -> bool {
-    return std::memcmp(this, &x, sizeof(*this)) == 0;
 }
 
 auto FmtArgs::operator!=(const FmtArgs& x) const -> bool {

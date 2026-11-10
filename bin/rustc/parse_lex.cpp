@@ -856,7 +856,7 @@ Token Lexer::getTokenInt() {
                         }
                     }
                     if (numMode != NumMode::DEC) {
-                        TODO(this->pointSpan(), StringView("Non-decimal floats"));
+                        ERROR(this->pointSpan(), E0000, StringView("non-decimal float literals are not supported"));
                     }
 
                     this->ungetc();
