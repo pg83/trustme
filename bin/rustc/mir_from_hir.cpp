@@ -4569,8 +4569,6 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                 const auto& re = r.as_Value();
                 pushIfEqual(sp, builder, mv$(val), MIRParam(re.clone()), armTargets[0], defBlk);
             } else {
-                // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
-
                 std::vector<std::pair<MIRConstant, MIRBasicBlockId>> largeValues;
                 Vector<u64> values;
                 Vector<MIRBasicBlockId> targets;
@@ -4583,11 +4581,7 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                     const auto& r = rules[i][0][ofs];
                     ASSERT_BUG(sp, r.is_Value(), StringView("Matching without _Value pattern - ") << r.tagStr());
                     const auto& re = r.as_Value();
-                    if (re.is_Const()) {
-                        auto nextBlock = builder.newBbUnlinked();
-                        pushIfEqual(sp, builder, val.clone(), MIRParam(re.clone()), armTargets[tgtOfs], nextBlock);
-                        builder.setCurBlock(nextBlock);
-                    } else if (re.as_Uint().v > U128(UINT64_MAX)) {
+                    if (re.as_Uint().v > U128(UINT64_MAX)) {
                         largeValues.push_back(std::make_pair(re.clone(), armTargets[tgtOfs]));
                     } else {
                         values.pushBack(re.as_Uint().v.truncateU64());
@@ -4624,8 +4618,6 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                 const auto& re = r.as_Value();
                 pushIfEqual(sp, builder, mv$(val), MIRParam(re.clone()), armTargets[0], defBlk);
             } else {
-                // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
-
                 Vector<i64> values;
                 Vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
@@ -4637,7 +4629,7 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                     const auto& r = rules[i][0][ofs];
                     ASSERT_BUG(sp, r.is_Value(), StringView("Matching without _Value pattern - ") << r.tagStr());
                     const auto& re = r.as_Value();
-                    if (re.is_Const() || re.as_Int().v > S128(INT64_MAX) || re.as_Int().v < S128(INT64_MIN)) {
+                    if (re.as_Int().v > S128(INT64_MAX) || re.as_Int().v < S128(INT64_MIN)) {
                         auto nextBlock = builder.newBbUnlinked();
                         pushIfEqual(sp, builder, val.clone(), MIRParam(re.clone()), armTargets[tgtOfs], nextBlock);
                         builder.setCurBlock(nextBlock);
@@ -4656,7 +4648,6 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
         case HIRCoreType::F32:
         case HIRCoreType::F64:
         case HIRCoreType::F128: {
-            // TODO: If there are Constant::Const values in the list, they need to come first!
             size_t tgtOfs = 0;
             for (size_t i = 0; i < rules.size(); i++) {
                 for (size_t j = 1; j < rules[i].size(); j++) {
@@ -4666,10 +4657,6 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                 const auto& r = rules[i][0][ofs];
                 ASSERT_BUG(sp, r.is_Value(), StringView("Matching without _Value pattern - ") << r.tagStr());
                 const auto& re = r.as_Value();
-                if (re.is_Const()) {
-                    TODO(sp, StringView("Handle Constant::Const in match"));
-                }
-
                 {
                     auto cmpEqBlk = builder.newBbUnlinked();
                     auto cmpLvalLt = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::LT, MIRParam(re.clone())}));
@@ -4703,10 +4690,6 @@ void MatchGenGrouped::genDispatchPrimitive(const HIRType* ty, MIRLValue val, con
                 const auto& r = rules[i][0][ofs];
                 ASSERT_BUG(sp, r.is_Value(), StringView("Matching without _Value pattern - ") << r.tagStr());
                 const auto& re = r.as_Value();
-                if (re.is_Const()) {
-                    TODO(sp, StringView("Handle Constant::Const in match"));
-                }
-
                 targets.pushBack(armTargets[tgtOfs]);
                 values.push_back(re.as_StaticString());
 
