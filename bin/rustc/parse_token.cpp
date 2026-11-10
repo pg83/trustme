@@ -323,12 +323,19 @@ Token::Token(TagTakeIP, InterpolatedFragment frag) {
     }
 }
 
+Token Token::fromParsedPath(ASTPath path, Span span) {
+    auto token = Token(TagTakeIP(), InterpolatedFragment(mv$(path), mv$(span)));
+    token.isParsedPath_ = true;
+    return token;
+}
+
 Token::Token(const Token& t)
     : type_(t.type_)
     , data_(Data::make_None({}))
     , pos(t.pos)
     , hygiene_(t.hygiene_)
     , isDocComment_(t.isDocComment_)
+    , isParsedPath_(t.isParsedPath_)
     , spacing_(t.spacing_)
 {
     BUG_ASSERT(!t.data_.isDead());
@@ -367,6 +374,7 @@ Token Token::clone() const {
     rv.pos = pos;
     rv.hygiene_ = hygiene_;
     rv.isDocComment_ = isDocComment_;
+    rv.isParsedPath_ = isParsedPath_;
     rv.spacing_ = spacing_;
 
     BUG_ASSERT(!data_.isDead());
@@ -971,6 +979,7 @@ Token Token::tokensOf(const Token& fragment) {
     const bool poolOwned = fragment.type_ == TOK_INTERPOLATED_EXPR || fragment.type_ == TOK_INTERPOLATED_STMT || fragment.type_ == TOK_INTERPOLATED_BLOCK;
     Token rv(fragment.type_, Data::make_Fragment({poolOwned ? fragment.data_.as_Fragment().ptr : nullptr, fragment.fragmentTokens()}), fragment.pos);
     rv.hygiene_ = fragment.hygiene_;
+    rv.isParsedPath_ = fragment.isParsedPath_;
     rv.spacing_ = fragment.spacing_;
     return rv;
 }
@@ -998,6 +1007,7 @@ Token::Token(Token&& t)
     , pos(std::move(t.pos))
     , hygiene_(std::move(t.hygiene_))
     , isDocComment_(t.isDocComment_)
+    , isParsedPath_(t.isParsedPath_)
     , spacing_(t.spacing_)
 {
     t.type_ = TOK_NULL;

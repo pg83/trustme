@@ -77,6 +77,7 @@ class Token {
     Position pos;
     Ident::Hygiene hygiene_;
     bool isDocComment_ = false;
+    bool isParsedPath_ = false;
     TokenSpacing spacing_ = TokenSpacing::Alone;
 
     Token(enum eTokenType t, Data d, Position p);
@@ -105,6 +106,12 @@ public:
     struct TagTakeIP {};
 
     Token(TagTakeIP, InterpolatedFragment);
+
+    static Token fromParsedPath(ASTPath path, Span span);
+
+    bool isParsedPath() const {
+        return isParsedPath_;
+    }
 
     enum eTokenType type() const {
         return type_;

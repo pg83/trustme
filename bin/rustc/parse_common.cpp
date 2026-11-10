@@ -948,7 +948,7 @@ namespace {
             case TOK_DOUBLE_COLON:
             case TOK_IDENT:
             case TOK_INTERPOLATED_PATH: {
-                const bool isInterpolatedPath = tok.type() == TOK_INTERPOLATED_PATH;
+                const bool isOpaquePath = tok.type() == TOK_INTERPOLATED_PATH && !tok.isParsedPath();
                 auto pathSpan = lex.tokenStartSpan(tok);
                 PUTBACK(tok, lex);
                 path = ParsePath(lex, PATH_GENERIC_EXPR);
@@ -965,7 +965,7 @@ namespace {
                             return rv;
                         }
                     case TOK_BRACE_OPEN:
-                        if (!isInterpolatedPath && !CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
+                        if (!isOpaquePath && !CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
                             return ParseExprValStructLiteral(lex, std::move(path));
                         } else {
                             DEBUG(StringView("Not parsing struct literal"));
@@ -3803,6 +3803,9 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
 
         switch (tok.type()) {
             case TOK_IDENT:
+                if (lex.lookahead(0) != TOK_DOUBLE_COLON && lex.lookahead(0) != TOK_EXCLAM) {
+                    break;
+                }
             case TOK_RWORD_CRATE:
             case TOK_RWORD_SUPER:
             case TOK_DOUBLE_COLON:
@@ -3820,7 +3823,7 @@ ASTExprNode* ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                         }
                         return isBlockLine ? finishBlockExpression(mv$(rv)) : mv$(rv);
                     }
-                    tok = Token(Token::TagTakeIP(), InterpolatedFragment(std::move(p), std::move(pathSpan)));
+                    tok = Token::fromParsedPath(std::move(p), std::move(pathSpan));
                 }
                 break;
             default:
