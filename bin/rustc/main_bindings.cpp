@@ -647,6 +647,7 @@ namespace {
             }
             {
                 HIRExpandErasedType(wb, *hirCrate);
+                ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
             }
             if (params.debug.dumpHir) {
                 {

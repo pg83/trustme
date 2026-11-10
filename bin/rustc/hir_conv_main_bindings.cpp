@@ -667,6 +667,19 @@ namespace {
             return true;
         });
         ig.generic.erase(newEnd, ig.generic.end());
+        auto kept = ig.nonNamed.begin();
+        for (auto current = ig.nonNamed.begin(); current != ig.nonNamed.end(); ++current) {
+            if (const auto* path = (*current)->type->getSortPath()) {
+                ig.named[*path].push_back(mv$(*current));
+            } else {
+                if (kept != current) {
+                    *kept = mv$(*current);
+                }
+                ++kept;
+            }
+        }
+        ig.nonNamed.erase(kept, ig.nonNamed.end());
+        ig.nonNamedIndexed = ~static_cast<size_t>(0);
     }
 
     template <typename T>
@@ -944,6 +957,9 @@ void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate) {
 
     crate.allTypeImpls = {};
     for (auto& group : crate.allTraitImpls) {
+        group.second = {};
+    }
+    for (auto& group : crate.allMarkerImpls) {
         group.second = {};
     }
     pushIndexImpls(crate, crate);
