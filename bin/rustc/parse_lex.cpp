@@ -1176,11 +1176,11 @@ Token Lexer::getTokenInt() {
                     if (firstchar.v == '\\') {
                         u32 val = this->parseEscape('\'');
                         if (this->getc() != '\'') {
-                            TODO(this->pointSpan(), StringView("Proper error for lex failures - multi-char const?"));
+                            ERROR(this->pointSpan(), E0000, StringView("character literal may only contain one codepoint"));
                         }
                         return this->withLiteralSuffix(Token(U128(val), CORETYPE_CHAR, this->takeSpelling()));
                     } else if (firstchar.v == '\'') {
-                        TODO(this->pointSpan(), StringView("Proper error for empty char literals"));
+                        ERROR(this->pointSpan(), E0000, StringView("empty character literal"));
                     } else {
                         ch = this->getc();
                         if (ch == '\'') {
@@ -1211,10 +1211,9 @@ Token Lexer::getTokenInt() {
                             this->ungetc();
                             return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str))));
                         } else {
-                            TODO(this->pointSpan(), StringView("Lex Fail - Expected ' after character constant"));
+                            ERROR(this->pointSpan(), E0000, StringView("unterminated character literal"));
                         }
                     }
-                    break;
                 }
                 case DOUBLEQUOTE: {
                     std::string str;
