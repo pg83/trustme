@@ -2835,11 +2835,11 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
         } else if (item.linkage.name == "llvm.x86.ssse3.psign.d.128") {
             of << StringView("\tu32 lhs[4], result[4]; i32 signs[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.psrli.d") {
-            of << StringView("\tconst u32* src = (const u32*)&arg0;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = src[i] >> arg1;\n") << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* src = (const u32*)&arg0;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = (u32)arg1 < 32 ? src[i] >> arg1 : 0;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.pslli.d") {
-            of << StringView("\tconst u32* src = (const u32*)&arg0;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = src[i] << arg1;\n") << StringView("\treturn rv;\n");
+            of << StringView("\tconst u32* src = (const u32*)&arg0;\n") << StringView("\tu32* dst = (u32*)&rv;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 32 << StringView("; i ++) dst[i] = (u32)arg1 < 32 ? src[i] << arg1 : 0;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.pmovmskb.128") {
-            of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\tu8* dst = (u8*)&rv; *dst = 0;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) *dst |= (src[i] >> 7) << i;\n") << StringView("\treturn rv;\n");
+            of << StringView("\tconst u8* src = (const u8*)&arg0;\n") << StringView("\trv = 0;\n") << StringView("\tfor(int i = 0; i < ") << 128 / 8 << StringView("; i ++) rv |= ((u32)src[i] >> 7) << i;\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.storeu.dq") {
             of << StringView("\tmemcpy(arg0, &arg1, sizeof(arg1));\n");
         } else if (item.linkage.name == "llvm.x86.sha256rnds2") {
