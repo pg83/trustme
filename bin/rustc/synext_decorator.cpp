@@ -1144,7 +1144,7 @@ namespace {
             case TypeData::TAG_Unit: {
                 break;
             }
-            case TypeData::TAG_Macro: {
+            default: {
                 break;
             }
             case TypeData::TAG_Primitive: {
@@ -1182,11 +1182,6 @@ namespace {
             }
             case TypeData::TAG_Slice: {
                 auto& e = type->data.as_Slice();
-                changed |= substituteType(e.inner, from, to);
-                break;
-            }
-            case TypeData::TAG_Pattern: {
-                auto& e = type->data.as_Pattern();
                 changed |= substituteType(e.inner, from, to);
                 break;
             }
