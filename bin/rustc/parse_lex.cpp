@@ -1358,6 +1358,8 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
         if (v != TOK_NULL) {
             return Token(v);
         }
+    } else if (str == "_" || str == "crate" || str == "self" || str == "Self" || str == "super") {
+        ERROR(this->pointSpan(), E0000, StringView("invalid raw identifier `r#") << str << StringView("`"));
     }
     auto ident = Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str)));
     ident.isRaw = !parseReservedWord;
