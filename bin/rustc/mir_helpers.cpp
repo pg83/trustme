@@ -277,26 +277,9 @@ namespace {
                         case MIRStatement::TAG_Asm2: {
                             auto& se = stmt.as_Asm2();
                             for (const auto& p : se.params) {
-                                switch (p.tag()) {
-                                    case MIRAsmParam::TAG_Const: {
-                                        break;
-                                    }
-                                    case MIRAsmParam::TAG_Sym: {
-                                        break;
-                                    }
-                                    case MIRAsmParam::TAG_Reg: {
-                                        auto& v = p.as_Reg();
-                                        if (v.output) {
-                                            if (*v.output == lv) {
-                                                state.finalise(stmtIdx);
-                                                return;
-                                            }
-                                        }
-                                        break;
-                                    }
-                                    case MIRAsmParam::TAG_Label: {
-                                        UNREACHABLE();
-                                    }
+                                if (const auto* reg = p.opt_Reg(); reg && reg->output && *reg->output == lv) {
+                                    state.finalise(stmtIdx);
+                                    return;
                                 }
                             }
                             break;
