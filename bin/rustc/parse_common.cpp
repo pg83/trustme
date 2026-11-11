@@ -2806,21 +2806,14 @@ namespace {
 
         while (lex.getTokenIf(TOK_RWORD_SUPER)) {
             lex.getTokenCheck(TOK_DOUBLE_COLON);
-            if (auto* p = path.cls.opt_Super()) {
-                if (p->nodes.empty()) {
-                    p->count += 1;
-                } else {
-                    p->nodes.pop_back();
-                }
-            } else if (auto* p = path.cls.opt_Self()) {
-                if (p->nodes.empty()) {
-                    path = ASTPath::newSuper(1, {});
-                } else {
-                    p->nodes.pop_back();
-                }
+            if (const auto* current = path.cls.opt_Self(); current && current->nodes.empty()) {
+                path = ASTPath::newSuper(1, {});
             } else {
-                ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, StringView("super in empty path"));
-                path.nodes().pop_back();
+                auto* parent = path.cls.opt_Super();
+                if (!parent || !parent->nodes.empty()) {
+                    ERROR(lex.pointSpan(), E0000, StringView("`super` is only allowed at the start of a path"));
+                }
+                parent->count += 1;
             }
         }
 
