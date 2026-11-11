@@ -2488,21 +2488,9 @@ Unifier::Outcome Unifier::unify(const HIRType* left, const HIRType* right) {
 
 Unifier::Outcome Unifier::unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right) {
     const auto snapshot = table_.snapshot();
-    const auto pendingValuesBefore = pendingValues_.size();
-    const auto bindingsBefore = bindings_.length();
-    const auto valueBindingsBefore = valueBindings_.size();
     const auto outcome = this->unifyValuesResolved(left, right);
     if (outcome == Outcome::Mismatch) {
         table_.rollbackTo(snapshot);
-        while (pendingValues_.size() > pendingValuesBefore) {
-            pendingValues_.pop_back();
-        }
-        while (bindings_.length() > bindingsBefore) {
-            bindings_.popBack();
-        }
-        while (valueBindings_.size() > valueBindingsBefore) {
-            valueBindings_.pop_back();
-        }
     } else {
         table_.commit(snapshot);
     }
