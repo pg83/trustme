@@ -5957,13 +5957,24 @@ auto CodeGeneratorC::emitAsmGcc(const MIRTypeResolve& localMirRes, const MIRStat
         of << StringView(" [trustme_dollar] \"i\" (&trustme_asm_dollar)");
     }
     of << StringView(": ");
+    bool firstClobber = true;
     for (unsigned int i = 0; i < e.clobbers.size(); i++) {
-        if (i != 0) {
+        if (e.tpl == "cpuid\n" && e.clobbers[i] == "rbx") {
+            bool outputUsesRbx = false;
+            for (const auto& output : e.outputs) {
+                if (std::strcmp(H::convertReg(output.first.c_str() + 1), "b") == 0) {
+                    outputUsesRbx = true;
+                    break;
+                }
+            }
+            if (outputUsesRbx) {
+                continue;
+            }
+        }
+        if (!firstClobber) {
             of << StringView(", ");
         }
-        if (e.tpl == "cpuid\n" && e.clobbers[i] == "rbx") {
-            continue;
-        }
+        firstClobber = false;
         of << StringView("\"") << e.clobbers[i] << StringView("\"");
     }
     of << StringView(");\n");
