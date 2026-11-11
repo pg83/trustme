@@ -3453,6 +3453,7 @@ auto CExpandExpr::visit(ASTExprNodeNamedValue& node) -> void {
 }
 
 auto CExpandExpr::visit(ASTExprNodeField& node) -> void {
+    this->inAssignLhs = false;
     node.obj = this->visitNodelete(node, node.obj);
 }
 
@@ -3463,6 +3464,7 @@ auto CExpandExpr::visit(ASTExprNodeIndex& node) -> void {
 }
 
 auto CExpandExpr::visit(ASTExprNodeDeref& node) -> void {
+    this->inAssignLhs = false;
     node.value = this->visitNodelete(node, node.value);
 }
 
