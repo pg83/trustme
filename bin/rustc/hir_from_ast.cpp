@@ -885,28 +885,15 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                     ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
                 }
                 const auto& ge = type->as_Generic();
-                unsigned paramIdx;
-                if (ge.binding == 0xFFFF) {
-                    if (!selfIsSized) {
-                        ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
-                    }
-                    paramIdx = ~0u;
-                } else {
-                    paramIdx = ge.idx();
-                    if (paramIdx >= rv.types.size() || rv.types[paramIdx].name != (e.type->data.is_Generic() ? e.type->data.as_Generic().name : e.type->data.as_Path()->cls.as_Local().name)) {
-                        ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
-                    }
+                const unsigned paramIdx = ge.idx();
+                if (ge.binding == 0xFFFF || paramIdx >= rv.types.size() || rv.types[paramIdx].name != (e.type->data.is_Generic() ? e.type->data.as_Generic().name : e.type->data.as_Path()->cls.as_Local().name)) {
+                    ERROR(e.type->span(), E0000, StringView("relaxed bounds are only permitted on type parameters declared by this item"));
                 }
 
                 auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
                 if (trait.path == pathSized) {
-                    if (paramIdx == ~0u) {
-                        BUG_ASSERT(selfIsSized);
-                        *selfIsSized = false;
-                    } else {
-                        BUG_ASSERT(paramIdx < rv.types.size());
-                        rv.types[paramIdx].isSized = false;
-                    }
+                    BUG_ASSERT(paramIdx < rv.types.size());
+                    rv.types[paramIdx].isSized = false;
                 } else {
                     ERROR(bound.span, E0000, StringView("MaybeTrait on unknown trait ") << trait.path);
                 }
