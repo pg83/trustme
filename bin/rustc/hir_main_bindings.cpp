@@ -735,7 +735,7 @@ HIRArraySize HirDeserialiser::deserialiseArraysize() {
         _(Known, in.readU64())
         _(Unevaluated, deserialiseConstgeneric())
         default:
-            BUG(Span(), StringView("Bad tag for HIR::ArraySize - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid array size tag in crate metadata: ") << tag);
 #undef _
     }
 }
@@ -812,7 +812,7 @@ const HIRType* HirDeserialiser::deserialiseType() {
         }
 #undef _
         default:
-            BUG(Span(), StringView("Bad tag for HIR::ASTType* - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid type tag in crate metadata: ") << tag);
     }
     if (regionTypeBase == NO_REGION) {
         types.pushBack(rv);
@@ -884,7 +884,7 @@ HIRPath HirDeserialiser::deserialisePath() {
             return HIRPath(HIRPath::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams()});
         }
         default:
-            BUG(Span(), StringView("Bad tag for HIR::Path - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid path tag in crate metadata: ") << tag);
     }
 }
 
@@ -946,7 +946,7 @@ HIREnum HirDeserialiser::deserialiseEnum() {
                         des.deserialiseVec<HIREnum::ValueVariant>(),
                     });
                 default:
-                    BUG(Span(), StringView("Bad tag for HIR::Enum::Class - ") << tag);
+                    ERROR(Span(), E0000, StringView("Invalid enum class tag in crate metadata: ") << tag);
             }
         }
     };
@@ -1013,7 +1013,7 @@ HIRStruct HirDeserialiser::deserialiseStruct() {
             data = HIRStruct::Data(deserialiseVec<HIRStructField>());
             break;
         default:
-            BUG(Span(), StringView("Bad tag for HIR::Struct::Data - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid struct data tag in crate metadata: ") << tag);
     }
     unsigned forcedAlignment = in.readCount();
     unsigned maxFieldAlignment = in.readCount();
@@ -1222,7 +1222,7 @@ bool HirDeserialiser::deserialiseMirStatement(MIRStatement& rv) {
             rv = MIRStatement::make_Assign({deserialiseMirLvalue(), deserialiseMirRvalue()});
             break;
         case 1:
-            BUG(Span(), StringView("Obsolete MIR statement Drop in metadata"));
+            ERROR(Span(), E0000, StringView("Obsolete MIR drop statement in crate metadata"));
         case 2:
             rv = MIRStatement::make_Asm({in.readString(), deserialiseVec<std::pair<std::string, MIRLValue>>(), deserialiseVec<std::pair<std::string, MIRLValue>>(), deserialiseVec<std::string>(), deserialiseVec<std::string>()});
             break;
@@ -1247,7 +1247,7 @@ bool HirDeserialiser::deserialiseMirStatement(MIRStatement& rv) {
             rv = MIRStatement::make_LoadDropFlag({static_cast<unsigned>(in.readCount()), deserialiseMirLvalue(), static_cast<unsigned>(in.readCount())});
             break;
         default:
-            BUG(Span(), StringView("Bad tag for MIR::Statement - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR statement tag in crate metadata: ") << tag);
     }
     return true;
 }
@@ -1964,7 +1964,7 @@ auto HirDeserialiser::deserialiseMirParam() -> MIRParam {
         case MIRParam::TAG_Constant:
             return deserialiseMirConstant();
         default:
-            BUG(Span(), StringView("Bad tag for MIR::Param - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR parameter tag in crate metadata: ") << tag);
     }
 }
 
@@ -2008,7 +2008,7 @@ auto HirDeserialiser::deserialiseMirRvalue() -> MIRRValue {
         _(Struct, {deserialiseGenericpath(), deserialiseVec<MIRParam>()})
 #undef _
         default:
-            BUG(Span(), StringView("Bad tag for MIR::RValue - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR rvalue tag in crate metadata: ") << tag);
     }
 }
 
@@ -2036,7 +2036,7 @@ auto HirDeserialiser::deserialiseMirConstant() -> MIRConstant {
             _(ItemAddr, {box$(deserialisePath()), in.readU128()})
 #undef _
         default:
-            BUG(Span(), StringView("Bad tag for MIR::Const - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR constant tag in crate metadata: ") << tag);
     }
 }
 
