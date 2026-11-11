@@ -2269,6 +2269,32 @@ auto VisitorPost::visitModule(HIRItemPath p, HIRModule& mod) -> void {
 [[nodiscard]] auto VisitorPost::visitTypeInner(const HIRType* ty, bool doBind) -> const HIRType* {
     Span sp;
 
+    if (const auto* object = ty->opt_TraitObject(); object && object->trait.traitPtr) {
+        const auto& sized = crate.getLangItemPathOpt("sized");
+        const auto checkBindings = [&](const HIRTrait& trait, const HIRTraitPath::assocListT& fixed) {
+            for (const auto& item : trait.types) {
+                if (object->trait.typeBounds.count(item.first) || fixed.count(item.first)) {
+                    continue;
+                }
+                bool sizedOnly = false;
+                for (const auto& bound : item.second.generics.bounds) {
+                    const auto* traitBound = bound.opt_TraitBound();
+                    if (traitBound && traitBound->type == crate.types.self() && traitBound->trait.path.path == sized) {
+                        sizedOnly = true;
+                        break;
+                    }
+                }
+                if (!sizedOnly) {
+                    ERROR(sp, E0000, StringView("associated type `") << item.first << StringView("` must be specified for trait object ") << ty);
+                }
+            }
+        };
+        checkBindings(*object->trait.traitPtr, object->trait.typeBounds);
+        for (const auto& parent : object->trait.traitPtr->allParentTraits) {
+            checkBindings(*parent.traitPtr, parent.typeBounds);
+        }
+    }
+
     if (!ty->is_NamedFunction()) {
         return HIRVisitor::visitType(ty);
     }
