@@ -46,6 +46,7 @@
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
+#include <std/sys/throw.h>
 
 #include <set>
 #include <string>
@@ -954,6 +955,9 @@ int main(int argc, char* argv[]) {
     int result = 1;
     try {
         result = compile(argc, argv);
+    } catch (stl::Exception& e) {
+        sysE << StringView("error: ") << e.description() << endL;
+        ::exit(1);
     } catch (const std::exception& e) {
         sysE << StringView("error: ") << e.what() << endL;
         ::exit(1);
