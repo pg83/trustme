@@ -70,12 +70,17 @@ namespace {
     }
 
     void exportMacroRules(const Span& sp, const WireBoard& wb, ASTCrate& crate, ASTModule& mod, const RcString& name, bool localInnerMacros) {
-        auto it = std::find_if(mod.macros().begin(), mod.macros().end(), [&](const auto& x) {
+        auto it = std::find_if(mod.macros().rbegin(), mod.macros().rend(), [&](const auto& x) {
             return x.name == name;
         });
-        ASSERT_BUG(sp, it != mod.macros().end(), StringView("Macro '") << name << StringView("' not defined in this module"));
+        ASSERT_BUG(sp, it != mod.macros().rend(), StringView("Macro '") << name << StringView("' not defined in this module"));
+        for (const auto& exported : crate.rootModule_.macros()) {
+            if (exported.name == name && exported.data->exported && &*exported.data != &*it->data) {
+                ERROR(sp, E0000, StringView("macro `") << name << StringView("` is already exported"));
+            }
+        }
         auto e = mv$(*it);
-        mod.macros().erase(it);
+        mod.macros().erase((it + 1).base());
 
         mod.macroImports.push_back(ASTModule::MacroImport{false, name, singleNodePath("", name), &*e.data});
 
