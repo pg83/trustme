@@ -16991,6 +16991,16 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
     const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
     ASSERT_BUG(callSpan, projection, StringView("NormalizesTo goal is not an associated-type projection: ") << goal.projection);
 
+    for (const auto& equality : resolve_.typeEqualities()) {
+        if (equality.first != goal.projection && !equality.first->equalsIgnoringRegions(goal.projection)) {
+            continue;
+        }
+        const auto* output = equality.second.ty;
+        SolverResponse response;
+        response.certainty = Certainty::Proven;
+        return callback.visit(NormalizesToResponse{std::move(response), output->equalsIgnoringRegions(goal.projection) ? nullptr : output});
+    }
+
     HIRGenericPath declaringTrait;
     if (!resolve_.traitContainsType(callSpan, projection->type, projection->trait, crate.getTraitByPath(callSpan, projection->trait.path), projection->item.c_str(), declaringTrait)) {
         BUG(callSpan, StringView("Cannot find associated type ") << projection->item << StringView(" anywhere in trait ") << projection->trait);
