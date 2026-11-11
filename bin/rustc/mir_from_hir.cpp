@@ -10692,17 +10692,7 @@ auto ExprVisitorConv::visit(HIRExprNodePathValue& node) -> void {
 
 auto ExprVisitorConv::visit(HIRExprNodeVariable& node) -> void {
     if (const auto* a = builder.getVariableAlias(node.span(), node.slot)) {
-        switch (a->first) {
-            case HIRPatternBinding::Type::Move:
-                builder.setResult(node.span(), a->second.clone());
-                break;
-            case HIRPatternBinding::Type::Ref:
-                builder.setResult(node.span(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, a->second.clone()}));
-                break;
-            case HIRPatternBinding::Type::MutRef:
-                builder.setResult(node.span(), MIRRValue::make_Borrow({HIRBorrowType::Unique, false, a->second.clone()}));
-                break;
-        }
+        builder.setResult(node.span(), a->second.clone());
         return;
     }
     builder.setResult(node.span(), builder.getVariable(node.span(), node.slot));
