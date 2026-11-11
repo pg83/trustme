@@ -550,9 +550,6 @@ namespace {
 
     GenericParamSlot consumeGenericParam(GenericParamLayout defs, size_t& index, bool lifetime) {
         if (defs.ast) {
-            while (index < defs.ast->params.size() && defs.ast->params[index].is_None()) {
-                index++;
-            }
             if (lifetime) {
                 if (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
                     index++;
@@ -786,10 +783,6 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
 
     for (const auto& param : gp.params) {
         switch (param.tag()) {
-            case GenericParam::TAG_None: {
-                auto& _ = param.as_None();
-                break;
-            }
             case GenericParam::TAG_Lifetime: {
                 break;
             }
@@ -819,9 +812,6 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
     }
     for (const auto& bound : gp.bounds) {
         switch (bound.tag()) {
-            case ASTGenericBound::TAG_None: {
-                break;
-            }
             case ASTGenericBound::TAG_Lifetime: {
                 break;
             }
@@ -2277,10 +2267,6 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
 
                 for (const auto& bound : i.selfBounds.bounds) {
                     switch (bound.tag()) {
-                        case ASTGenericBound::TAG_None: {
-                            auto& _ = bound.as_None();
-                            break;
-                        }
                         case ASTGenericBound::TAG_Lifetime: {
                             auto& _ = bound.as_Lifetime();
                             break;

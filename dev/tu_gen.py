@@ -116,7 +116,7 @@ class Union:
         tags = [variant.tag for variant in variants]
         if len(set(tags)) != len(tags):
             raise TuError(f"union {name}: duplicate variant tags")
-        if default not in tags:
+        if default is not None and default not in tags:
             raise TuError(f"union {name}: default {default!r} is not a variant")
         for field in extra_fields:
             if len(field) not in (2, 3) or not IDENT.match(field[1]):
@@ -400,7 +400,6 @@ def emit_clone_helper(out):
 
 def emit_cpp_packed(out, union):
     name = union.name
-    default = next(v for v in union.variants if v.tag == union.default)
     out.open(f"::std::uintptr_t {name}::pack(Tag tag, const void* payload) {{")
     out.line("const auto bits = reinterpret_cast<::std::uintptr_t>(payload);")
     out.line('assert((bits >> tagShift) == 0 && "pointer does not fit under the tag");')
@@ -412,7 +411,8 @@ def emit_cpp_packed(out, union):
     out.close()
     out.line()
     out.line(f"{name}::{name}()")
-    out.line(f"    : bits_(pack(TAG_{union.default}, nullptr))")
+    initial_tag = "deadTag" if union.default is None else f"TAG_{union.default}"
+    out.line(f"    : bits_(pack({initial_tag}, nullptr))")
     out.open("{")
     out.close()
     out.line()
@@ -541,9 +541,16 @@ def emit_cpp_union(out, union):
         emit_cpp_packed(out, union)
         return
     name = union.name
-    default = next(v for v in union.variants if v.tag == union.default)
+    default = next((v for v in union.variants if v.tag == union.default), None)
 
-    if union.allow_incomplete:
+    if default is None:
+        out.line(f"{name}::{name}()")
+        out.line("    : tag_(deadTag)")
+        if union.allow_incomplete:
+            out.line("    , ptr_(nullptr)")
+        out.open("{")
+        out.close()
+    elif union.allow_incomplete:
         default_ptr = ("nullptr" if default.is_empty
                        else f"new {default.data_name}()")
         out.line(f"{name}::{name}()")

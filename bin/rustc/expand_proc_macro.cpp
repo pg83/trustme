@@ -2224,9 +2224,6 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                 pmi.sendSymbol(",");
             }
             switch (param.tag()) {
-                case GenericParam::TAG_None: {
-                    BUG(sp, StringView("Enountered GenericParam::None"));
-                }
                 case GenericParam::TAG_Lifetime: {
                     const auto& p = param.as_Lifetime();
                     pmi.sendLifetime(p.name().name.c_str());
@@ -2243,22 +2240,17 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                     pmi.sendIdent(p.name().c_str());
                     bool first = true;
                     for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
-                        if (!params.bounds[i].is_None()) {
-                            if (first) {
-                                pmi.sendSymbol(":");
-                                first = false;
-                            } else {
-                                pmi.sendSymbol("+");
-                            }
+                        if (first) {
+                            pmi.sendSymbol(":");
+                            first = false;
+                        } else {
+                            pmi.sendSymbol("+");
                         }
                         {
                             auto& tuMatch = params.bounds[i];
                             switch (tuMatch.tag()) {
                                 default:
                                     BUG(sp, StringView("Unhandled bound type - ") << params.bounds[i]);
-                                case ASTGenericBound::TAG_None: {
-                                    break;
-                                }
                                 case ASTGenericBound::TAG_TypeLifetime: {
                                     auto& be = tuMatch.as_TypeLifetime();
                                     pmi.sendLifetime(be.bound.name().name.c_str());
@@ -2312,14 +2304,11 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
             size_t i = &e - params.bounds.data();
             bool alreadyEmitted = false;
             for (const auto& p : params.params) {
-                if (p.is_None()) {
-                    continue;
-                }
                 if (p.boundsStart <= i && i < p.boundsEnd) {
                     alreadyEmitted = true;
                 }
             }
-            if (alreadyEmitted || e.is_None()) {
+            if (alreadyEmitted) {
                 continue;
             }
 
@@ -2328,9 +2317,6 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
                 whereSent = true;
             }
             switch (e.tag()) {
-                case ASTGenericBound::TAG_None: {
-                    continue;
-                }
                 case ASTGenericBound::TAG_Lifetime: {
                     auto& be = e.as_Lifetime();
                     pmi.sendLifetime(be.test.name().name.c_str());

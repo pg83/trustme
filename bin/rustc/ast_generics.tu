@@ -2,10 +2,9 @@
 
 generate(
     name="GenericParam",
-    default="None",
+    default=None,
     output=True,
     variants=[
-        v("None"),
         v("Lifetime", "ASTLifetimeParam"),
         v("Type", "ASTTypeParam"),
         v("Value", "ASTValueParam"),
@@ -18,10 +17,9 @@ generate(
 
 generate(
     name="ASTGenericBound",
-    default="None",
+    default=None,
     output=True,
     variants=[
-        v("None"),
         v("Lifetime", fields=[
             ("ASTLifetimeRef", "test"),
             ("ASTLifetimeRef", "bound"),

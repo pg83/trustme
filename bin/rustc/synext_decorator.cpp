@@ -1225,9 +1225,6 @@ namespace {
     bool substituteBound(ASTGenericBound& bound, const RcString& from, ASTType* to) {
         bool changed = false;
         switch (bound.tag()) {
-            case ASTGenericBound::TAG_None: {
-                break;
-            }
             case ASTGenericBound::TAG_Lifetime: {
                 break;
             }

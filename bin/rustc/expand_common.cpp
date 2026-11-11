@@ -1159,24 +1159,21 @@ namespace {
         return visitor.visit(node);
     }
 
-    const ASTAttributeList* genericParamAttrs(const GenericParam& param) {
+    const ASTAttributeList& genericParamAttrs(const GenericParam& param) {
         switch (param.tag()) {
             case GenericParam::TAG_Lifetime:
-                return &param.as_Lifetime().attrs();
+                return param.as_Lifetime().attrs();
             case GenericParam::TAG_Type:
-                return &param.as_Type().attrs();
+                return param.as_Type().attrs();
             case GenericParam::TAG_Value:
-                return &param.as_Value().attrs();
-            case GenericParam::TAG_None:
-                break;
+                return param.as_Value().attrs();
         }
-        return nullptr;
     }
 
     void StripConfiguredOutGenericParams(const Settings& settings, ASTGenericParams& params) {
         for (size_t idx = params.params.size(); idx-- > 0;) {
-            const auto* attrs = genericParamAttrs(params.params[idx]);
-            if (!attrs || checkCfgAttrs(settings, *attrs)) {
+            const auto& attrs = genericParamAttrs(params.params[idx]);
+            if (checkCfgAttrs(settings, attrs)) {
                 continue;
             }
             const size_t start = params.params[idx].boundsStart;
@@ -1198,9 +1195,6 @@ namespace {
         StripConfiguredOutGenericParams(*es.wb.settings, params);
         for (auto& paramDef : params.params) {
             switch (paramDef.tag()) {
-                case GenericParam::TAG_None: {
-                    break;
-                }
                 case GenericParam::TAG_Lifetime: {
                     break;
                 }
@@ -1218,9 +1212,6 @@ namespace {
         }
         for (auto& bound : params.bounds) {
             switch (bound.tag()) {
-                case ASTGenericBound::TAG_None: {
-                    break;
-                }
                 case ASTGenericBound::TAG_Lifetime: {
                     break;
                 }

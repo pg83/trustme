@@ -385,10 +385,6 @@ void RustPrinter::printParams(const ASTGenericParams& params) {
             {
                 auto& tuMatch = p;
                 switch (tuMatch.tag()) {
-                    case GenericParam::TAG_None: {
-                        os << StringView("/*-*/");
-                        break;
-                    }
                     case GenericParam::TAG_Lifetime: {
                         auto& p = tuMatch.as_Lifetime();
                         os << p;
@@ -423,10 +419,6 @@ void RustPrinter::printBounds(const ASTGenericParams& params) {
         bool isFirst = true;
 
         for (const auto& b : params.bounds) {
-            if (b.is_None()) {
-                os << StringView("/*-*/");
-                continue;
-            }
             if (!isFirst) {
                 os << StringView(",\n");
             } else {
@@ -436,10 +428,6 @@ void RustPrinter::printBounds(const ASTGenericParams& params) {
 
             os << indent();
             switch (b.tag()) {
-                case ASTGenericBound::TAG_None: {
-                    os << StringView("/*-*/");
-                    break;
-                }
                 case ASTGenericBound::TAG_Lifetime: {
                     auto& ent = b.as_Lifetime();
                     os << ent.test << StringView(": ") << ent.bound;

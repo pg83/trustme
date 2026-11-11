@@ -1068,9 +1068,6 @@ namespace {
                             if (e.trait_) {
                                 for (const auto& param : e.trait_->params().params) {
                                     switch (param.tag()) {
-                                        case GenericParam::TAG_None: {
-                                            break;
-                                        }
                                         case GenericParam::TAG_Lifetime: {
                                             break;
                                         }
@@ -1968,10 +1965,6 @@ namespace {
             {
                 auto& tuMatch = param;
                 switch (tuMatch.tag()) {
-                    case GenericParam::TAG_None: {
-                        auto& _ = tuMatch.as_None();
-                        break;
-                    }
                     case GenericParam::TAG_Lifetime: {
                         break;
                     }
@@ -1992,9 +1985,6 @@ namespace {
         }
         for (auto& bound : params.bounds) {
             switch (bound.tag()) {
-                case ASTGenericBound::TAG_None: {
-                    break;
-                }
                 case ASTGenericBound::TAG_Lifetime: {
                     auto& e = bound.as_Lifetime();
                     ResolveAbsoluteLifetime(context, bound.span, e.test);
@@ -2599,9 +2589,6 @@ namespace {
         }
         for (auto& param : function.params().params) {
             switch (param.tag()) {
-                case GenericParam::TAG_None: {
-                    break;
-                }
                 case GenericParam::TAG_Lifetime: {
                     break;
                 }
@@ -2619,9 +2606,6 @@ namespace {
         }
         for (auto& bound : function.params().bounds) {
             switch (bound.tag()) {
-                case ASTGenericBound::TAG_None: {
-                    break;
-                }
                 case ASTGenericBound::TAG_Lifetime: {
                     break;
                 }
@@ -3017,9 +3001,6 @@ namespace {
                     traitArgs.clear();
                     for (const auto& param : targetTrait->params().params) {
                         switch (param.tag()) {
-                            case GenericParam::TAG_None: {
-                                break;
-                            }
                             case GenericParam::TAG_Lifetime: {
                                 auto& e = param.as_Lifetime();
                                 traitArgs.push_back(ASTLifetimeRef(e.name()));
@@ -5936,9 +5917,6 @@ auto Context::push(/*const */ ASTGenericParams& params, GenericSlot::Level level
         u32 valIdx = 0;
         for (const auto& e : params.params) {
             switch (e.tag()) {
-                case GenericParam::TAG_None: {
-                    break;
-                }
                 case GenericParam::TAG_Lifetime: {
                     auto& lft = e.as_Lifetime();
                     if (!allowShadowing) {
