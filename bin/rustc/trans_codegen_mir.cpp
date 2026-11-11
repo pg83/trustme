@@ -787,7 +787,8 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 of << StringView("sym ") << fmt(v);
                                 break;
                             }
-                            case MIRAsmParam::TAG_Reg: {
+                            default: {
+                                BUG_ASSERT(p.is_Reg());
                                 auto& v = p.as_Reg();
                                 of << StringView("reg(") << v.dir << StringView(" ") << v.spec << StringView(") ");
                                 if (v.input) {
@@ -802,9 +803,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                     of << StringView("_");
                                 }
                                 break;
-                            }
-                            case MIRAsmParam::TAG_Label: {
-                                UNREACHABLE();
                             }
                         }
                     }
