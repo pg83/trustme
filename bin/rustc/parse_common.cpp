@@ -1813,6 +1813,9 @@ namespace {
     }
 
     FsPath joinDirOf(std::string file, const char* rest) {
+        if (*rest == '/') {
+            return FsPath(rest);
+        }
         while (file.size() > 0 && file.back() != '/' && file.back() != '\\') {
             file.pop_back();
         }
