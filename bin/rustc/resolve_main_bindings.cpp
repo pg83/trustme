@@ -2049,6 +2049,11 @@ namespace {
                 auto name = mv$(e.name);
                 auto p = context.lookupOpt(pat.span(), name.name, name.hygiene, Context::LookupMode::PatternValue);
                 if (p.isValid()) {
+                    const auto* structure = name.name == selfName() ? p.bindings.type.binding.opt_Struct() : nullptr;
+                    if (structure && ((structure->struct_ && !structure->struct_->data.is_Unit())
+                        || (structure->hir && !structure->hir->data.is_Unit()))) {
+                        ERROR(pat.span(), E0000, StringView("expected unit struct for bare `Self` pattern"));
+                    }
                     ResolveAbsolutePath(context, pat.span(), Context::LookupMode::PatternValue, p);
                     pat.data() = ASTPattern::Data::make_Value({ASTPattern::Value::make_Named(mv$(p)), ASTPattern::Value()});
                     DEBUG(StringView("MaybeBind resolved to ") << pat);
