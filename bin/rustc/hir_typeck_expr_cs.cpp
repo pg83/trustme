@@ -2605,6 +2605,9 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             }
             const auto& endpoints = coercionIndex[dependency.index].endpoints;
             return std::none_of(endpoints.begin(), endpoints.end(), [&](const auto& endpoint) {
+                if (endpoint.obligation && endpoint.obligation->argumentSite) {
+                    return false;
+                }
                 const auto* other = context.getType(endpoint.other);
                 const auto* infer = other->opt_Infer();
                 return !infer || infer->index == ~0u;
