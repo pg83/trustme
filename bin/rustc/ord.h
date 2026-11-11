@@ -19,10 +19,6 @@ inline Ordering ord(char l, char r) {
     return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
 }
 
-inline Ordering ord(unsigned char l, unsigned char r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
 inline Ordering ord(char8_t l, char8_t r) {
     return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
 }
@@ -39,35 +35,11 @@ inline Ordering ord(unsigned long l, unsigned long r) {
     return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
 }
 
-inline Ordering ord(unsigned long long l, unsigned long long r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
-inline Ordering ord(signed char l, signed char r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
 inline Ordering ord(int l, int r) {
     return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
 }
 
-inline Ordering ord(short l, short r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
 inline Ordering ord(long l, long r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
-inline Ordering ord(long long l, long long r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
-inline Ordering ord(float l, float r) {
-    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
-}
-
-inline Ordering ord(double l, double r) {
     return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
 }
 
