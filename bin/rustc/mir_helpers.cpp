@@ -304,12 +304,8 @@ namespace {
                         case MIRStatement::TAG_SetDropFlag: {
                             break;
                         }
-                        case MIRStatement::TAG_SaveDropFlag: {
-                            break;
-                        }
-                        case MIRStatement::TAG_LoadDropFlag: {
-                            break;
-                        }
+                        default:
+                            UNREACHABLE();
                     }
                 }
                 mirRes.setCurStmtTerm(bbIdx);
@@ -339,11 +335,6 @@ namespace {
                     }
                     case MIRTerminator::TAG_UnwindResume: {
                         DEBUG(mirRes << StringView("UnwindResume"));
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_UnwindTerminate: {
-                        DEBUG(mirRes << StringView("UnwindTerminate"));
                         state.finalise(stmtIdx);
                         break;
                     }
@@ -434,6 +425,8 @@ namespace {
                         }
                         break;
                     }
+                    default:
+                        UNREACHABLE();
                 }
             }
         };
