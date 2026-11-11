@@ -5789,7 +5789,7 @@ auto CodeGeneratorC::asmMatchesTemplate(const MIRStatement::Data_Asm& e, const c
 
     if (e.tpl == tpl) {
         if (!H::checkList(e.inputs, inputs) || !H::checkList(e.outputs, outputs)) {
-            MIR_BUG(*mirRes, StringView("Hard-coded asm translation doesn't apply - `") << e.tpl << StringView("` inputs=") << e.inputs << StringView(" outputs=") << e.outputs);
+            return false;
         }
         return true;
     }
