@@ -17,11 +17,11 @@ class CodeGenerator {
 public:
     virtual ~CodeGenerator();
 
-    virtual void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile);
+    virtual void finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) = 0;
 
     virtual void emitTypeProto(const HIRType*);
 
-    virtual void emitType(const HIRType*);
+    virtual void emitType(const HIRType*) = 0;
 
     virtual void emitTypeId(const HIRType*);
 
@@ -38,7 +38,7 @@ public:
 
     virtual void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& val) = 0;
 
-    virtual void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params);
+    virtual void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) = 0;
 
     virtual void emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef);
 

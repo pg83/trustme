@@ -279,13 +279,7 @@ void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput
 CodeGenerator::~CodeGenerator() {
 }
 
-void CodeGenerator::finalise(const TransOptions& opt, CodegenOutput outTy, const std::string& hirFile) {
-}
-
 void CodeGenerator::emitTypeProto(const HIRType*) {
-}
-
-void CodeGenerator::emitType(const HIRType*) {
 }
 
 void CodeGenerator::emitTypeId(const HIRType*) {
@@ -295,9 +289,6 @@ void CodeGenerator::emitStaticExt(const HIRPath& p, const HIRStatic& item, const
 }
 
 void CodeGenerator::emitStaticProto(const HIRPath& p, const HIRStatic& item, const TransParams& params) {
-}
-
-void CodeGenerator::emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
 }
 
 void CodeGenerator::emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) {
