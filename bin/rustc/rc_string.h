@@ -31,14 +31,6 @@ public:
         return RcString(s);
     }
 
-    const char* begin() const {
-        return c_str();
-    }
-
-    const char* end() const {
-        return c_str() + size();
-    }
-
     size_t size() const;
 
     const char* c_str() const;
@@ -72,28 +64,12 @@ public:
         return this->ord(s) == OrdLess;
     }
 
-    bool operator>(const RcString& s) const {
-        return this->ord(s) == OrdGreater;
-    }
-
     Ordering ord(const std::string& s) const {
         return ord(s.data(), s.size());
     }
 
     bool operator==(const std::string& s) const {
         return this->ord(s) == OrdEqual;
-    }
-
-    bool operator!=(const std::string& s) const {
-        return this->ord(s) != OrdEqual;
-    }
-
-    bool operator<(const std::string& s) const {
-        return this->ord(s) == OrdLess;
-    }
-
-    bool operator>(const std::string& s) const {
-        return this->ord(s) == OrdGreater;
     }
 
     Ordering ord(const char* s) const;
@@ -110,10 +86,6 @@ public:
         return b == a;
     }
 
-    friend bool operator!=(const char* a, const RcString& b) {
-        return b != a;
-    }
-
     int compare(size_t o, size_t l, const char* s) const;
 };
 
@@ -122,10 +94,6 @@ static_assert(sizeof(RcString) == sizeof(u32));
 namespace std {
     static inline bool operator==(const string& a, const ::RcString& b) {
         return b == a;
-    }
-
-    static inline bool operator!=(const string& a, const ::RcString& b) {
-        return b != a;
     }
 
     template <>

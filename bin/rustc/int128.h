@@ -112,14 +112,6 @@ public:
         return *this & U128(x);
     }
 
-    U128 operator^(unsigned x) const {
-        return *this ^ U128(x);
-    }
-
-    U128 operator/(unsigned x) const {
-        return *this / U128(x);
-    }
-
     U128 operator%(unsigned x) const {
         return *this % U128(x);
     }
@@ -331,18 +323,6 @@ public:
 
     bool operator<(int x) const {
         return *this < S128(x);
-    }
-
-    bool operator<=(int x) const {
-        return *this <= S128(x);
-    }
-
-    bool operator>(int x) const {
-        return *this > S128(x);
-    }
-
-    bool operator>=(int x) const {
-        return *this >= S128(x);
     }
 
     bool operator==(int x) const {

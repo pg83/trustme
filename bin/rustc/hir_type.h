@@ -118,14 +118,6 @@ struct HIRTypeDataErasedTypeAliasInner {
 
 Ordering ord(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b);
 
-static inline bool operator==(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
-    return ord(a, b) == OrdEqual;
-}
-
-static inline bool operator!=(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
-    return ord(a, b) != OrdEqual;
-}
-
 struct HIRTypeDataErasedType {
     bool isSized;
     std::vector<HIRTraitPath> traits;

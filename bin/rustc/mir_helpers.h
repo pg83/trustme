@@ -148,10 +148,6 @@ public:
         return getLvalueType(val.lv(), val.lv().wrappers.size() - val.wrapperCount());
     }
 
-    const HIRType* getLvalueType(const MIRLValue::MRef& val) const {
-        return getLvalueType(val.lv(), val.lv().wrappers.size() - val.wrapperCount());
-    }
-
     const HIRType* getUnwrappedType(const MIRLValue::Wrapper& w, const HIRType* ty) const;
     const HIRType* getParamType(const MIRParam& val) const;
 

@@ -180,10 +180,6 @@ public:
 
     void finalCleanup();
 
-    const HIRSimplePath* langBox() const {
-        return langBox_;
-    }
-
     const HIRCrate& crate() const {
         return resolve_.hirCrate();
     }

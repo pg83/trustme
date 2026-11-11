@@ -33,10 +33,6 @@ struct Codepoint {
     bool operator==(Codepoint x) const {
         return v == x.v;
     }
-
-    bool operator!=(Codepoint x) const {
-        return v != x.v;
-    }
 };
 
 std::string& operator+=(std::string& s, const Codepoint& cp);

@@ -487,10 +487,6 @@ public:
             return p != nullptr;
         }
 
-        const MIREnumCache& operator*() const {
-            return *p;
-        }
-
         const MIREnumCache* operator->() const {
             return p;
         }
