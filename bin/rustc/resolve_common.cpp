@@ -640,7 +640,7 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
 
 auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath, bool visitUse) -> ResolveItemRef {
     if (ns == ResolveNamespace::Macro) {
-        for (const auto& i : mod.macros()) {
+        for (const auto& i : reverse(mod.macros())) {
             DEBUG(StringView("> MACRO ") << i.name);
             if (i.name == name) {
                 DEBUG(StringView("Found in ast (macro)"));

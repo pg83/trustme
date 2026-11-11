@@ -4908,7 +4908,7 @@ namespace {
                 }
             }
         }
-        for (const auto& mac : mod.macros()) {
+        for (const auto& mac : reverse(mod.macros())) {
             if (mac.name == desItemName) {
                 rv.macro.set(mod.path() + mac.name, ASTPathBindingMacro::make_MacroRules({nullptr, &*mac.data}));
                 DEBUG(StringView("Macro definition: ") << rv.macro.path);

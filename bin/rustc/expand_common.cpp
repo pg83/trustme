@@ -1998,6 +1998,9 @@ namespace {
                 i->data = ASTItem::make_None({});
             } else if (isMacroExport && (i->data.is_MacroInv() || i->data.is_Macro())) {
                 if (i->data.is_MacroInv() && i->data.as_MacroInv().path().isTrivial() && i->data.as_MacroInv().path().asTrivial() == "macro_rules") {
+                    if (&mod == &crate.rootModule_) {
+                        continue;
+                    }
                     const auto& macInv = i->data.as_MacroInv();
                     DEBUG(StringView("macro_rules marked with #[macro_export] moved to the crate root - ") << macInv.inputIdent());
                     newRootItems.push_back(box$(*i));
