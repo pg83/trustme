@@ -511,7 +511,8 @@ public:
                             visitPath(v);
                             break;
                         }
-                        case MIRAsmParam::TAG_Reg: {
+                        default: {
+                            BUG_ASSERT(p.is_Reg());
                             auto& v = p.as_Reg();
                             if (v.input) {
                                 rv |= visitParam(*v.input, MIRValUsage::Read);
@@ -519,11 +520,6 @@ public:
                             if (v.output) {
                                 rv |= visitLvalue(*v.output, MIRValUsage::Write);
                             }
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Label: {
-                            auto& v = p.as_Label();
-                            rv |= visitBlockId(v);
                             break;
                         }
                     }
