@@ -2075,7 +2075,7 @@ auto HirDeserialiser::deserialiseTypeitem() -> HIRTypeItem {
         case 8:
             return HIRTypeItem(deserialiseTraitalias());
         default:
-            BUG(Span(), StringView("Bad tag for HIR::TypeItem - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid type item tag in crate metadata: ") << tag);
     }
 }
 
@@ -2097,7 +2097,7 @@ auto HirDeserialiser::deserialiseValueitem() -> HIRValueItem {
         case 5:
             return HIRValueItem::make_StructConstructor({deserialiseSimplepath()});
         default:
-            BUG(Span(), StringView("Bad tag for HIR::ValueItem - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid value item tag in crate metadata: ") << tag);
     }
 }
 
@@ -2113,7 +2113,7 @@ auto HirDeserialiser::deserialiseMacroitem() -> HIRMacroItem {
             return deserialiseProcmacro();
     }
 
-    TODO(Span(), StringView("Bad tag for MacroItem - ") << tag);
+    ERROR(Span(), E0000, StringView("Invalid macro item tag in crate metadata: ") << tag);
 }
 
 auto HirDeserialiser::deserialiseLinkage() -> HIRLinkage {
