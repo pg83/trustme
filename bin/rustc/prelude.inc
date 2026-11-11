@@ -880,9 +880,19 @@ static inline f128 f128_copysign(f128 a, f128 b) { return f128_encode(__builtin_
 static inline f128 f128_floor(f128 v) { return f128_encode(__builtin_floorf128(f128_decode(v))); }
 static inline f128 f128_ceil(f128 v) { return f128_encode(__builtin_ceilf128(f128_decode(v))); }
 static inline f128 f128_round(f128 v) { return f128_encode(__builtin_roundf128(f128_decode(v))); }
+static inline f128 f128_trunc(f128 v) {
+    u64 words[2];
+    __builtin_memcpy(words, &v, sizeof(v));
+    const unsigned exponent = (unsigned)((words[1] >> 48) & 0x7fff);
+    if (exponent >= 16383 + 112) return v;
+    if (exponent < 16383) return make_f128_bits(words[1] & (1ull << 63), 0);
+    const unsigned discarded = 16383 + 112 - exponent;
+    if (discarded >= 64) return make_f128_bits(words[1] & (~0ull << (discarded - 64)), 0);
+    return make_f128_bits(words[1], words[0] & (~0ull << discarded));
+}
 static inline f128 f128_round_even(f128 v) {
     f128_native value = f128_decode(v);
-    f128_native integral = __builtin_truncf128(value);
+    f128_native integral = f128_decode(f128_trunc(v));
     f128_native fraction = value - integral;
     f128_native magnitude = __builtin_fabsf128(fraction);
     if (magnitude < 0.5Q) {
@@ -892,12 +902,19 @@ static inline f128 f128_round_even(f128 v) {
     if (magnitude > 0.5Q) {
         return f128_encode(integral + step);
     }
-    f128_native half = __builtin_truncf128(integral / 2.0Q);
+    f128_native half = f128_decode(f128_trunc(f128_encode(integral / 2.0Q)));
     return f128_encode(integral == half * 2.0Q ? integral : integral + step);
 }
-static inline f128 f128_trunc(f128 v) { return f128_encode(__builtin_truncf128(f128_decode(v))); }
-static inline f128 f128_min(f128 a, f128 b) { return f128_encode(__builtin_fminf128(f128_decode(a), f128_decode(b))); }
-static inline f128 f128_max(f128 a, f128 b) { return f128_encode(__builtin_fmaxf128(f128_decode(a), f128_decode(b))); }
+static inline f128 f128_min(f128 a, f128 b) {
+    if (f128_ne(a, a)) return b;
+    if (f128_ne(b, b)) return a;
+    return f128_lt(a, b) || (f128_eq(a, b) && __builtin_signbit(f128_decode(a))) ? a : b;
+}
+static inline f128 f128_max(f128 a, f128 b) {
+    if (f128_ne(a, a)) return b;
+    if (f128_ne(b, b)) return a;
+    return f128_gt(a, b) || (f128_eq(a, b) && !__builtin_signbit(f128_decode(a))) ? a : b;
+}
 static inline f128 f128_sqrt(f128 v) { return f128_encode(__builtin_sqrtf128(f128_decode(v))); }
 static inline f128 f128_fma(f128 a, f128 b, f128 c) { return f128_encode(__builtin_fmaf128(f128_decode(a), f128_decode(b), f128_decode(c))); }
 static inline f128 f128_pow(f128 a, f128 b) { return f128_encode(__builtin_powf128(f128_decode(a), f128_decode(b))); }

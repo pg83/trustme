@@ -8482,7 +8482,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << StringView(")");
         };
         if (name == "rintf16" || name == "rintf32" || name == "rintf64" || name == "rintf128") {
-            emit1("round");
+            emit1(isF128 ? "round_even" : "roundeven");
         } else if (name == "round_ties_even_f16" || name == "round_ties_even_f32" || name == "round_ties_even_f64" || name == "round_ties_even_f128") {
             emit1(isF128 ? "round_even" : "roundeven");
         } else if (name == "fabsf16" || name == "fabsf32" || name == "fabsf64" || name == "fabsf128") {
