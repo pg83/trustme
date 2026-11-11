@@ -1282,17 +1282,6 @@ namespace {
             return true;
         }
 
-        if (const auto* ae = a.opt_Value()) {
-            if (ae->is_Const()) {
-                return true;
-            }
-        }
-        if (const auto* be = b.opt_Value()) {
-            if (be->is_Const()) {
-                return true;
-            }
-        }
-
         if (const auto* ae = a.opt_Value(); ae && ae->is_Bytes()) {
             if (const auto* be = b.opt_Slice()) {
                 return ae->as_Bytes().length() == be->len;
