@@ -1396,6 +1396,12 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
 
     rv.exportedMacroNames = deserialiseVector<::RcString>();
+    for (const auto& name : rv.exportedMacroNames) {
+        auto item = rv.rootModule.macroItems.find(name);
+        if (item != rv.rootModule.macroItems.end()) {
+            item->second->publicity = HIRPublicity::newGlobal();
+        }
+    }
     rv.langItems = deserialiseIstrumap<HIRSimplePath>();
 
     {

@@ -3670,7 +3670,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
            prelude brings into every module - the shadowing tokio works around with
            `#[cfg(not(test))]` (rust-lang/rust#62127). */
         if (!e.second.is_Import()) {
-            if (auto existing = rv.rootModule.macroItems.find(e.first); existing != rv.rootModule.macroItems.end() && existing->second->ent.is_Import()) {
+            if (auto existing = rv.rootModule.macroItems.find(e.first); existing != rv.rootModule.macroItems.end()) {
                 rv.rootModule.macroItems.erase(existing);
             }
         }
