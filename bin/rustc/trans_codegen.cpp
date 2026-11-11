@@ -375,16 +375,7 @@ auto FunctionOrder::addDropDependency(FunctionOrderNode& source, const HIRType* 
         case HIRType::TAG_Pattern:
             addDropDependency(source, type->as_Pattern().inner);
             break;
-        case HIRType::TAG_Diverge:
-        case HIRType::TAG_Infer:
-        case HIRType::TAG_ErasedType:
-        case HIRType::TAG_NodeType:
-        case HIRType::TAG_Generic:
-        case HIRType::TAG_Primitive:
-        case HIRType::TAG_Pointer:
-        case HIRType::TAG_NamedFunction:
-        case HIRType::TAG_Function:
-        case HIRType::TAG_TraitObject:
+        default:
             break;
     }
 }
