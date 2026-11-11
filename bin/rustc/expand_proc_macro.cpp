@@ -1867,9 +1867,6 @@ auto ProcMacroVisitor::visitTypeBehindPointer(const ASTType* ty) -> void {
 auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
     // TODO: Correct handling of visit_type
     switch (ty->data.tag()) {
-        case TypeData::TAG_None: {
-            BUG(sp, ty);
-        }
         case TypeData::TAG_Any: {
             pmi.sendRword("_");
             break;
@@ -2955,10 +2952,8 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
                 this->visitParams(e.params_);
                 this->visitSelfBounds(e.selfBounds);
                 this->visitBounds(e.params_);
-                if (e.type_->isValid()) {
-                    pmi.sendSymbol("=");
-                    this->visitType(e.type_);
-                }
+                pmi.sendSymbol("=");
+                this->visitType(e.type_);
                 pmi.sendSymbol(";");
                 break;
             }
@@ -2996,10 +2991,8 @@ auto ProcMacroVisitor::visitImpl(const ASTImpl& impl) -> void {
                 pmi.sendRword("type");
                 pmi.sendIdent(i.name.c_str());
                 this->visitParams(e.params_);
-                if (e.type_->isValid()) {
-                    pmi.sendSymbol("=");
-                    this->visitType(e.type_);
-                }
+                pmi.sendSymbol("=");
+                this->visitType(e.type_);
                 pmi.sendSymbol(";");
                 break;
             }
@@ -3039,7 +3032,7 @@ auto ProcMacroVisitor::visitItem(const RcString& name, const ASTVisibility& vis,
             this->visitParams(e.params_);
             this->visitSelfBounds(e.selfBounds);
             this->visitBounds(e.params_);
-            if (e.type_->isValid() && !e.type_->isUnbounded()) {
+            if (!e.type_->isUnbounded()) {
                 pmi.sendSymbol("=");
                 this->visitType(e.type_);
             }

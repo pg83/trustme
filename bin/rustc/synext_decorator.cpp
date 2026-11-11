@@ -1135,9 +1135,6 @@ namespace {
                 type = to->clone();
                 return true;
             }
-            case TypeData::TAG_None: {
-                break;
-            }
             case TypeData::TAG_Any: {
                 break;
             }

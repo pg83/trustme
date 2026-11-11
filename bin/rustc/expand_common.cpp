@@ -925,9 +925,6 @@ namespace {
 
     void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
         switch (ty->data.tag()) {
-            case TypeData::TAG_None: {
-                break;
-            }
             case TypeData::TAG_Any: {
                 break;
             }

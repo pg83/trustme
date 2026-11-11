@@ -134,10 +134,6 @@ struct ASTType {
         return span_;
     }
 
-    bool isValid() const {
-        return !data.is_None();
-    }
-
     bool isUnbounded() const {
         return data.is_Any();
     }

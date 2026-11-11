@@ -72,7 +72,6 @@ ASTType* ASTType::clone() const {
         const auto& old = data.as_##VAR();                          \
         return mkType(p, span_, TypeData::make_##VAR(__VA_ARGS__)); \
     } break;
-        _COPY(None)
         _COPY(Any)
         _COPY(Bang)
         _CLONE(Macro, {p.make<ASTMacroInvocation>(old.inv->clone())})
@@ -127,7 +126,6 @@ void ASTType::print(ZeroCopyOutput& os, bool isDebug /*=false*/) const {
         const auto& ent = this->data.as_##VAR(); \
         (void)&ent;
     switch (this->data.tag()) {
-        _(None, os << StringView("!/*none*/!");)
         _(Any, os << StringView("_");)
         _(Bang, os << StringView("!");)
         _(Macro, os << *ent.inv;)

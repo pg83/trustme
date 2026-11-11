@@ -1616,9 +1616,6 @@ namespace {
         }
 
         switch (type->data.tag()) {
-            case TypeData::TAG_None: {
-                break;
-            }
             case TypeData::TAG_ResolvedHIR:
             case TypeData::TAG_Any: {
                 break;
@@ -2481,9 +2478,6 @@ namespace {
 
     void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
         switch (type->data.tag()) {
-            case TypeData::TAG_None: {
-                break;
-            }
             case TypeData::TAG_Any: {
                 break;
             }

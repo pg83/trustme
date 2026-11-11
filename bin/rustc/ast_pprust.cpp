@@ -1757,7 +1757,6 @@ void State::printType(const ASTType* ty) {
     this->ibox(0);
     const auto& data = ty->data;
     switch (data.tag()) {
-        case TypeData::TAG_None:
         case TypeData::TAG_Any:
             this->word(StringView("_"));
             break;

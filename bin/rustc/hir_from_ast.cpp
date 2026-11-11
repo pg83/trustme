@@ -1578,9 +1578,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
         case TypeData::TAG_ResolvedHIR: {
             return ty->data.as_ResolvedHIR().type;
         }
-        case TypeData::TAG_None: {
-            BUG(ty->span(), StringView("TypeData::None"));
-        }
         case TypeData::TAG_Bang: {
             return crate->types.diverge();
         }
@@ -3983,9 +3980,6 @@ auto LifetimeIdentity::traitPath(const TypeTraitPath& value) -> void {
 
 auto LifetimeIdentity::type(const ASTType& value) -> void {
     switch (value.data.tag()) {
-        case TypeData::TAG_None:
-            append('n');
-            break;
         case TypeData::TAG_Any:
             append('y');
             break;

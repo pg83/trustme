@@ -3,10 +3,9 @@
 
 generate(
     name="TypeData",
-    default="None",
+    default=None,
     clone=False,
     variants=[
-        v("None"),
         v("Any"),
         v("Bang"),
         v("Unit"),
