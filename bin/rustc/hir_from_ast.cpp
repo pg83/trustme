@@ -854,7 +854,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 // TODO: Check if this trait is `Sized` and ignore if it is? (It's a useless bound)
 
                 if (!e.outerHrbs.empty() && !e.innerHrbs.empty()) {
-                    TODO(bound.span, StringView("Handle two layers of HRBs in a bound"));
+                    ERROR(e.span, E0000, StringView("nested quantification of lifetimes"));
                 }
 
                 auto boundTraitPath = LowerHIRTraitPath(bound.span, e.trait, e.innerHrbs, /*allow_bounds=*/true, e.constness, type);
@@ -1744,9 +1744,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                         node->setSpan(sp);
                         return LowerHIRConstGeneric(*node);
                     }
-                    case ASTPatternValue::TAG_Invalid: {
-                        BUG(sp, StringView("invalid pattern endpoint"));
-                    }
                     case ASTPatternValue::TAG_Float: {
                         ERROR(sp, E0000, StringView("float pattern types are not supported"));
                     }
@@ -1756,6 +1753,8 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                     case ASTPatternValue::TAG_ByteString: {
                         ERROR(sp, E0000, StringView("byte-string pattern types are not supported"));
                     }
+                    default:
+                        UNREACHABLE();
                 }
             };
 
@@ -2294,7 +2293,6 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                             auto& be = bound.as_IsTrait();
                             auto type = LowerHIRType(be.type);
                             ASSERT_BUG(item.span, type == crate->types.self(), StringView("Associated type bound has non-Self subject ") << type);
-                            ASSERT_BUG(item.span, be.outerHrbs.empty() || be.innerHrbs.empty(), StringView("Two layers of higher-ranked binders in associated type bound"));
                             auto trait = LowerHIRTraitPath(be.span, be.trait, be.innerHrbs, /*allow_bounds=*/true, be.constness);
                             if (trait.path.path == pathPointeeSized || trait.path.path == pathMetadataSized) {
                                 isSized = false;
