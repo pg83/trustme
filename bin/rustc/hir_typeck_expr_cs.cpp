@@ -1043,7 +1043,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         void visitArgumentsClosuresLast(Arguments& args);
     };
 
-    struct ExprVisitorEnum: public HIRExprVisitor {
+    struct ExprVisitorEnum: public HIRExprVisitorDef {
         Context& context;
         const HIRType* retType;
 
@@ -1198,8 +1198,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
         void visit(HIRExprNodeClosure& node) override;
 
         void visit(HIRExprNodeGenerator& node) override;
-
-        void visit(HIRExprNodeGeneratorWrapper& node) override;
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
@@ -10447,7 +10445,8 @@ auto ExprVisitorAddIvars::LocalImplTraitLowering::monomorphType(const Span& sp, 
 }
 
 ExprVisitorEnum::ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRType* retType)
-    : context(context)
+    : HIRExprVisitorDef(context.crate.types)
+    , context(context)
     , retType(retType)
     , traits(mv$(baseTraits))
 {
@@ -12173,10 +12172,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeGenerator& node) -> void {
     this->closureRetTypes.pushBack(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
     this->visitChild(*node.code);
     this->closureRetTypes.popBack();
-}
-
-auto ExprVisitorEnum::visit(HIRExprNodeGeneratorWrapper& node) -> void {
-    BUG(node.span(), StringView("ExprNode_GeneratorWrapper unexpected at this time"));
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeAsyncBlock& node) -> void {
