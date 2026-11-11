@@ -23,10 +23,6 @@ struct Reloc {
     }
 
     Ordering ord(const Reloc& x) const;
-
-    bool operator==(const Reloc& x) const {
-        return ord(x) == OrdEqual;
-    }
 };
 
 struct EncodedLiteral {

@@ -72,10 +72,6 @@ struct HIRGenericRef {
         return this->ord(x) != OrdEqual;
     }
 
-    bool operator<(const HIRGenericRef& x) const {
-        return this->ord(x) == OrdLess;
-    }
-
     void fmt(stl::ZeroCopyOutput& os) const;
 
 };

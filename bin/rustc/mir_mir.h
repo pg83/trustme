@@ -173,10 +173,6 @@ struct MIRLValue {
             return ::ord(val, x.val);
         }
 
-        bool operator==(const Wrapper& x) const {
-            return val == x.val;
-        }
-
         bool operator!=(const Wrapper& x) const {
             return val != x.val;
         }
@@ -301,10 +297,6 @@ struct MIRLValue {
             return wrapperCount_ == 0 && lv_->root.is_Local();
         }
 
-        bool is_Return() const {
-            return wrapperCount_ == 0 && lv_->root.is_Return();
-        }
-
         bool is_Argument() const {
             return wrapperCount_ == 0 && lv_->root.is_Argument();
         }
@@ -355,10 +347,6 @@ struct MIRLValue {
 
         const CRef innerRef() const;
 
-        bool operator<(const CRef& b) const {
-            return this->ord(b) == OrdLess;
-        }
-
         bool operator==(const CRef& b) const {
             return this->ord(b) == OrdEqual;
         }
@@ -380,22 +368,6 @@ struct MIRLValue {
     Ordering ord(const MIRLValue::CRef& x) const;
     Ordering ord(const MIRLValue::MRef& x) const;
 };
-
-static inline bool operator<(const MIRLValue& a, const MIRLValue::CRef& b) {
-    return a.ord(b) == OrdLess;
-}
-
-static inline bool operator<(const MIRLValue& a, const MIRLValue::MRef& b) {
-    return a.ord(b) == OrdLess;
-}
-
-static inline bool operator<(const MIRLValue::CRef& a, const MIRLValue& b) {
-    return b.ord(a) == OrdGreater;
-}
-
-static inline bool operator<(const MIRLValue::MRef& a, const MIRLValue& b) {
-    return b.ord(a) == OrdGreater;
-}
 
 static inline bool operator<(const MIRLValue& a, const MIRLValue& b) {
     return a.ord(b) == OrdLess;

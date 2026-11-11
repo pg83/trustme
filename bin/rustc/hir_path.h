@@ -387,10 +387,6 @@ public:
         return ord(x) == OrdEqual;
     }
 
-    bool operator!=(const HIRTraitPath& x) const {
-        return ord(x) != OrdEqual;
-    }
-
     bool operator<(const HIRTraitPath& x) const {
         return ord(x) == OrdLess;
     }

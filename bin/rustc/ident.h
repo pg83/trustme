@@ -127,9 +127,5 @@ struct Ident {
         return this->name == x.name && this->hygiene == x.hygiene;
     }
 
-    bool operator!=(const Ident& x) const {
-        return !(*this == x);
-    }
-
     bool operator<(const Ident& x) const;
 };

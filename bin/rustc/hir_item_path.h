@@ -46,10 +46,6 @@ public:
 
     const HIRItemPath& getTopIp() const;
 
-    HIRItemPath operator+(const std::string& name) const {
-        return HIRItemPath(*this, name.c_str());
-    }
-
     HIRItemPath operator+(const RcString& name) const {
         return HIRItemPath(*this, name.c_str());
     }
