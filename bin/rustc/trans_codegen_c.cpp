@@ -7007,21 +7007,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
     auto getRealPrimTy = [](HIRCoreType ct) -> HIRCoreType {
         switch (ct) {
             case HIRCoreType::Usize:
-                if (TargetGetPointerBits() == 64) {
-                    return HIRCoreType::U64;
-                }
-                if (TargetGetPointerBits() == 32) {
-                    return HIRCoreType::U32;
-                }
-                BUG(Span(), StringView(""));
+                return HIRCoreType::U64;
             case HIRCoreType::Isize:
-                if (TargetGetPointerBits() == 64) {
-                    return HIRCoreType::I64;
-                }
-                if (TargetGetPointerBits() == 32) {
-                    return HIRCoreType::I32;
-                }
-                BUG(Span(), StringView(""));
+                return HIRCoreType::I64;
             default:
                 return ct;
         }
