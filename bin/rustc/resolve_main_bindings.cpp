@@ -1833,6 +1833,11 @@ namespace {
                 this->context.popBlock();
             }
 
+            void visit(ASTExprNodeGeneratorBlock& node) override {
+                ResolveAbsoluteType(this->context, node.returnType);
+                ASTNodeVisitorDef::visit(node);
+            }
+
             void visit(ASTExprNodeFor& node) override {
                 BUG(node.span(), StringView("`for` should be desugared"));
             }
