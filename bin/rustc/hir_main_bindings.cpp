@@ -776,7 +776,7 @@ const HIRType* HirDeserialiser::deserialiseType() {
                     break;
                 }
                 default:
-                    BUG(Span(), StringView("Bad tag for a serialised erased type - ") << innerTag);
+                    ERROR(Span(), E0000, StringView("Invalid erased type tag in crate metadata: ") << innerTag);
             }
             rv = typeInterner.intern(HIRType::make_ErasedType(std::move(erased)));
             break;
@@ -928,7 +928,7 @@ HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
             return HIRGenericBound::make_TraitBound({mv$(type), mv$(trait), constness, isTrivial});
         }
         default:
-            BUG(Span(), StringView("Bad tag for HIR::GenericBound - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid generic bound tag in crate metadata: ") << tag);
     }
 }
 
@@ -1077,7 +1077,7 @@ HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
         _(Evaluated, freezeEncodedLiteral(pool, deserialiseEncodedliteral()))
 #undef _
         default:
-            BUG(Span(), StringView("Unknown HIR::ConstGeneric tag when deserialising - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid const generic tag in crate metadata: ") << tag);
     }
 }
 
@@ -1194,7 +1194,7 @@ AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
         case AsmRegisterSpec::TAG_Explicit:
             return in.readString();
         default:
-            BUG(Span(), StringView("Bad tag for AsmCommon::RegisterSpec - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid asm register tag in crate metadata: ") << tag);
     }
 }
 
@@ -1209,7 +1209,7 @@ MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
         case MIRAsmParam::TAG_Label:
             return MIRAsmParam::make_Label(static_cast<unsigned int>(in.readCount()));
         default:
-            BUG(Span(), StringView("Bad tag for MIR::AsmParam - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR asm parameter tag in crate metadata: ") << tag);
     }
 }
 
@@ -1295,7 +1295,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
         _(Asm2, {deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>(), static_cast<unsigned int>(in.readCount())})
 #undef _
         default:
-            BUG(Span(), StringView("Bad tag for MIR::Terminator - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR terminator tag in crate metadata: ") << tag);
     }
 }
 
@@ -1310,7 +1310,7 @@ MIRUnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
         case MIRUnwindAction::TAG_Unreachable:
             return MIRUnwindAction::make_Unreachable({});
         default:
-            BUG(Span(), StringView("Bad tag for MIR::UnwindAction - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR unwind action tag in crate metadata: ") << tag);
     }
 }
 
@@ -1328,7 +1328,7 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
         case MIRSwitchValues::TAG_String:
             return MIRSwitchValues::make_String(deserialiseVec<std::string>());
         default:
-            BUG(Span(), StringView("Bad tag for MIR::SwitchValues - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR switch values tag in crate metadata: ") << tag);
     }
 }
 
@@ -1342,7 +1342,7 @@ MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
         _(Intrinsic, {in.readIstring(), deserialisePathparams()})
 #undef _
         default:
-            BUG(Span(), StringView("Bad tag for MIR::CallTarget - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid MIR call target tag in crate metadata: ") << tag);
     }
 }
 
@@ -1830,7 +1830,7 @@ auto HirDeserialiser::deserialiseSimplepatent() -> ::SimplePatEnt {
                 return deserialiseSimplepatifcheck();
             })});
         default:
-            BUG(Span(), StringView("Bad tag for MacroPatEnt - #") << static_cast<int>(tag));
+            ERROR(Span(), E0000, StringView("Invalid macro pattern tag in crate metadata: ") << static_cast<int>(tag));
     }
 }
 
@@ -1871,7 +1871,7 @@ auto HirDeserialiser::deserialiseMacroexpansionent() -> ::MacroExpansionEnt {
             return ::MacroExpansionEnt(std::move(entries));
         }
         default:
-            BUG(Span(), StringView("Bad tag for MacroExpansionEnt - ") << tag);
+            ERROR(Span(), E0000, StringView("Invalid macro expansion tag in crate metadata: ") << tag);
     }
 }
 
@@ -1923,7 +1923,7 @@ auto HirDeserialiser::deserialiseTokendata() -> TokenData {
             return TokenData::make_Float({dty, value, in.readIstring()});
         }
         default:
-            BUG(Span(), StringView("Bad tag for Token::Data - ") << static_cast<int>(tag));
+            ERROR(Span(), E0000, StringView("Invalid token data tag in crate metadata: ") << static_cast<int>(tag));
     }
 }
 
