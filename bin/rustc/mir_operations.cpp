@@ -855,7 +855,6 @@ namespace {
                 } else {
                     MIR_BUG(state, StringView("Unsize to slice from non-array - ") << srcTy);
                 }
-                break;
             }
             case HIRType::TAG_TraitObject: {
                 auto& de = (*dstTy).as_TraitObject();
@@ -890,7 +889,6 @@ namespace {
                 return outMetaTy;
             }
         }
-        UNREACHABLE();
     }
 
     MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, const HIRType* dstTy, const HIRType* srcTyInner, MIRLValue ptrValue) {

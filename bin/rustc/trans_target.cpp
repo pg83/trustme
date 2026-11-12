@@ -525,7 +525,6 @@ namespace {
             sysE << StringView("Unknown target name '") << targetName << StringView("'") << endL;
             abort();
         }
-        UNREACHABLE();
     }
 
     bool osHasThreadLocal(const TargetSpec& spec) {
