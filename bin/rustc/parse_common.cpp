@@ -2928,6 +2928,11 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     path = ASTPath(RcString::newInterned(tok.str()), {});
                     explicitAbsolute = false;
+                    if (lex.getTokenIf(TOK_RWORD_AS)) {
+                        auto name = getOptionalIdent(lex);
+                        out.entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name), false, group});
+                        return;
+                    }
                 } else if (lex.editionAfter(ASTEdition::Rust2018) && LOOK_AHEAD(lex) == TOK_IDENT) {
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
