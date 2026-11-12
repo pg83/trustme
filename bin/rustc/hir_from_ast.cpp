@@ -2618,9 +2618,14 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                     return ctx.crate->types.pointer(e.type, inner);
                 } else if (ty->is_Generic()) {
                     return ty;
-                } else {
-                    return nullptr;
+                } else if (const auto* object = ty->opt_TraitObject()) {
+                    const auto& receiver = ctx.crate->getLangItemPathOpt("receiver");
+                    const auto target = object->trait.typeBounds.find(RcString::newInterned("Target"));
+                    if (object->trait.path.path == receiver && target != object->trait.typeBounds.end() && (target->second.type == ctx.crate->types.self() || target->second.type == realSelfType)) {
+                        return ty;
+                    }
                 }
+                return nullptr;
             }
         } ivcr(*this, sp, realSelfType);
 
