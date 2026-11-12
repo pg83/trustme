@@ -1237,7 +1237,6 @@ Token Lexer::getTokenInt() {
     } catch (const Lexer::EndOfFile& /*e*/) {
         return Token(TOK_EOF);
     }
-    UNREACHABLE();
 }
 
 Token Lexer::getTokenIntRawString(eTokenType kind) {

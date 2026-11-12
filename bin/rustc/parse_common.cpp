@@ -4770,10 +4770,9 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
         for (auto& a : itemAttrs.items) {
             item.attrs.items.push_back(std::move(a));
         }
-        // Only the kinds a trait body can hold; anything else is a loud TODO rather than silently accepted.
         switch (item.data.tag()) {
             default:
-                TODO(lex.pointSpan(), StringView("Interpolated item into trait: ") << item.data.tagStr());
+                ERROR(item.span, E0000, StringView("Item of type ") << item.data.tagStr() << StringView(" is not allowed in a trait"));
             case ASTItem::TAG_Function: {
                 break;
             }
@@ -4783,6 +4782,7 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
                 }
                 break;
             }
+            case ASTItem::TAG_MacroInv:
             case ASTItem::TAG_Type: {
                 break;
             }
