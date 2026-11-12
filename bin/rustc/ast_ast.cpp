@@ -77,7 +77,9 @@ ASTTupleItem ASTTupleItem::clone() const {
 }
 
 ASTTypeAlias ASTTypeAlias::clone() const {
-    return ASTTypeAlias(params_.clone(), type_->clone());
+    ASTTypeAlias rv(params_.clone(), type_->clone());
+    rv.selfBounds = selfBounds.clone();
+    return rv;
 }
 
 ASTStatic ASTStatic::clone() const {

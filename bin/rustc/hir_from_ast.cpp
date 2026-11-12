@@ -2257,14 +2257,9 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
 
                 for (const auto& bound : i.selfBounds.bounds) {
                     switch (bound.tag()) {
-                        case ASTGenericBound::TAG_Lifetime: {
-                            auto& _ = bound.as_Lifetime();
+                        case ASTGenericBound::TAG_Lifetime:
+                        case ASTGenericBound::TAG_TypeLifetime:
                             break;
-                        }
-                        case ASTGenericBound::TAG_TypeLifetime: {
-                            auto& _ = bound.as_TypeLifetime();
-                            break;
-                        }
                         case ASTGenericBound::TAG_IsTrait: {
                             auto& be = bound.as_IsTrait();
                             auto type = LowerHIRType(be.type);
