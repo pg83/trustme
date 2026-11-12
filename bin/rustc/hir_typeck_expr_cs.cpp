@@ -8179,7 +8179,7 @@ auto ExprVisitorRevisit::callAsyncCallable(HIRExprNodeCallValue& node, const HIR
         }
         const HIRType* fcnArgsTup;
         const auto inspectImpl = [&](const SolverImpl& impl) {
-            auto tup = impl.getTraitTyParam(context.crate.types, 0);
+            auto tup = this->context.expandAssociatedTypes(node.span(), impl.getTraitTyParam(context.crate.types, 0));
             if (!tup->is_Tuple()) {
                 ERROR(node.span(), E0000, StringView("AsyncFn* expects a tuple argument, got ") << tup);
             }
@@ -8319,7 +8319,7 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallValue& node) -> void {
             bool found = false;
             bool mayHold = false;
             const auto inspectImpl = [&](const SolverImpl& impl) {
-                auto tup = impl.getTraitTyParam(context.crate.types, 0);
+                auto tup = this->context.expandAssociatedTypes(node.span(), impl.getTraitTyParam(context.crate.types, 0));
                 if (!tup->is_Tuple()) {
                     ERROR(node.span(), E0000, StringView("FnOnce expects a tuple argument, got ") << tup);
                 }
