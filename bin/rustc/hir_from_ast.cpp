@@ -110,7 +110,7 @@ namespace {
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
         HIRPath LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
         HIRPattern LowerHIRPattern(const ASTPattern& pat);
-        HIRExprPtr LowerHIRExpr(ASTExprNode* e);
+        HIRExprPtr LowerHIRExpr(ASTExprNode* e, unsigned firstSlot = 0);
         HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
         HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {}, bool typeSegment = false);
         HIRConstGeneric LowerHIRConstGeneric(ASTExprNode& nodeRef);
@@ -130,7 +130,7 @@ namespace {
         HIRValueItem LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name);
         HIRModule LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vector<HIRSimplePath> traits = {});
         void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate);
-        HIRExprPtr LowerHIRExprNode(ASTExprNode& e);
+        HIRExprPtr LowerHIRExprNode(ASTExprNode& e, unsigned firstSlot = 0);
 
         HIRCrate* lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crate);
     };
@@ -1151,9 +1151,9 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
     UNREACHABLE();
 }
 
-HIRExprPtr AST2HIR::LowerHIRExpr(ASTExprNode* e) {
+HIRExprPtr AST2HIR::LowerHIRExpr(ASTExprNode* e, unsigned firstSlot) {
     if (e) {
-        return LowerHIRExprNode(*e);
+        return LowerHIRExprNode(*e, firstSlot);
     } else {
         return HIRExprPtr();
     }
@@ -2399,6 +2399,59 @@ std::vector<HIRSimplePath> AST2HIR::LowerHIRDefineOpaque(HIRItemPath p, const HI
     return defineOpaque;
 }
 
+namespace {
+    struct AsyncArgumentSlotVisitor final: HIRExprVisitorDef {
+        unsigned nextSlot = 0;
+
+        explicit AsyncArgumentSlotVisitor(HIRTypeInterner& types)
+            : HIRExprVisitorDef(types)
+        {
+        }
+
+        void noteSlot(unsigned slot) {
+            if (slot != ~0u && nextSlot <= slot) {
+                nextSlot = slot + 1;
+            }
+        }
+
+        void visit(HIRExprNodeVariable& node) override {
+            noteSlot(node.slot);
+        }
+
+        void visitPattern(const Span& patternSpan, HIRPattern& pattern) override {
+            for (auto slot : patternBindingSlots(pattern, HIRPatternBindingOrder::FirstCandidate)) {
+                noteSlot(slot);
+            }
+            HIRExprVisitorDef::visitPattern(patternSpan, pattern);
+        }
+    };
+
+    HIRExprNodeBlock* lowerAsyncArgumentPatterns(HIRCrate& crate, const Span& sp, HIRExprNodeP code, auto& args, unsigned* nextSlot = nullptr) {
+        AsyncArgumentSlotVisitor slots(crate.types);
+        if (!nextSlot) {
+            for (auto& arg : args) {
+                slots.visitPattern(sp, arg.first);
+            }
+            code->visit(slots);
+            nextSlot = &slots.nextSlot;
+        }
+
+        auto* body = crate.pool->make<HIRExprNodeBlock>(sp);
+        body->resType = code->resType;
+        for (auto& arg : args) {
+            const auto slot = (*nextSlot)++;
+            auto* value = crate.pool->make<HIRExprNodeVariable>(sp, RcString(), slot);
+            value->resType = crate.types.infer();
+            auto* binding = crate.pool->make<HIRExprNodeLet>(sp, arg.first.clone(), arg.second, HIRExprNodeP(value));
+            binding->resType = crate.types.unit();
+            body->nodes.push_back(HIRExprNodeP(binding));
+            arg.first = HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, RcString::newInterned("#async_arg"), slot), HIRPattern::Data::make_Any({}));
+        }
+        body->valueNode = mv$(code);
+        return body;
+    }
+}
+
 HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRType* realSelfType) {
     Span sp;
 
@@ -2749,7 +2802,11 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
     rv.span = f.sp();
-    rv.code = LowerHIRExpr(f.code());
+    AsyncArgumentSlotVisitor argumentSlots(crate->types);
+    for (auto& arg : rv.args) {
+        argumentSlots.visitPattern(sp, arg.first);
+    }
+    rv.code = LowerHIRExpr(f.code(), argumentSlots.nextSlot);
     if (rv.code) {
         bool neverArg = false;
         for (const auto& arg : f.args()) {
@@ -2765,50 +2822,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     }
 
     if (rv.code && f.isAsync() && !rv.args.empty()) {
-        struct AsyncArgumentSlotVisitor final: HIRExprVisitorDef {
-            unsigned nextSlot = 0;
-
-            explicit AsyncArgumentSlotVisitor(HIRTypeInterner& types)
-                : HIRExprVisitorDef(types)
-            {
-            }
-
-            void noteSlot(unsigned slot) {
-                if (slot != ~0u && nextSlot <= slot) {
-                    nextSlot = slot + 1;
-                }
-            }
-
-            void visit(HIRExprNodeVariable& node) override {
-                noteSlot(node.slot);
-            }
-
-            void visitPattern(const Span& patternSpan, HIRPattern& pattern) override {
-                for (auto slot : patternBindingSlots(pattern, HIRPatternBindingOrder::FirstCandidate)) {
-                    noteSlot(slot);
-                }
-                HIRExprVisitorDef::visitPattern(patternSpan, pattern);
-            }
-        } slots(crate->types);
-
-        for (auto& arg : rv.args) {
-            slots.visitPattern(sp, arg.first);
-        }
-        rv.code->visit(slots);
-
-        auto* body = crate->pool->make<HIRExprNodeBlock>(sp);
-        body->resType = rv.code->resType;
-        for (auto& arg : rv.args) {
-            const auto slot = slots.nextSlot++;
-            auto* value = crate->pool->make<HIRExprNodeVariable>(sp, RcString(), slot);
-            value->resType = crate->types.infer();
-            auto* binding = crate->pool->make<HIRExprNodeLet>(sp, arg.first.clone(), arg.second, HIRExprNodeP(value));
-            binding->resType = crate->types.unit();
-            body->nodes.push_back(HIRExprNodeP(binding));
-            arg.first = HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, RcString::newInterned("#async_arg"), slot), HIRPattern::Data::make_Any({}));
-        }
-        body->valueNode = rv.code.takeNode();
-        rv.code.reset(body);
+        rv.code.reset(lowerAsyncArgumentPatterns(*crate, sp, rv.code.takeNode(), rv.args));
     }
     rv.defineOpaque = std::move(defineOpaque);
     rv.markings = markings;
@@ -3720,7 +3734,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
     return &rv;
 }
 
-HIRExprPtr AST2HIR::LowerHIRExprNode(ASTExprNode& e) {
+HIRExprPtr AST2HIR::LowerHIRExprNode(ASTExprNode& e, unsigned firstSlot) {
     LowerHIRExprNodeVisitor v(*this);
 
     e.visit(v);
@@ -3746,6 +3760,31 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(ASTExprNode& e) {
     } initialise(crate->types);
 
     initialise.visitNodePtr(v.rv);
+
+    AsyncArgumentSlotVisitor slots(crate->types);
+    slots.nextSlot = firstSlot;
+    v.rv->visit(slots);
+
+    struct RelocateAsyncClosureArguments final: HIRExprVisitorDef {
+        HIRCrate& crate;
+        unsigned& nextSlot;
+
+        RelocateAsyncClosureArguments(HIRCrate& crate, unsigned& nextSlot)
+            : HIRExprVisitorDef(crate.types)
+            , crate(crate)
+            , nextSlot(nextSlot)
+        {
+        }
+
+        void visit(HIRExprNodeClosure& node) override {
+            if (auto* body = cast<HIRExprNodeAsyncBlock>(node.code.get()); body && body->isClosureBody && !node.args.empty()) {
+                body->code.reset(lowerAsyncArgumentPatterns(crate, node.span(), mv$(body->code), node.args, &nextSlot));
+            }
+            HIRExprVisitorDef::visit(node);
+        }
+    } relocate(*crate, slots.nextSlot);
+
+    v.rv->visit(relocate);
 
     return HIRExprPtr(mv$(v.rv));
 }
