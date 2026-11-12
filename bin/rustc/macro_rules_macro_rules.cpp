@@ -2495,12 +2495,15 @@ namespace {
                         ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
                     } else if (ident == "index" || ident == "len") {
                         lex.getTokenCheck(TOK_PAREN_OPEN);
-                        unsigned int loopDepthArg = 0;
+                        U128 loopDepthArg(0);
                         if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
-                            loopDepthArg = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                            loopDepthArg = lex.getTokenCheck(TOK_INTEGER).intval();
                             lex.getTokenCheck(TOK_PAREN_CLOSE);
                         }
-                        ret.push_back(MacroExpansionEnt((ident == "index" ? NAMEDVALUE_MAGIC_INDEX_AT : NAMEDVALUE_MAGIC_LEN_AT) + loopDepthArg));
+                        if (loopDepthArg >= U128(loopDepth)) {
+                            ERROR(lex.pointSpan(), E0000, StringView("depth parameter of meta-variable expression `") << ident << StringView("` must be less than ") << loopDepth);
+                        }
+                        ret.push_back(MacroExpansionEnt((ident == "index" ? NAMEDVALUE_MAGIC_INDEX_AT : NAMEDVALUE_MAGIC_LEN_AT) + static_cast<unsigned int>(loopDepthArg.truncateU64())));
                     } else if (ident == "concat") {
                         std::vector<MacroExpansionConcatEnt> ents;
                         lex.getTokenCheck(TOK_PAREN_OPEN);
