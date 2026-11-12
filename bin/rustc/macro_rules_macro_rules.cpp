@@ -2475,9 +2475,9 @@ namespace {
                         }
                         auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
                         const auto& name = nameIdent.name;
-                        unsigned int countDepth = 0;
+                        U128 countDepth(0);
                         if (lex.getTokenIf(TOK_COMMA)) {
-                            countDepth = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                            countDepth = lex.getTokenCheck(TOK_INTEGER).intval();
                         }
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                         const auto* ns = state.findName(nameIdent);
@@ -2488,11 +2488,14 @@ namespace {
                         if (loopDepth >= ns->loops.length()) {
                             ERROR(lex.pointSpan(), E0000, StringView("count requires a metavariable that is still repeating at this depth"));
                         }
+                        if (countDepth >= U128(ns->loops.length() - loopDepth)) {
+                            ERROR(lex.pointSpan(), E0000, StringView("depth parameter of meta-variable expression `count` must be less than ") << (ns->loops.length() - loopDepth));
+                        }
                         DEBUG(StringView("$") << name << StringView(" #") << ns->idx << StringView(" [") << ns->loops << StringView("]"));
                         if (varUsagePtr) {
                             varUsagePtr->insert(std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                         }
-                        ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
+                        ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (static_cast<unsigned int>(countDepth.truncateU64()) << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
                     } else if (ident == "index" || ident == "len") {
                         lex.getTokenCheck(TOK_PAREN_OPEN);
                         U128 loopDepthArg(0);
