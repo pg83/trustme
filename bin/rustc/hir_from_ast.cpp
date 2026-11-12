@@ -105,6 +105,7 @@ namespace {
         /* Distinguish syntax occurrences before aliases duplicate their arguments. */
         unsigned int nextErasedType = 0;
         bool disallowNestedImplTrait = false;
+        bool disallowPathImplTrait = false;
 
         HIRPublicity LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis);
         HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
@@ -1555,6 +1556,7 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
                 itemName = RcString::newInterned(FMT(ATY_PREFIX_ERASED << itemName << StringView("_0")));
             }
 
+            ImplTraitNestingScope pathScope(disallowPathImplTrait, true);
             if (!e.trait || !e.trait->isValid()) {
                 return HIRPath(HIRPath::Data::make_UfcsUnknown({LowerHIRType(e.type), mv$(itemName), mv$(params)}));
             } else {
@@ -1823,6 +1825,9 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
             return crate->types.intern(HIRType::make_TraitObject(mv$(v)));
         }
         case TypeData::TAG_ErasedType: {
+            if (disallowPathImplTrait) {
+                ERROR(ty->span(), E0000, StringView("`impl Trait` is not allowed in paths"));
+            }
             if (disallowNestedImplTrait) {
                 ERROR(ty->span(), E0000, StringView("nested `impl Trait` is not allowed"));
             }
