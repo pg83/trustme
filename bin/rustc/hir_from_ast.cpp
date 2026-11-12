@@ -2682,7 +2682,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                         receiver = HIRFunction::Receiver::Custom;
                     }
                 }
-            } else if (e->path.data.is_UfcsKnown()) {
+            } else if (e->path.data.is_UfcsKnown() || e->path.data.is_UfcsUnknown()) {
                 receiver = HIRFunction::Receiver::Custom;
             }
         } else if (argSelfTy->is_Generic()) {
@@ -2695,7 +2695,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
         if (receiver == HIRFunction::Receiver::Free && visitTyWith(argSelfTy, [](const HIRType* ty) {
             const auto* path = ty->opt_Path();
-            return path && path->path.data.is_UfcsKnown();
+            return path && (path->path.data.is_UfcsKnown() || path->path.data.is_UfcsUnknown());
         })) {
             receiver = HIRFunction::Receiver::Custom;
         }

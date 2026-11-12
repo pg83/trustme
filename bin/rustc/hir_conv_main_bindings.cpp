@@ -3183,6 +3183,13 @@ auto ReceiverValidator::replaceImplTypeWithSelf(const HIRType* ty) -> const HIRT
     if (const auto* path = ty->opt_Path()) {
         const auto* generic = path->path.data.opt_Generic();
         if (!generic) {
+            const auto& receiver = crate.getLangItemPathOpt("receiver");
+            if (path->binding.is_Opaque() && path->path.data.is_UfcsKnown() && !receiver.components().empty()) {
+                const auto* target = resolve.expandAssociatedTypes(Span(), crate.types.path(HIRPath(ty, HIRGenericPath(receiver), RcString::newInterned("Target")), {}));
+                if (target == implType || target == crate.types.self()) {
+                    return ty;
+                }
+            }
             return nullptr;
         }
         if (generic->params.types.empty()) {
@@ -3234,9 +3241,9 @@ auto ReceiverValidator::validateFunction(HIRFunction& item) -> void {
         ASSERT_BUG(Span(), item.receiverType, StringView("Custom receiver without a receiver type"));
         ASSERT_BUG(Span(), !item.args.empty(), StringView("Custom receiver without arguments"));
 
+        auto itemGenerics = resolve.setItemGenerics(item.params);
         auto receiverType = *item.receiverType;
         if (needsProjectionValidation(item)) {
-            auto itemGenerics = resolve.setItemGenerics(item.params);
             const auto implArgs = resolve.implGenerics().makeNopParams(crate.types, 0);
             const auto itemArgs = item.params.makeNopParams(crate.types, 1);
             receiverType = MonomorphStatePtr(crate.types, implType, &implArgs, &itemArgs).monomorphType(Span(), receiverType);
