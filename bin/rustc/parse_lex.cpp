@@ -1570,6 +1570,7 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape, bool byteLiteral) {
         case 't':
             return '\t';
         case '\r':
+            compileErrorGeneric(*this, "bare CR in an escape sequence");
         case '\n':
             if (enclosing == '\'') {
                 compileErrorGeneric(*this, "escaped newline is not allowed in a character literal");

@@ -1,0 +1,8 @@
+pub const LF: &str = "left\
+    right";
+pub const CRLF: &str = "left\
+    right";
+pub const BYTE: &[u8] = b"left\
+    right";
+pub const C: &core::ffi::CStr = c"left\
+    right";
