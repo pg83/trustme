@@ -1,0 +1,8 @@
+﻿
+//@ stdin-source
+
+fn main() {
+    assert_eq!(859u16 + 4, 863);
+    let text = "поток с BOM";
+    assert_eq!(text.as_bytes(), &[0xd0u8, 0xbf, 0xd0, 0xbe, 0xd1, 0x82, 0xd0, 0xbe, 0xd0, 0xba, 32, 0xd1, 0x81, 32, 66, 79, 77]);
+}

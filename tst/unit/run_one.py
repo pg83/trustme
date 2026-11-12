@@ -13,6 +13,7 @@ program with the given flags. CLI checks accept `OWN_FLAGS || NATIVE_FLAGS`.
 `default-compile-flags` augments only the default compilation; CLI checks and
 compile variants retain their own flags.
 `compile-fail-exit-code` optionally checks our compiler's exact rejection status.
+`stdin-source` feeds the unit's exact bytes to the primary compiler input `-`.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -39,6 +40,12 @@ def main() -> int:
     system_rustc = os.environ.get("TRUSTME_SYSTEM_RUSTC") == "1"
     test_harness = "//@ test-harness" in source_text
     compile_only = bool(re.search(r"^//@\s*compile-only\s*$", source_text, re.MULTILINE))
+    stdin_source = bool(re.search(r"^//@\s*stdin-source\s*$", source_text, re.MULTILINE))
+    primary_source = "-" if stdin_source else src
+    compiler_input = {}
+    if stdin_source:
+        with open(src, "rb") as input_source:
+            compiler_input["input"] = input_source.read()
     output_checks = re.findall(
         r"^//@\s*output-contains:\s*((?:_[1-3]_[a-z]+)?\.[a-z]+)\s+(.+)$", source_text, re.MULTILINE
     )
@@ -223,17 +230,27 @@ def main() -> int:
             env["TRUSTME_CHAOS"] = chaos_match.group(1)
         mode = ["--test"] if test_harness else ["--crate-type", crate_type]
         cli_library_args = [] if system_rustc else ["-L", os.path.join(libstd, "release")]
+
+        def wrap_primary(command):
+            return command if stdin_source else lib.wrap_gdb(command)
+
+        def run_primary(command):
+            if stdin_source:
+                subprocess.run(command, env=env, check=True, **compiler_input)
+            else:
+                lib.run(command, env=env)
+
         for flags, own_diagnostic, native_diagnostic in reject_options:
             choices = flags.split(" || ", 1)
             flags = choices[-1] if system_rustc else choices[0]
             extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
                      for flag in shlex.split(flags)]
             rejected = subprocess.run(
-                [rustc, src, *cli_library_args, "-o", binary,
+                [rustc, primary_source, *cli_library_args, "-o", binary,
                  *dependency_args, *base_flags, *extra],
                 env=dict(env, TRUSTME_CLI_EXACT_ARGS="1"),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
-                check=False,
+                check=False, **compiler_input,
             )
             expected = (native_diagnostic if system_rustc else own_diagnostic).encode()
             diagnostic = rejected.stdout + rejected.stderr
@@ -248,23 +265,24 @@ def main() -> int:
             extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", binary)
                      for flag in shlex.split(flags)]
             inspected = subprocess.run(
-                [rustc, src, *cli_library_args, "-o", binary,
+                [rustc, primary_source, *cli_library_args, "-o", binary,
                  *dependency_args, *base_flags, *extra],
                 env=dict(env, TRUSTME_CLI_EXACT_ARGS="1"),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, check=False,
+                **compiler_input,
             )
             if inspected.returncode or expected.encode() not in inspected.stdout:
                 sys.stderr.buffer.write((inspected.stdout + inspected.stderr)[-16384:])
                 raise RuntimeError(f"option output failed: {extra!r}, expected {expected!r}")
             print(f"option output: {extra!r}: {expected}", flush=True)
-        command = lib.wrap_gdb(
-            [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+        command = wrap_primary(
+            [rustc, primary_source, "-L", os.path.join(libstd, "release"), "-o", binary,
              *mode, "--edition", edition, *dependency_args, *main_flags]
         )
         expected_failure = compile_fail_match is not None
         if expected_failure:
             result = subprocess.run(command, env=env, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, check=False)
+                                    stderr=subprocess.PIPE, check=False, **compiler_input)
             if result.returncode == 0:
                 raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
             internal_failure = re.search(
@@ -295,7 +313,7 @@ def main() -> int:
                     if marker not in result.stderr:
                         raise RuntimeError(f"compiler did not exercise requested fault: {rule}")
         else:
-            lib.run(command, env=env)
+            run_primary(command)
         if expected_failure:
             os.makedirs(os.path.dirname(stamp), exist_ok=True)
             open(stamp, "w").close()
@@ -330,10 +348,10 @@ def main() -> int:
             extra = [flag.replace("$DIR", os.path.dirname(src)).replace("$OUT", variant)
                      for flag in flags]
             variant_flags = [flag.replace("$OUT", variant) for flag in compile_flags]
-            lib.run(lib.wrap_gdb(
-                [rustc, src, "-L", os.path.join(libstd, "release"), "-o", variant,
+            run_primary(wrap_primary(
+                [rustc, primary_source, "-L", os.path.join(libstd, "release"), "-o", variant,
                  *mode, "--edition", edition, *dependency_args, *variant_flags, *extra]
-            ), env=env)
+            ))
             for suffix, expected in output_checks:
                 with open(variant + suffix, encoding="utf-8") as output:
                     if expected not in output.read():
