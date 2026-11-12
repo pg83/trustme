@@ -503,6 +503,15 @@ static void TransEnumerateGlobalAsm(EnumState& state, HIRModule& mod) {
     }
 }
 
+static void TransEnumeratePanicImplementation(EnumState& state) {
+    const auto& handler = state.crate.getLangItemPathOpt("trustme-panic_implementation");
+    if (handler != HIRSimplePath()) {
+        HIRPath path = HIRGenericPath(handler);
+        state.rv.roots.push_back(path.clone());
+        TransEnumerateFillFromPathMono(state, std::move(path));
+    }
+}
+
 static void TransEnumerateGlobalAllocator(EnumState& state) {
     const auto allocatorIt = state.crate.langItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
     if (allocatorIt == state.crate.langItems.end()) {
@@ -2624,6 +2633,7 @@ TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
     }
 
     TransEnumerateExplicitLinkage(state, crate.rootModule, HIRSimplePath(crate.crateName, {}));
+    TransEnumeratePanicImplementation(state);
     TransEnumerateGlobalAllocator(state);
     TransEnumerateGlobalAsm(state, crate.rootModule);
 
@@ -2717,15 +2727,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
         H1::enumerateTypeImpl(state, *impl);
     }
 
-    {
-        auto it = crate.langItems.find("trustme-panic_implementation");
-        if (it != crate.langItems.end()) {
-            HIRGenericPath p = it->second;
-            const auto& f = crate.getFunctionByPath(Span(), p.path);
-            p.params = HIRPathParams();
-            TransEnumerateFillFromPathMono(state, std::move(p));
-        }
-    }
+    TransEnumeratePanicImplementation(state);
 
     TransEnumerateGlobalAsm(state, crate.rootModule);
 

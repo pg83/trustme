@@ -1031,9 +1031,20 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         {
             const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
             if (panicImplPath != HIRSimplePath()) {
+                const auto& handler = crate.getFunctionByPath(sp, panicImplPath);
                 of << StringView("u32 panic_impl(uintptr_t payload) {");
-                of << StringView("extern u32 ") << TransMangleValue(panicImplPath) << StringView("(uintptr_t payload);");
-                of << StringView("return ") << TransMangleValue(panicImplPath) << StringView("(payload);");
+                of << StringView("extern ");
+                emitFunctionHeader(HIRGenericPath(panicImplPath), handler, TransParams(crate.types), false, "");
+                of << StringView(";");
+                if (!handler.returnType->is_Diverge()) {
+                    of << StringView("return ");
+                }
+                of << TransMangleValue(panicImplPath) << StringView("((");
+                emitCtype(handler.args.front().second);
+                of << StringView(")payload);");
+                if (handler.returnType->is_Diverge()) {
+                    of << StringView("__builtin_unreachable();");
+                }
                 of << StringView("}\n");
             } else if (!crate.isNoCore) {
                 crate.getLangItemPath(Span(), "trustme-panic_implementation");

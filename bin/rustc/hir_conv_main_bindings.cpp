@@ -81,7 +81,7 @@ namespace {
 
         static void checkImplSignature(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
 
-        static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
+        void checkImplParamsConstrained(const HIRGenericParams& params, const HIRType* selfTy, const HIRPathParams* traitArgs);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
 
@@ -1562,11 +1562,20 @@ auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, con
         used = saved;
         return rv;
     };
+    auto constrain = [&](const HIRType* t) {
+        const auto* injective = rewriteTyWith(crate.types, t, [&](const HIRType* inner) -> const HIRType* {
+            if (inner->is_ErasedType() || (inner->is_Path() && !inner->as_Path().path.data.is_Generic())) {
+                return crate.types.unit();
+            }
+            return nullptr;
+        });
+        visitTyWith(injective, mark);
+    };
 
-    visitTyWith(selfTy, mark);
+    constrain(selfTy);
     if (traitArgs) {
         for (const auto& t : traitArgs->types) {
-            visitTyWith(t, mark);
+            constrain(t);
         }
     }
     for (bool changed = true; changed;) {
@@ -1584,7 +1593,7 @@ auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, con
                     }
                     for (const auto& assoc : e.trait.typeBounds) {
                         uint64_t before = used;
-                        visitTyWith(assoc.second.type, mark);
+                        constrain(assoc.second.type);
                         changed = changed || used != before;
                     }
                     break;
@@ -1602,7 +1611,6 @@ auto BindVisitor::checkImplParamsConstrained(const HIRGenericParams& params, con
 auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     TRACE_FUNCTION_F(StringView("impl ") << impl.type << StringView(" - from ") << impl.srcModule);
     checkImplSignature(impl.params, impl.type, nullptr);
-    checkImplParamsConstrained(impl.params, impl.type, nullptr);
     auto _ = this->ms.setImplGenerics(impl.params);
     const auto oldSelfType = selfType;
     const auto oldModule = curModule;
@@ -1617,6 +1625,7 @@ auto BindVisitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     impl.type = visitType(impl.type);
     selfType = impl.type;
     HIRVisitor::visitTypeImpl(impl);
+    checkImplParamsConstrained(impl.params, impl.type, nullptr);
     if (mod) {
         ms.popTraits(*mod);
     }
@@ -1636,7 +1645,6 @@ auto BindVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> void {
 auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) -> void {
     TRACE_FUNCTION_F(StringView("impl ") << traitPath << StringView(" for ") << impl.type);
     checkImplSignature(impl.params, impl.type, &impl.traitArgs);
-    checkImplParamsConstrained(impl.params, impl.type, &impl.traitArgs);
     auto traitGpath = HIRGenericPath(traitPath, impl.traitArgs.clone());
     auto _0 = this->ms.setCurrentTraitImpl(impl);
     auto _1 = this->ms.setCurrentTrait(traitGpath);
@@ -1655,6 +1663,7 @@ auto BindVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     selfType = impl.type;
     ms.traits.push_back(std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
     HIRVisitor::visitTraitImpl(traitPath, impl);
+    checkImplParamsConstrained(impl.params, impl.type, &impl.traitArgs);
     ms.traits.pop_back();
     if (mod) {
         ms.popTraits(*mod);
