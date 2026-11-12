@@ -1513,7 +1513,6 @@ namespace {
             default:
                 parseErrorUnexpected(lex, tok);
         }
-        UNREACHABLE();
     }
 
     ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path) {
@@ -4310,7 +4309,6 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
                 return ASTPath::newUfcsTy(mv$(ty), ParsePathNodes(lex, genericMode));
             }
-            UNREACHABLE();
         }
 
         default:
