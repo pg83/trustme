@@ -4803,12 +4803,9 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
         (void)ParsePublicity(lex);
         GET_TOK(tok, lex);
     }
-    bool isSpecialisable = false;
     if (tok.type() == TOK_IDENT && tok.ident().name == "default") {
-        isSpecialisable = true;
-        GET_TOK(tok, lex);
+        ERROR(lex.tokenStartSpan(tok), E0000, StringView("`default` is not allowed on trait items"));
     }
-    // TODO: Mark specialisation
 
     std::string abi = ABI_RUST;
     ASTFunction::Flags fnFlags;
