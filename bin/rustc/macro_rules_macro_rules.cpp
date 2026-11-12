@@ -2125,7 +2125,7 @@ namespace {
                         ASSERT_BUG(sp, stmtCaptureIndex < stmtIsItemHistory.length(), StringView("Missing statement fragment classification"));
                         stmtIsItem = stmtIsItemHistory[stmtCaptureIndex++];
                     }
-                    const bool recordsTokens = e->type != MacroPatEnt::PAT_TT && e->type != MacroPatEnt::PAT_IDENT && e->type != MacroPatEnt::PAT_LIFETIME && e->type != MacroPatEnt::PAT_LITERAL && rules.rules[i].capturesTokens(e->idx);
+                    const bool recordsTokens = e->type != MacroPatEnt::PAT_TT && e->type != MacroPatEnt::PAT_IDENT && e->type != MacroPatEnt::PAT_LIFETIME && rules.rules[i].capturesTokens(e->idx);
                     Vector<RecordedToken*> recorded;
                     if (recordsTokens) {
                         lex.startSourceRecording(&recorded);
@@ -3805,94 +3805,32 @@ MacroRulesArm::MacroRulesArm() {
 namespace {
     struct TokenCaptureScan {
         Vector<u8>& captures;
-        enum class Group : u8 {
-            Other,
-            Call,
-            DefinitionParameters,
-        };
-        Vector<Group> groups;
-        size_t insideCall = 0;
-        bool afterName = false;
-        bool afterBang = false;
-        bool afterCallName = false;
-        bool definitionGroup = false;
+
+        void capture(unsigned int value) {
+            if ((value & ~NAMEDVALUE_VALMASK) != 0) {
+                return;
+            }
+            while (captures.length() <= value) {
+                captures.pushBack(0);
+            }
+            captures.mut(value) = 1;
+        }
 
         template <typename Ents>
         void scan(const Ents& ents) {
             for (const auto& ent : ents) {
                 if (const auto* loop = ent.opt_Loop()) {
                     this->scan(loop->entries);
-                } else if (const auto* tok = ent.opt_Token()) {
-                    this->token(tok->type());
                 } else if (const auto* value = ent.opt_NamedValue()) {
-                    if ((*value & ~NAMEDVALUE_VALMASK) == 0) {
-                        if (insideCall > 0) {
-                            while (captures.length() <= *value) {
-                                captures.pushBack(0);
-                            }
-                            captures.mut(*value) = 1;
+                    capture(*value);
+                } else if (const auto* concat = ent.opt_Concat()) {
+                    for (const auto& part : *concat) {
+                        if (const auto* value = part.opt_Named()) {
+                            capture(*value);
                         }
                     }
-                    this->name();
-                } else {
-                    this->name();
                 }
             }
-        }
-
-        void name() {
-            afterCallName = afterBang;
-            afterName = !afterBang;
-            afterBang = false;
-        }
-
-        void token(eTokenType type) {
-            switch (type) {
-                case TOK_PAREN_OPEN:
-                case TOK_SQUARE_OPEN:
-                case TOK_BRACE_OPEN: {
-                    const bool isCall = definitionGroup || afterBang || afterCallName;
-                    const auto group = definitionGroup && type == TOK_PAREN_OPEN ? Group::DefinitionParameters : isCall ? Group::Call : Group::Other;
-                    groups.pushBack(group);
-                    definitionGroup = false;
-                    if (isCall) {
-                        insideCall++;
-                    }
-                    break;
-                }
-                case TOK_PAREN_CLOSE:
-                case TOK_SQUARE_CLOSE:
-                case TOK_BRACE_CLOSE:
-                    if (!groups.empty()) {
-                        const auto group = groups.popBack();
-                        if (group != Group::Other) {
-                            insideCall--;
-                        }
-                        definitionGroup = group == Group::DefinitionParameters;
-                    }
-                    break;
-                case TOK_RWORD_MACRO:
-                    definitionGroup = true;
-                    this->name();
-                    return;
-                case TOK_EXCLAM:
-                    afterBang = afterName;
-                    afterName = false;
-                    afterCallName = false;
-                    return;
-                case TOK_IDENT:
-                    this->name();
-                    return;
-                default:
-                    if (Token::typeIsRword(type)) {
-                        this->name();
-                        return;
-                    }
-                    break;
-            }
-            afterName = false;
-            afterBang = false;
-            afterCallName = false;
         }
     };
 }
