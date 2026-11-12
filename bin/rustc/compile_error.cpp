@@ -6,12 +6,12 @@
 using namespace stl;
 
 void compileErrorGeneric(const char* message) {
-    sysO << StringView("Generic(") << message << StringView(")") << endL;
+    sysE << StringView("Generic(") << message << StringView(")") << endL;
     std::abort();
 }
 
 void compileErrorGeneric(const TokenStream& lex, const char* message) {
-    sysO << lex.pointSpan() << StringView(": Generic(") << message << StringView(")") << endL;
+    sysE << lex.pointSpan() << StringView(": Generic(") << message << StringView(")") << endL;
     std::abort();
 }
 

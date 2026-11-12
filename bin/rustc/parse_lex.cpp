@@ -1255,8 +1255,6 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
             this->ungetc();
             if (isByte) {
                 return this->getTokenIntIdentifier('b', 'r');
-            } else if (kind == TOK_CSTRING) {
-                return this->getTokenIntIdentifier('c', 'r');
             } else {
                 return this->getTokenIntIdentifier('r');
             }

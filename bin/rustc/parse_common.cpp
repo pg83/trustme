@@ -5572,10 +5572,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     auto impl = ParseImpl(lex, metaItems, true);
                     if (impl.is_Impl()) {
                         impl.as_Impl().def().setIsUnsafe();
-                    } else if (impl.is_NegImpl()) {
-                        impl.as_NegImpl().setIsUnsafe();
                     } else {
-                        BUG(lex.pointSpan(), StringView("Parse_Impl returned a variant other than Impl or NegImpl"));
+                        impl.as_NegImpl().setIsUnsafe();
                     }
                     return ASTNamed<ASTItem>{Span(), mv$(metaItems), mv$(vis), "", mv$(impl)};
                 }
