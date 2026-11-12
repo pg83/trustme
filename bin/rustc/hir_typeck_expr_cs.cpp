@@ -10536,6 +10536,9 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
 
 auto ExprVisitorEnum::visit(HIRExprNodeConstBlock& node) -> void {
     TRACE_FUNCTION_F(static_cast<const void*>(&node) << StringView(" const { ... }"));
+    auto savedLoops = mv$(this->loopBlocks);
+    this->loopBlocks = {};
+    STD_DEFER { this->loopBlocks = mv$(savedLoops); };
     node.inner->resType = this->context.addIvars(node.inner->resType);
 
     this->visitChild(*node.inner);
@@ -10693,6 +10696,18 @@ auto ExprVisitorEnum::visit(HIRExprNodeLoop& node) -> void {
 }
 
 auto ExprVisitorEnum::visit(HIRExprNodeLoopControl& node) -> void {
+    if (node.isContinue) {
+        bool foundLoop = false;
+        for (const auto* loop : this->loopBlocks) {
+            if (!loop->requireLabel && (node.label == "" || node.label == loop->label)) {
+                foundLoop = true;
+                break;
+            }
+        }
+        if (!foundLoop) {
+            ERROR(node.span(), E0000, StringView("continue target must be an enclosing loop"));
+        }
+    }
     if (!node.isContinue) {
         HIRExprNodeLoop* loopNodePtr;
         if (node.label != "") {
