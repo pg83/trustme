@@ -4997,7 +4997,7 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
         }
         GET_TOK(tok, lex);
     } else if (lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::typeIsRword(lex.lookahead(0))) {
-        tok = Token(TOK_EQUAL);
+        parseErrorUnexpected(lex, lex.getToken(), TOK_IDENT);
     } else {
         name.hasLeading = lex.getTokenIf(TOK_DOUBLE_COLON);
         if (name.hasLeading && lex.lookahead(0) == TOK_STRING) {
