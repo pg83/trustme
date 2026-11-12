@@ -639,6 +639,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             struct MCB: public HIRMatchGenerics {
                 std::map<RcString, const HIRType*> mapping;
                 std::map<unsigned int, const HIRType*> rpitMapping;
+                const HIRPath* rpitOrigin = nullptr;
 
                 MCB()
                     : HIRMatchGenerics(BorrowMatchedValues{})
@@ -647,6 +648,7 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
 
                 HIRCompare cmpType(const Span& sp, const HIRType* tyL, const HIRType* tyR, tCbResolveType resolveCb) override {
                     if (const auto* erased = tyL->opt_ErasedType(); erased && erased->inner.is_Fcn()) {
+                        rpitOrigin = &erased->inner.as_Fcn().origin;
                         const auto index = erased->inner.as_Fcn().index;
                         const auto inserted = rpitMapping.insert(std::make_pair(index, tyR));
                         if (!inserted.second) {
@@ -738,6 +740,9 @@ auto TypecheckVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitIm
             DEBUG(StringView("Updating < ") << impl.type << StringView(" as ") << traitPath << impl.traitArgs << StringView(" >::") << e.first);
             if (!matchCb.rpitMapping.empty()) {
                 implFcn.traitReturnType = expRetTy1;
+                if (!implFcn.code.rpitOrigin) {
+                    implFcn.code.rpitOrigin = crate.pool->make<HIRPath>(matchCb.rpitOrigin->clone());
+                }
                 for (const auto& mapping : matchCb.rpitMapping) {
                     const auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << e.first << StringView("_") << mapping.first));
                     impl.types.insert(std::make_pair(name, HIRTraitImpl::ImplEnt<const HIRType*>{e.second.isSpecialisable, mapping.second}));
