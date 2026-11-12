@@ -4323,9 +4323,8 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
 ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode) {
     Token tok;
     if (isAbs) {
-        if (lex.getTokenIf(TOK_RWORD_CRATE)) {
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-            return ASTPath("", ParsePathNodes(lex, genericMode));
+        if (lex.getTokenIf(TOK_RWORD_CRATE, tok)) {
+            ERROR(lex.tokenStartSpan(tok), E0000, StringView("`crate` can only appear at the beginning of a path"));
         } else if (lex.getTokenIf(TOK_STRING, tok)) {
             auto cratename = RcString::newInterned(tok.str());
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
