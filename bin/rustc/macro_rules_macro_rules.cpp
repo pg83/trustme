@@ -1413,6 +1413,13 @@ namespace {
             }
         }
 
+        if (lex.next() == TOK_RWORD_SUPER) {
+            auto superLex = lex.clone();
+            superLex.consume();
+            if (superLex.next() == TOK_RWORD_LET) {
+                lex.consume();
+            }
+        }
         if (lex.consumeIf(TOK_RWORD_LET)) {
             if (!consumePat(lex)) {
                 return false;
