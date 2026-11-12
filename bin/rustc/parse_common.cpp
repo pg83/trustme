@@ -1876,14 +1876,8 @@ namespace {
             return;
         }
 
-        bool isFirst = true;
         do {
             auto ps = lex.startSpan();
-            if (!isFirst && (LOOK_AHEAD(lex) == TOK_SEMICOLON || LOOK_AHEAD(lex) == TOK_COMMA || LOOK_AHEAD(lex) == TOK_GT)) {
-                return;
-            }
-            isFirst = false;
-
             const bool hasParens = lex.getTokenIf(TOK_PAREN_OPEN);
             if (lex.getTokenIf(TOK_LIFETIME, tok)) {
                 auto lft = getLifetimeRef(lex, mv$(tok));
