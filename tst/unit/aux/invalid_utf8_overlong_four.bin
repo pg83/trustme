@@ -1,0 +1,2 @@
+// malformed scalar: ð€€¯ end
+pub const VALUE: u16 = 991;

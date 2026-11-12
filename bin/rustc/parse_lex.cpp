@@ -1692,49 +1692,40 @@ Codepoint Lexer::getcNum() {
 
 Codepoint Lexer::getcCp() {
     u8 v1 = this->getcByte();
-    if (v1 < 128) {
+    if (v1 < 0x80) {
         return {v1};
-    } else if ((v1 & 0xC0) == 0x80) {
-        return {0xFFFE};
-    } else if ((v1 & 0xE0) == 0xC0) {
-        u8 e1 = this->getcByte();
-        if ((e1 & 0xC0) != 0x80) {
-            return {0xFFFE};
-        }
-
-        u32 outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
-        return {outval};
-    } else if ((v1 & 0xF0) == 0xE0) {
-        u8 e1 = this->getcByte();
-        if ((e1 & 0xC0) != 0x80) {
-            return {0xFFFE};
-        }
-        u8 e2 = this->getcByte();
-        if ((e2 & 0xC0) != 0x80) {
-            return {0xFFFE};
-        }
-
-        u32 outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
-        return {outval};
-    } else if ((v1 & 0xF8) == 0xF0) {
-        u8 e1 = this->getcByte();
-        if ((e1 & 0xC0) != 0x80) {
-            return {0xFFFE};
-        }
-        u8 e2 = this->getcByte();
-        if ((e2 & 0xC0) != 0x80) {
-            return {0xFFFE};
-        }
-        u8 e3 = this->getcByte();
-        if ((e3 & 0xC0) != 0x80) {
-            return {0xFFFE};
-        }
-
-        u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
-        return {outval};
-    } else {
-        compileErrorGeneric("Invalid UTF-8 (too long)");
     }
+
+    u32 value;
+    unsigned count;
+    if (v1 >= 0xC2 && v1 <= 0xDF) {
+        count = 1;
+        value = v1 & 0x1F;
+    } else if (v1 >= 0xE0 && v1 <= 0xEF) {
+        count = 2;
+        value = v1 & 0x0F;
+    } else if (v1 >= 0xF0 && v1 <= 0xF4) {
+        count = 3;
+        value = v1 & 0x07;
+    } else {
+        compileErrorGeneric(v1 >= 0xF8 ? "Invalid UTF-8 (too long)" : "Invalid UTF-8 sequence");
+    }
+    for (unsigned i = 0; i < count; ++i) {
+        u8 next;
+        try {
+            next = this->getcByte();
+        } catch (const Lexer::EndOfFile&) {
+            compileErrorGeneric("Incomplete UTF-8 sequence");
+        }
+        if ((next & 0xC0) != 0x80) {
+            compileErrorGeneric("Invalid UTF-8 continuation byte");
+        }
+        value = (value << 6) | (next & 0x3F);
+    }
+    if ((count == 2 && value < 0x800) || (count == 3 && value < 0x10000) || (value >= 0xD800 && value <= 0xDFFF) || value > 0x10FFFF) {
+        compileErrorGeneric("Invalid UTF-8 codepoint");
+    }
+    return {value};
 }
 
 void Lexer::ungetc() {

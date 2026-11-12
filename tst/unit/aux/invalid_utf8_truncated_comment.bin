@@ -1,0 +1,2 @@
+pub const VALUE: u16 = 991;
+// incomplete scalar: ñ€€

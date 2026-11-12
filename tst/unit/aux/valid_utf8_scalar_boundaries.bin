@@ -1,0 +1,3 @@
+pub const TEXT: &str = "߿ࠀ퟿￾￿𐀀􏿿";
+pub fn café() -> u16 { 997 }
+// complete final scalar: 􏿿

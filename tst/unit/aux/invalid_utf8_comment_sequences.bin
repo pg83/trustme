@@ -1,0 +1,2 @@
+// invalid sequences: € | Â  | á € | á€  | ñ €€ | ñ€ € | ñ€€  end
+pub const VALUE: u16 = 991;
