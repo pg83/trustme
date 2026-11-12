@@ -5209,25 +5209,6 @@ auto CodeGeneratorC::emitTermSwitchCb(const MIRTypeResolve& localMirRes, const M
     const auto* repr = TargetGetTypeRepr(localMirRes.sp, resolve_, ty);
     MIR_ASSERT(localMirRes, repr, StringView("No repr for ") << ty);
 
-    struct MaybeSigned64 {
-        bool is_signed;
-        u64 v;
-
-        MaybeSigned64(bool is_signed, u64 v)
-            : is_signed(is_signed)
-            , v(v)
-        {
-        }
-
-        void fmt(ZeroCopyOutput& os) const {
-            if (is_signed) {
-                os << static_cast<i64>(v);
-            } else {
-                os << v;
-            }
-        }
-    };
-
     switch (repr->variants.tag()) {
         case TypeReprVariantMode::TAG_NonZero: {
             auto& e = repr->variants.as_NonZero();
