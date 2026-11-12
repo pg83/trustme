@@ -1502,6 +1502,9 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 }
                 auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
                 auto srcTrait = H(*this, boundedType).findSourceTrait(sp, rv.path, path.bindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(crate->types));
+                if (srcTrait == HIRGenericPath()) {
+                    ERROR(sp, E0000, StringView("Unknown associated type ") << nameArgs.first << StringView(" of trait ") << rv.path);
+                }
                 DEBUG(StringView("src_trait = ") << srcTrait << StringView(" for ") << assoc.first);
                 rv.typeBounds.insert(std::make_pair(nameArgs.first, HIRTraitPath::AtyEqual{std::move(srcTrait), std::move(nameArgs.second), LowerHIRType(assoc.second)}));
                 break;
@@ -1518,6 +1521,9 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     const auto sourceName = nameArgs.first;
                     const auto ns = assoc.first.args().isRtn ? H::Namespace::Function : H::Namespace::Type;
                     auto srcTrait = H(*this, boundedType).findSourceTrait(sp, rv.path, path.bindings.type.binding, sourceName, ns, MonomorphiserNop(crate->types));
+                    if (srcTrait == HIRGenericPath()) {
+                        ERROR(sp, E0000, StringView("Unknown associated ") << (ns == H::Namespace::Function ? StringView("function ") : StringView("type ")) << sourceName << StringView(" of trait ") << rv.path);
+                    }
                     if (assoc.first.args().isRtn) {
                         nameArgs.first = RcString::newInterned(FMT(ATY_PREFIX_ERASED << sourceName << StringView("_0")));
                     }
