@@ -681,7 +681,6 @@ const HIRType* MIRTypeResolve::getUnwrappedType(const MIRLValue::Wrapper& w, con
             }
         }
     }
-    UNREACHABLE();
 }
 
 const HIRType* MIRTypeResolve::getParamType(const MIRParam& val) const {

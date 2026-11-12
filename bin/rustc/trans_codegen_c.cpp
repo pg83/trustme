@@ -10359,7 +10359,6 @@ auto CodeGeneratorC::getInnerUnsizedType(const HIRType* ty) -> const HIRType* {
             switch (tuMatch.tag()) {
                 default:
                     MIR_BUG(*mirRes, StringView("Unbound/opaque path in trans - ") << ty);
-                    UNREACHABLE();
                 case HIRTypePathBinding::TAG_ExternType: {
                     return ty;
                 }

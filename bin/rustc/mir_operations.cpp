@@ -1029,7 +1029,6 @@ namespace {
         }
 
         MIR_BUG(state, StringView("Unknown CoerceUnsized target ") << dstTy << StringView(" from ") << srcTy);
-        UNREACHABLE();
     }
 
     void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval) {
