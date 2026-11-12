@@ -4222,6 +4222,9 @@ TraitObjectLowering::TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRType
 }
 
 auto TraitObjectLowering::add(const ::TypeTraitPath& bound) -> void {
+    if (bound.constness != ASTBoundConstness::Never) {
+        ERROR(span_, E0000, StringView("const trait bounds are not allowed in trait object types"));
+    }
     auto path = ctx_.LowerHIRTraitPath(span_, *bound.path, bound.hrbs, false, bound.constness);
     addAstPath(mv$(path), bound.path->bindings.type.binding);
 }
