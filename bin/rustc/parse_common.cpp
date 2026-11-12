@@ -1337,10 +1337,6 @@ namespace {
 
     ASTPattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr) {
         Token tok;
-        if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_PATTERN) {
-            GET_TOK(tok, lex);
-            return mv$(tok.fragPattern());
-        }
         auto ps = lex.startSpan();
         ASTPattern ret = ParsePatternReal1(lex, allowOr);
         if ((GET_TOK(tok, lex) == TOK_TRIPLE_DOT) || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
