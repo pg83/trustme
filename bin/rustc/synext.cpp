@@ -265,10 +265,6 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
             }
             ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, StringView("Macro `") << name << StringView("` missing from crate ") << ec.name);
             const auto* e = &*ec.hir->rootModule.macroItems.at(name);
-            if (!e->publicity.isGlobal()) {
-                DEBUG(StringView("Not public: ") << name);
-                continue;
-            }
             importMacro(name, e, false);
         }
         if (filter.empty()) {
