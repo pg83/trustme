@@ -388,10 +388,6 @@ auto ResolveState::getModuleAst(const ASTModule& startMod, const ASTPath& path, 
         }
         const auto& r = res.as_Namespace();
         switch (r.tag()) {
-            case ResolveItemRefType::TAG_None: {
-                DEBUG(StringView("Not found (Namespace::None)"));
-                return ResolveModuleRef();
-            }
             case ResolveItemRefType::TAG_Ast: {
                 const auto e = r.as_Ast();
                 if (e->is_Module()) {

@@ -9797,10 +9797,6 @@ auto AssociatedStallCollector::collect() -> void {
 
             const auto resolved = context.ivars.getType(infer->index);
             if (const auto* resolvedInfer = resolved->opt_Infer()) {
-                if (resolvedInfer->index == ~0u) {
-                    hasRawInfer = true;
-                    return true;
-                }
                 const auto existing = std::find_if(dependencies.begin(), dependencies.end(), [&](const auto& dependency) {
                     return dependency.index == resolvedInfer->index;
                 });

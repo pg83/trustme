@@ -16134,9 +16134,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         solverResponse.slots.typeInputs.resize(keptTypeSlots);
         solverResponse.slots.types.resize(keptTypeSlots);
-        /* Nothing a probe made may leave with the response: a slot value or an equality
-           naming such a variable is read through its class, a stray one leaves the slot
-           at its input and drops the equality or obligation. */
         for (size_t i = 0; i < solverResponse.slots.types.size(); i++) {
             if (const auto* through = throughClasses(solverResponse.slots.types[i])) {
                 solverResponse.slots.types[i] = through;
@@ -16156,30 +16153,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 solverResponse.equalities[kept++] = SolverTypeEquality{left, right};
             }
             solverResponse.equalities.resize(kept);
-        }
-        {
-            size_t kept = 0;
-            for (size_t i = 0; i < solverResponse.obligations.size(); i++) {
-                auto& obligation = solverResponse.obligations[i];
-                const auto* type = throughClasses(obligation.type);
-                bool stray = type == nullptr;
-                for (const auto* param : obligation.trait.path.params.types) {
-                    stray |= throughClasses(param) == nullptr;
-                }
-                for (const auto& associated : obligation.trait.typeBounds) {
-                    stray |= throughClasses(associated.second.type) == nullptr;
-                }
-                if (stray) {
-                    DEBUG(StringView("response obligation dropped, probe-born variable: ") << obligation.type << StringView(": ") << obligation.trait);
-                    continue;
-                }
-                obligation.type = type;
-                if (kept != i) {
-                    solverResponse.obligations[kept] = std::move(obligation);
-                }
-                kept++;
-            }
-            solverResponse.obligations.resize(kept);
         }
         if (!cacheableResponse || canonicalizer.sawForeignIvar() || canonicalizer.sawForeignSolverExistential() || captureWaits_ != captureWaitsBefore) {
             return deliverResponse(solverResponse, exposeImpl ? &response : nullptr);
