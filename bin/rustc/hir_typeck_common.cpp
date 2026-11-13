@@ -648,53 +648,6 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* left
     }
 }
 
-bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType* left) {
-    const auto* primitive = left->opt_Primitive();
-    const auto numeric = primitive && (isInteger(*primitive) || isFloat(*primitive));
-    const auto bitwise = primitive && (isInteger(*primitive) || *primitive == HIRCoreType::Bool);
-    const auto comparison = left->is_Pointer() || (primitive && *primitive != HIRCoreType::Str);
-
-    switch (op) {
-        case TypeckPrimitiveOperator::Add:
-        case TypeckPrimitiveOperator::Sub:
-        case TypeckPrimitiveOperator::Mul:
-        case TypeckPrimitiveOperator::Div:
-        case TypeckPrimitiveOperator::Rem:
-        case TypeckPrimitiveOperator::AddAssign:
-        case TypeckPrimitiveOperator::SubAssign:
-        case TypeckPrimitiveOperator::MulAssign:
-        case TypeckPrimitiveOperator::DivAssign:
-        case TypeckPrimitiveOperator::RemAssign:
-            return numeric;
-
-        case TypeckPrimitiveOperator::BitAnd:
-        case TypeckPrimitiveOperator::BitOr:
-        case TypeckPrimitiveOperator::BitXor:
-        case TypeckPrimitiveOperator::BitAndAssign:
-        case TypeckPrimitiveOperator::BitOrAssign:
-        case TypeckPrimitiveOperator::BitXorAssign:
-            return bitwise;
-
-        case TypeckPrimitiveOperator::Equal:
-        case TypeckPrimitiveOperator::Order:
-            return comparison;
-
-        case TypeckPrimitiveOperator::Shl:
-        case TypeckPrimitiveOperator::Shr:
-        case TypeckPrimitiveOperator::ShlAssign:
-        case TypeckPrimitiveOperator::ShrAssign:
-        case TypeckPrimitiveOperator::None:
-        case TypeckPrimitiveOperator::Not:
-        case TypeckPrimitiveOperator::Neg:
-        case TypeckPrimitiveOperator::Deref:
-            return false;
-    }
-}
-
-bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRType* left, const HIRType* right) {
-    return primitiveOperatorHasBuiltin(op, left, right) || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
-}
-
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* value) {
     if (op == TypeckPrimitiveOperator::Deref) {
         return value->is_Borrow() || value->is_Pointer();

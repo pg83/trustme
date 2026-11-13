@@ -254,10 +254,6 @@ enum class TypeckPrimitiveOperator {
 
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* left, const HIRType* right);
 
-bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType* left);
-
-bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRType* left, const HIRType* right);
-
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* value);
 
 class StaticTraitResolve;

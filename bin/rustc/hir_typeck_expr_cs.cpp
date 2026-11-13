@@ -2347,7 +2347,7 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 return primitiveOperatorHasBuiltin(v.operatorKind, implTy);
             }
             if (v.params.types.size() == 1) {
-                return primitiveOperatorHasLanguageCandidate(v.operatorKind, implTy, context.getType(v.params.types.front()));
+                return primitiveOperatorHasBuiltin(v.operatorKind, implTy, context.getType(v.params.types.front()));
             }
             return false;
         };
