@@ -2800,8 +2800,14 @@ namespace {
                     for (const auto& part : ent.subpats) {
                         literalBody = literalBody && part.type == MacroPatEnt::PAT_TOKEN;
                     }
-                    if (literalBody && ent.subpats.size() > maxConditionAdd) {
-                        maxConditionAdd = ent.subpats.size();
+                    if (literalBody) {
+                        size_t literalLookahead = ent.subpats.size();
+                        for (size_t tail = idx + 1; tail < pattern.size() && pattern[tail].type == MacroPatEnt::PAT_TOKEN; tail++) {
+                            literalLookahead++;
+                        }
+                        if (literalLookahead > maxConditionAdd) {
+                            maxConditionAdd = literalLookahead;
+                        }
                     }
                     for (size_t iterations = 0; iterations < maxConditionAdd; iterations++) {
                         bool didExtend = false;
