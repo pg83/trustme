@@ -30,8 +30,6 @@ private:
 public:
     MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, MIRExprCallback& cb);
 
-    void visitExpr(HIRExprPtr& exp) override;
-
     [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
     void visitConstgeneric(HIRConstGeneric& value) override;
 

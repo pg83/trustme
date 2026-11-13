@@ -5,10 +5,6 @@
 
 using namespace stl;
 
-void MIROuterVisitor::visitExpr(HIRExprPtr& exp) {
-    BUG(Span(), StringView("visit_expr hit in OuterVisitor"));
-}
-
 const HIRType* MIROuterVisitor::visitType(const HIRType* ty) {
     if (ty->is_Array()) {
         auto data = ty->cloneData();
