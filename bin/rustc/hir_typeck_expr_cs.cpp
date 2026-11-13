@@ -570,9 +570,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             if (pending->nodeKind() == HIRExprNodeCallValue::kind && isArgumentOfPendingCall(static_cast<const HIRExprNodeCallValue&>(*pending).args)) {
                 return true;
             }
-            if (pending->nodeKind() == HIRExprNodeCallPath::kind && isArgumentOfPendingCall(static_cast<const HIRExprNodeCallPath&>(*pending).args)) {
-                return true;
-            }
         }
         Vector<const HIRType*> targets;
         for (const auto& coercion : context.linkCoerce) {
