@@ -1888,6 +1888,7 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             this->visitPath(ASTPath(wb.astCrate->extCratenameCore, {ASTPathNode("primitive"), ASTPathNode(coretypeName(ty->data.as_Primitive().coreType))}));
             break;
         }
+        case TypeData::TAG_Pattern:
         case TypeData::TAG_Function: {
             visitTypeAsText(ty);
             break;
@@ -1944,10 +1945,6 @@ auto ProcMacroVisitor::visitType(const ::ASTType* ty) -> void {
             pmi.sendSymbol("[");
             this->visitType(te.inner);
             pmi.sendSymbol("]");
-            break;
-        }
-        case TypeData::TAG_Pattern: {
-            visitTypeAsText(ty);
             break;
         }
         case TypeData::TAG_Generic: {
