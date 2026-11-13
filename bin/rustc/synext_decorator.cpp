@@ -2287,7 +2287,7 @@ auto CHandlerRustcLayoutScalarValidRangeStart::handle(const Span& sp, const ASTA
         s->markings.scalarValidStart = np->value;
         DEBUG(path << StringView(" #[rustc_layout_scalar_valid_range_start]: ") << formatHex(s->markings.scalarValidStart));
     } else {
-        TODO(sp, StringView("#[rustc_layout_scalar_valid_range_start] on ") << i.tagStr());
+        ERROR(sp, E0000, StringView("#[rustc_layout_scalar_valid_range_start] requires a struct"));
     }
 }
 
@@ -2310,7 +2310,7 @@ auto CHandlerRustcLayoutScalarValidRangeEnd::handle(const Span& sp, const ASTAtt
         s->markings.scalarValidEnd = np->value;
         DEBUG(path << StringView(" #[rustc_layout_scalar_valid_range_end]: ") << formatHex(s->markings.scalarValidEnd));
     } else {
-        TODO(sp, StringView("#[rustc_layout_scalar_valid_range_end] on ") << i.tagStr());
+        ERROR(sp, E0000, StringView("#[rustc_layout_scalar_valid_range_end] requires a struct"));
     }
 }
 
@@ -2408,7 +2408,7 @@ auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 }
                 // TODO: save and use the `modifiers` value
             } else {
-                TODO(sp, StringView("Unknown attribute `#[link(") << key << StringView(")]`"));
+                ERROR(sp, E0000, StringView("Unknown attribute `#[link(") << key << StringView(")]`"));
             }
             if (!lex.getTokenIf(TOK_COMMA)) {
                 break;
