@@ -22,6 +22,7 @@
 #include <std/lib/vector.h>
 
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string_view>
@@ -2104,24 +2105,25 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                     ERROR(sp, E0000, StringView("Unexpected EOF in asm! format string"));
                 }
                 AsmLineFragment frag;
+                auto index = 0ull;
+                bool invalidNumber = false;
                 if (name.empty()) {
-                    frag.index = nextIndex;
-                    if (frag.index >= params.size()) {
-                        ERROR(sp, E0000, StringView("asm! format doesn't have enough arguments"));
-                    }
-                    nextIndex++;
-                } else if (std::isdigit(name[0])) {
-                    frag.index = std::stoul(name);
-                    if (frag.index >= params.size()) {
-                        ERROR(sp, E0000, StringView("asm! format string index out of range - ") << frag.index);
-                    }
+                    index = nextIndex++;
+                } else if (name[0] >= '0' && name[0] <= '9') {
+                    char* end = nullptr;
+                    index = strtoull(name.c_str(), &end, 10);
+                    invalidNumber = *end != '\0';
                 } else {
                     auto it = std::find(names.begin(), names.end(), name);
                     if (it == names.end()) {
                         ERROR(sp, E0000, StringView("asm! format string references undefined value - `") << name << StringView("`"));
                     }
-                    frag.index = it - names.begin();
+                    index = it - names.begin();
                 }
+                if (invalidNumber || index >= UINT_MAX || index >= params.size()) {
+                    ERROR(sp, E0000, (name.empty() ? FMT(StringView("asm! format doesn't have enough arguments")) : FMT(StringView("asm! format string index out of range - ") << index)));
+                }
+                frag.index = static_cast<unsigned>(index);
                 const auto& param = params[frag.index];
                 if ((param.is_Reg() && param.as_Reg().spec.is_Explicit()) || (param.is_RegSingle() && param.as_RegSingle().spec.is_Explicit())) {
                     ERROR(sp, E0000, StringView("explicit register arguments cannot be referenced in asm templates"));
@@ -2191,9 +2193,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 
     for (const auto& line : lines) {
         for (const auto& frag : line.frags) {
-            if (frag.index == UINT_MAX) {
-                ERROR(sp, E0000, StringView("asm! marked `pure` without `nomem` or `readonly`"));
-            }
             if (frag.modifier != '\0') {
                 const auto& param = params[frag.index];
                 const auto* reg = param.opt_Reg();
