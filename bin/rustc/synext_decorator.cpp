@@ -2476,14 +2476,6 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
         }
         f->markings.linkage = linkage;
     } else if (auto* f = i.opt_Static()) {
-        switch (linkage) {
-            case ASTLinkage::Default:
-            case ASTLinkage::Weak:
-            case ASTLinkage::ExternWeak:
-                break;
-            default:
-                TODO(sp, StringView("#[linkage=\"") << linkageStr << StringView("\"] on ") << i.tagStr());
-        }
         f->markings.linkage = linkage;
     } else {
         TODO(sp, StringView("#[linkage] - ") << i.tagStr() << StringView(" ") << path << StringView(": ") << mi);
