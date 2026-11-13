@@ -193,16 +193,6 @@ auto TypecheckVisitor::checkParameters(const Span& sp, const HIRSimplePath& used
         ERROR(sp, E0000, StringView("Incorrect number of parameters - expected ") << paramDef.types.size() << StringView(", got ") << paramVals.types.size());
     }
 
-    for (unsigned int i = 0; i < paramVals.types.size(); i++) {
-        if (paramVals.types[i] == nullptr) {
-            // TODO: Why is this pulling in the default? Why not just leave it as-is
-
-            // TODO: Monomorphise?
-            paramVals = paramVals.withType(i, ms.monomorphType(sp, paramDef.types[i].defaultValue));
-            DEBUG(StringView("Update `_` param (using default): ") << paramDef.types[i].defaultValue << StringView(" -> ") << paramVals.types[i]);
-        }
-    }
-
     for (const auto& bound : paramDef.bounds) {
         switch (bound.tag()) {
             case HIRGenericBound::TAG_TraitBound: {

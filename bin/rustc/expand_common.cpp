@@ -2175,10 +2175,6 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             DEBUG(StringView("Found builtin"));
             return MacroRef(pm);
         }
-        if (path.cls.is_Local()) {
-            DEBUG(StringView("Local path not resolved?"));
-            return MacroRef();
-        }
     }
 
     // HACK: If the crate name is empty, look up builtins

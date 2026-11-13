@@ -384,10 +384,6 @@ namespace {
                         statesToDo.push_back(std::make_pair(te.retBlock, mv$(state)));
                         break;
                     }
-                    case MIRTerminator::TAG_TailCall: {
-                        state.finalise(stmtIdx);
-                        break;
-                    }
                     case MIRTerminator::TAG_Asm2: {
                         auto& te = bb.terminator.as_Asm2();
                         for (const auto& p : te.params) {
