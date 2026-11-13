@@ -4513,7 +4513,7 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
     auto name = attr.parseEqualsString(wb, crate, mod);
     switch (i.tag()) {
         default:
-            TODO(sp, StringView("Unknown item type ") << i.tagStr() << StringView(" with #[") << attr << StringView("] attached at ") << path);
+            ERROR(sp, E0000, StringView("language item attribute is not supported on this item kind"));
         case ASTItem::TAG_None: {
             break;
         }
