@@ -2478,7 +2478,7 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
     } else if (auto* f = i.opt_Static()) {
         f->markings.linkage = linkage;
     } else {
-        TODO(sp, StringView("#[linkage] - ") << i.tagStr() << StringView(" ") << path << StringView(": ") << mi);
+        ERROR(sp, E0000, StringView("linkage may only be applied to functions and statics"));
     }
 }
 
@@ -4440,7 +4440,7 @@ auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const Wir
             break;
         }
         default: {
-            TODO(sp, StringView("Handle #[derive] for other item types - ") << i.tagStr());
+            ERROR(sp, E0000, StringView("derive may only be applied to structs, enums and unions"));
         }
     }
 }
