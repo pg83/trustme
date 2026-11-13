@@ -6045,10 +6045,6 @@ auto Expander::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                     case TypeckValuePtr::TAG_NotYetKnown: {
                         TODO(sp, StringView("NotYetKnown"));
                     }
-                    case TypeckValuePtr::TAG_Static: {
-                        auto& e = vi.as_Static();
-                        return e->params;
-                    }
                     case TypeckValuePtr::TAG_Constant: {
                         auto& e = vi.as_Constant();
                         return e->params;

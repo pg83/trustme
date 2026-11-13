@@ -3873,10 +3873,6 @@ auto LifetimeIdentity::appendBound(Binder& owner, size_t canonical) -> void {
 }
 
 auto LifetimeIdentity::appendImplicitLifetime() -> void {
-    if (!binder) {
-        append('e');
-        return;
-    }
     if (binder->phase == Phase::Output && binder->inputLifetimes.length() == 1) {
         appendBound(*binder, binder->inputLifetimes[0]);
         return;

@@ -2133,13 +2133,9 @@ auto ProcMacroVisitor::visitPathParams(const ASTPathParams& args, bool isExpr) -
 auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
     const std::vector<ASTPathNode>* nodes = nullptr;
     switch (path.cls.tag()) {
+        case ASTPathClass::TAG_Local:
         case ASTPathClass::TAG_Invalid: {
             BUG(sp, StringView("Invalid path"));
-        }
-        case ASTPathClass::TAG_Local: {
-            auto& pe = path.cls.as_Local();
-            pmi.sendIdent(pe.name.c_str());
-            break;
         }
         case ASTPathClass::TAG_Relative: {
             auto& pe = path.cls.as_Relative();
