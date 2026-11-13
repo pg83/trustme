@@ -842,12 +842,19 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span&
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
     const auto& pe = input->as_Path().path.data.as_UfcsInherent();
-    if (visitTyWith(pe.type, [](const HIRType* type) {
-        const auto* erased = type->opt_ErasedType();
-        const auto* opaque = erased ? erased->inner.opt_Alias() : nullptr;
-        return opaque && !opaque->inner->type;
-    })) {
-        DEBUG(StringView("Deferring inherent associated type with unresolved opaque receiver ") << input);
+    struct ReceiverNeedsInference final: HIRTypeVisitorCallback {
+        bool visit(const HIRType* type) override {
+            const auto* erased = type->opt_ErasedType();
+            const auto* opaque = erased ? erased->inner.opt_Alias() : nullptr;
+            return type->is_Infer() || (opaque && !opaque->inner->type);
+        }
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override {
+            return value.is_Infer();
+        }
+    } receiverNeedsInference;
+    if (visitTyWithCb(pe.type, receiverNeedsInference)) {
+        DEBUG(StringView("Deferring inherent associated type with an unresolved receiver ") << input);
         return nullptr;
     }
     if (!nextSolver) {

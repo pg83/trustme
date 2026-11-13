@@ -9258,6 +9258,7 @@ auto ExprVisitorApply::visit(HIRExprNodeUnsize& node) -> void {
 auto ExprVisitorApply::checkTypeResolvedTop(const Span& sp, const HIRType* ty) const -> const HIRType* {
     ty = checkTypeResolved(sp, ty, ty);
     ty = this->context.expandAssociatedTypes(sp, mv$(ty));
+    ty = checkTypeResolved(sp, ty, ty);
     DEBUG(ty);
     return ty;
 }
