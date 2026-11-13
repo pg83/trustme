@@ -8552,10 +8552,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeCallMethod& node) -> void {
             ERROR(sp, E0000, StringView("No applicable methods for {") << this->context.ivars.fmtType(ty) << StringView("}.") << node.method);
         }
         BUG_ASSERT(!possibleMethods.empty());
-        if (possibleMethods.size() != 1) {
-            DEBUG(StringView("- Multiple options, deferring"));
-            return;
-        }
         auto& selectedMethod = possibleMethods.front();
         ASSERT_BUG(sp, selectedMethod.effects.certainty == SolverCertainty::Proven, StringView("Method selection received a non-proven candidate"));
         this->context.applySolverResponse(sp, selectedMethod.effects, &node.args);
