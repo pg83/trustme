@@ -1510,7 +1510,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRType* ty,
             return e.empty() ? MetadataType::None : this->metadataType(sp, e.back(), errOnUnknown);
         }
     }
-    UNREACHABLE();
 }
 
 bool StaticTraitResolve::typeHasDropImpl(const Span& sp, const HIRType* ty) const {

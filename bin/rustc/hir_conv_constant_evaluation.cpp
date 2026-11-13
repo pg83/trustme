@@ -5083,11 +5083,9 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                     if (const auto* te = typ->opt_Array()) {
                         typ = te->inner;
                         size = te->size.as_Known();
-                    } else if (const auto* te = typ->opt_Slice()) {
-                        typ = te->inner;
-                        size = metadata.readUsize(state);
                     } else {
-                        UNREACHABLE();
+                        typ = typ->as_Slice().inner;
+                        size = metadata.readUsize(state);
                     }
                     metadata = MIREvalValueRef();
                     size_t sz, al;

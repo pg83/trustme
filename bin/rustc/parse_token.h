@@ -163,10 +163,8 @@ public:
             }
             default: {
                 BUG_ASSERT(!"Getting datatype of invalid token type");
-                break;
             }
         }
-        UNREACHABLE();
     }
 
     U128 intval() const {

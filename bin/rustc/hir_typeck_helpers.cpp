@@ -13644,7 +13644,6 @@ auto NextTraitGoalEvaluator::evaluateAutoBuiltin(const HIRSimplePath& trait, con
             return evaluateInner((*type).as_Pointer().inner);
         }
     }
-    UNREACHABLE();
 }
 
 auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated) -> Certainty {

@@ -1359,7 +1359,6 @@ static EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate
             return EntPtr::make_AutoGenerate({});
         }
     }
-    UNREACHABLE();
 }
 
 static void TransEnumerateFillFromPath(EnumState& state, const HIRPath& path, const TransParams& pp) {
