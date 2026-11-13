@@ -2122,11 +2122,8 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     if (path.isTrivial() && !hasDefinitionModule) {
         const auto& name = path.asTrivial();
 
+        // Every stack node has a module; the root has no previous node.
         for (const auto* ll = &modstack; ll; ll = ll->prev) {
-            if (!ll->item) {
-                DEBUG(StringView("null module in stack"));
-                break;
-            }
             const auto& macMod = *ll->item;
             DEBUG(StringView("Searching in ") << macMod.path());
             for (const auto& mr : reverse(macMod.macros())) {

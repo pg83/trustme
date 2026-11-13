@@ -3478,9 +3478,6 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
             case HIRType::TAG_Generic: {
                 BUG(sp, StringView("Generic type hit in enumeration - ") << ty);
             }
-            case HIRType::TAG_ErasedType: {
-                break;
-            }
             case HIRType::TAG_NodeType: {
                 BUG(sp, StringView("NodeType type hit in enumeration - ") << ty);
             }

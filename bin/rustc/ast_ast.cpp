@@ -353,10 +353,9 @@ void ASTModule::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {
 
 ASTItem ASTItem::clone() const {
     switch ((*this).tag()) {
-        case ASTItem::TAG_None: {
-            auto& e = (*this).as_None();
-            return ASTItem(e);
-        }
+        case ASTItem::TAG_None:
+            // Expansion tombstones never enter fragment cloning.
+            break;
         case ASTItem::TAG_MacroInv: {
             return ASTItem(as_MacroInv().clone());
         }
