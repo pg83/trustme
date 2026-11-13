@@ -4954,53 +4954,23 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
             case HIRCoreType::Usize:
                 emitLvalue(dst);
                 of << StringView(" = ");
-                switch (ty->as_Primitive()) {
-                    case HIRCoreType::U128:
-                    case HIRCoreType::I128:
-                        emitLvalue(ve.val);
-                        of << StringView(".lo");
-                        break;
-                    default:
-                        MIR_BUG(localMirRes, StringView("Unreachable"));
-                }
+                emitLvalue(ve.val);
+                of << StringView(".lo");
                 break;
             case HIRCoreType::F16:
-                MIR_TODO(localMirRes, StringView("f16 from i128/u128"));
             case HIRCoreType::F32:
                 emitLvalue(dst);
                 of << StringView(" = ");
-                switch (ty->as_Primitive()) {
-                    case HIRCoreType::U128:
-                        of << StringView("cast128_float(");
-                        emitLvalue(ve.val);
-                        of << StringView(")");
-                        break;
-                    case HIRCoreType::I128:
-                        of << StringView("cast128s_float(");
-                        emitLvalue(ve.val);
-                        of << StringView(")");
-                        break;
-                    default:
-                        MIR_BUG(localMirRes, StringView("Unreachable"));
-                }
+                of << StringView(ty == HIRCoreType::U128 ? "cast128_float(" : "cast128s_float(");
+                emitLvalue(ve.val);
+                of << StringView(")");
                 break;
             case HIRCoreType::F64:
                 emitLvalue(dst);
                 of << StringView(" = ");
-                switch (ty->as_Primitive()) {
-                    case HIRCoreType::U128:
-                        of << StringView("cast128_double(");
-                        emitLvalue(ve.val);
-                        of << StringView(")");
-                        break;
-                    case HIRCoreType::I128:
-                        of << StringView("cast128s_double(");
-                        emitLvalue(ve.val);
-                        of << StringView(")");
-                        break;
-                    default:
-                        MIR_BUG(localMirRes, StringView("Unreachable"));
-                }
+                of << StringView(ty == HIRCoreType::U128 ? "cast128_double(" : "cast128s_double(");
+                emitLvalue(ve.val);
+                of << StringView(")");
                 break;
             default:
                 MIR_BUG(localMirRes, StringView("Bad i128/u128 cast - ") << ty << StringView(" to ") << ve.type);
