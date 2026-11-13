@@ -8418,7 +8418,6 @@ auto ExprVisitorConv::getValueForBindingPath(const Span& sp, const HIRType* oute
                     case HIRPatternBinding::Type::MutRef:
                         return HIRBorrowType::Unique;
                 }
-                UNREACHABLE();
             }
         };
 

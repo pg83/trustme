@@ -2124,7 +2124,6 @@ HIRTypePathBinding HIRTypePathBinding::clone() const {
         }
     }
     BUG_ASSERT(!"Fell off end of clone_binding");
-    UNREACHABLE();
 }
 
 const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {

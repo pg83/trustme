@@ -2634,7 +2634,6 @@ auto AnnotateExprVisitorMark::getUsageForPatternBinding(const Span& sp, const HI
         case HIRPatternBinding::Type::Ref:
             return HIRValueUsage::Borrow;
     }
-    UNREACHABLE();
 }
 
 auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPattern& pat, const HIRType* outerTy) const -> HIRValueUsage {
