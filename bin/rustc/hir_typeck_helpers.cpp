@@ -3603,9 +3603,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         }
         return callback.visit(SolverImpl(type, {}, HIRTraitPath::assocListT()));
     } else if (trait == langMetaSized()) {
-        if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
-            return true;
-        }
         StaticTraitResolve metadataResolve(this->board());
         metadataResolve.setBothGenericsRaw(implGenerics_, itemGenerics_);
         const auto metadata = metadataResolve.metadataType(sp, type);
