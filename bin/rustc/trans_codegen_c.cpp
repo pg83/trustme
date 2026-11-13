@@ -3991,26 +3991,9 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
     auto valRef = MIRLValue::CRef(val);
     if (!special && valRef.is_Index() && this->typeIsBadZst(ty)) {
         auto inner = valRef.innerRef();
-        const HIRType* tmp;
-        const auto& parentTy = localMirRes.getLvalueType(inner);
-        const HIRType* elementTy = nullptr;
-        if (const auto* array = parentTy->opt_Array()) {
-            elementTy = array->inner;
-        } else if (const auto* slice = parentTy->opt_Slice()) {
-            elementTy = slice->inner;
-        }
-        MIR_ASSERT(localMirRes, elementTy, StringView("Index of non-array type in ZST borrow path: ") << parentTy);
-        size_t elementSize = 0;
-        MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, elementTy, elementSize), StringView("Unknown array element size for ") << parentTy);
-        MIR_ASSERT(localMirRes, elementSize == 0, StringView("Non-ZST element in ZST borrow path: ") << elementTy);
-        if (parentTy->is_Slice()) {
-            of << StringView("(void*)");
-            emitDstLvaluePointer(inner);
-            of << StringView(".PTR");
-        } else {
-            of << StringView("(void*)& ");
-            emitLvalue(inner);
-        }
+        of << StringView("(void*)");
+        emitDstLvaluePointer(inner);
+        of << StringView(".PTR");
         special = true;
     }
 
