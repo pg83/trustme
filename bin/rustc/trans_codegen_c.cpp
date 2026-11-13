@@ -878,9 +878,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                 struct H {
                     static void tyArgs(Vector<const char*>& out, AllocatorDataTy t) {
                         switch (t) {
-                            case AllocatorDataTy::Unit:
-                            case AllocatorDataTy::ResultPtr:
-                                UNREACHABLE();
                             case AllocatorDataTy::Layout:
                                 out.pushBack("uintptr_t");
                                 out.pushBack("uintptr_t");
@@ -894,22 +891,8 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                         }
                     }
 
-                    static const char* tyRet(AllocatorDataTy t) {
-                        switch (t) {
-                            case AllocatorDataTy::Unit:
-                                return "void";
-                            case AllocatorDataTy::ResultPtr:
-                                return "i8*";
-                            case AllocatorDataTy::Layout:
-                            case AllocatorDataTy::Ptr:
-                            case AllocatorDataTy::Usize:
-                                UNREACHABLE();
-                        }
-                        UNREACHABLE();
-                    }
-
                     static void emitProto(ZeroCopyOutput& os, const AllocatorMethod& method, const char* namePrefix, const Vector<const char*>& args) {
-                        os << H::tyRet(method.ret) << StringView(" ") << namePrefix << method.name << StringView("(");
+                        os << StringView(method.returnsPointer ? "i8*" : "void") << StringView(" ") << namePrefix << method.name << StringView("(");
                         for (size_t j = 0; j < args.length(); j++) {
                             if (j != 0) {
                                 os << StringView(", ");
@@ -933,7 +916,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                     H::emitProto(of, method, allocPrefix, args);
                     of << StringView(";\n");
                     of << StringView("\t");
-                    if (method.ret != AllocatorDataTy::Unit) {
+                    if (method.returnsPointer) {
                         of << StringView("return ");
                     }
                     of << allocPrefix << method.name << StringView("(");
@@ -960,16 +943,13 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                             case AllocatorDataTy::Usize:
                                 flatArg += 1;
                                 break;
-                            case AllocatorDataTy::Unit:
-                            case AllocatorDataTy::ResultPtr:
-                                UNREACHABLE();
                         }
                     }
 
                     const auto methodPath = TransAllocatorMethodPath(crate, globalAllocator->type, method);
                     const HIRPath staticPath = HIRGenericPath(allocatorIt->second);
                     of << StringView("\t");
-                    if (method.ret != AllocatorDataTy::Unit) {
+                    if (method.returnsPointer) {
                         of << StringView("return (i8*)");
                     }
                     of << TransMangleValue(methodPath) << StringView("(&") << TransMangleValue(staticPath) << StringView(".val");
@@ -991,9 +971,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                                 of << StringView("a") << flatArg;
                                 flatArg += 1;
                                 break;
-                            case AllocatorDataTy::Unit:
-                            case AllocatorDataTy::ResultPtr:
-                                UNREACHABLE();
                         }
                     }
                     of << StringView(")");

@@ -8,9 +8,6 @@ class HIRSimplePath;
 class HIRType;
 
 enum class AllocatorDataTy {
-    Unit,
-    ResultPtr,
-
     Layout,
     Ptr,
     Usize,
@@ -18,7 +15,7 @@ enum class AllocatorDataTy {
 
 struct AllocatorMethod {
     const char* name;
-    AllocatorDataTy ret;
+    bool returnsPointer;
     size_t nArgs;
     const AllocatorDataTy* args;
 };
