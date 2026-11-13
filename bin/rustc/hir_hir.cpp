@@ -1024,6 +1024,9 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
         if (!ep.mir) {
             TRACE_FUNCTION_F(ip);
             ASSERT_BUG(Span(), ep.state, StringView("No ExprState for ") << ip);
+            if (ep.state->stage == HIRExprState::Stage::SbcRequest) {
+                ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
+            }
 
             HIRGenericPath currentTrait;
             if (ep.state->currentTraitImpl) {
@@ -1091,9 +1094,6 @@ HIRCrate::MirResult HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath
                 ep.state->stage = HIRExprState::Stage::PostTypecheck;
             }
             if (ep.state->stage < HIRExprState::Stage::Sbc) {
-                if (ep.state->stage == HIRExprState::Stage::SbcRequest) {
-                    ERROR(Span(), E0000, StringView("Loop in constant evaluation"));
-                }
                 ep.state->stage = HIRExprState::Stage::SbcRequest;
                 retTy = HIRExpandClosuresExpr(wb, *this, retTy, ep);
                 HIRExpandStaticBorrowConstantsExpr(wb, *this, ip, ep);
