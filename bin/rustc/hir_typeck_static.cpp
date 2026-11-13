@@ -2169,13 +2169,11 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         switch (v.tag()) {
                             case HIRTraitValueItem::TAG_Constant: {
                                 auto& ve = v.as_Constant();
-                                if (ve.value || ve.valueState != HIRConstant::ValueState::Unknown) {
+                                if (ve.value || ve.value.mir || ve.valueState == HIRConstant::ValueState::Known || ve.monomorphCache.count(p)) {
                                     DEBUG(StringView("Trait provided value"));
                                     return &ve;
-                                } else {
-                                    DEBUG(StringView("Trait did not provide a value"));
                                 }
-                                break;
+                                ERROR(sp, E0000, StringView("missing definition for associated constant ") << p);
                             }
                             case HIRTraitValueItem::TAG_Static: {
                                 break;
