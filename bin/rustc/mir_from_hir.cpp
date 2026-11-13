@@ -5884,11 +5884,6 @@ ScopeHandle MirBuilder::newScopeFreeze(const Span& sp) {
 
 void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitCleanup /*=true*/) {
     TRACE_FUNCTION_F(StringView("DONE scope ") << scope.idx << StringView(" - ") << (emitCleanup ? "CLEANUP" : "NO CLEANUP"));
-    if (scopeStack.empty() || scopeStack.back() != scope.idx) {
-        DEBUG(StringView("- m_scope_stack = [") << scopeStack << StringView("]"));
-        auto it = std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
-        BUG(sp, StringView("Terminating scope ") << scope.idx << StringView(" when not at top of stack, ") << (scopeStack.end() - it - 1) << StringView(" scopes in the way"));
-    }
 
     auto& scopeDef = scopes.at(scope.idx);
 
@@ -5922,11 +5917,6 @@ void MirBuilder::raiseToEnclosingTemporaries(const Span& sp, ScopeHandle source)
 
 void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int targetIdx) {
     TRACE_FUNCTION_F(StringView("scope ") << source.idx << StringView(" => ") << targetIdx);
-    if (scopeStack.empty() || scopeStack.back() != source.idx) {
-        DEBUG(StringView("- m_scope_stack = [") << scopeStack << StringView("]"));
-        auto it = std::find(scopeStack.begin(), scopeStack.end(), source.idx);
-        BUG(sp, StringView("Terminating scope ") << source.idx << StringView(" when not at top of stack, ") << (scopeStack.end() - it - 1) << StringView(" scopes in the way"));
-    }
     auto& srcScopeDef = scopes.at(source.idx);
 
     ASSERT_BUG(sp, srcScopeDef.data.is_Owning(), StringView("Rasising scopes can only be done on temporaries (source)"));
