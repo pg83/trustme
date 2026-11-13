@@ -2778,8 +2778,9 @@ auto CExpandExpr::visit(ASTExprNodeTry& node) -> void {
     auto pathTry = getPath(coreCrate, "ops", "Try");
     auto pathTryFromOutput = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
     auto okNode = makeNode<ASTExprNodeCallPath>(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner)));
-    auto breakNode = makeNode<ASTExprNodeFlow>(ASTExprNodeFlow::BREAK, loopName, mv$(okNode));
-    this->replacement = makeNode<ASTExprNodeLoop>(loopName, mv$(breakNode));
+    auto* block = static_cast<ASTExprNodeBlock*>(makeNode<ASTExprNodeBlock>(mv$(okNode)));
+    block->label = Ident(mv$(loopName));
+    this->replacement = block;
 }
 
 auto CExpandExpr::visit(ASTExprNodeAsm& node) -> void {

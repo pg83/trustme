@@ -9113,9 +9113,6 @@ auto ExprVisitorConv::findLoop(const Span& sp, const RcString& targetLabel) cons
         if (it == loopStack.rend()) {
             BUG(sp, StringView("Break outside of a breakable block"));
         }
-        if (it->label != "" && it->label.c_str()[0] == '#') {
-            TODO(sp, StringView("Break within try block, want to break parent loop instead"));
-        }
         return *it;
     }
 }
