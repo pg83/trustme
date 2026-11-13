@@ -6526,7 +6526,6 @@ outOfLoop:
             ASSERT_BUG(sp, idx < argStates.size(), StringView("Argument ") << idx << StringView(" out of range for state table"));
             return argStates.at(idx);
     }
-    UNREACHABLE();
 }
 
 VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType type) {

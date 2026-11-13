@@ -646,7 +646,6 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* left
         case TypeckPrimitiveOperator::Deref:
             return false;
     }
-    UNREACHABLE();
 }
 
 bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType* left) {
@@ -690,7 +689,6 @@ bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType
         case TypeckPrimitiveOperator::Deref:
             return false;
     }
-    UNREACHABLE();
 }
 
 bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRType* left, const HIRType* right) {

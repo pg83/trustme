@@ -4693,7 +4693,6 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeAssign& v) -> void {
                 case ASTExprNodeAssign::SHL:
                     return HIRExprNodeAssign::Op::Shl;
             }
-            UNREACHABLE();
         }
     };
 

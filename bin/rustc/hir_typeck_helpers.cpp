@@ -13457,7 +13457,6 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
                 case StructuralTrait::Clone:
                     return cached->clone;
             }
-            UNREACHABLE();
         }
     }
 

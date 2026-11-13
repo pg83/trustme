@@ -1460,7 +1460,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
     enum CoerceResult {
         Unknown,
         Equality,
-        Fail,
         Custom,
         Unsize,
     };
@@ -2091,8 +2090,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
 
         const auto coercionResult = checkCoerceTys(context, sp, tyDst, tySrc, nodePtr, v);
         switch (coercionResult) {
-            case CoerceResult::Fail:
-                return false;
             case CoerceResult::Unknown:
                 DEBUG(StringView("Unknown - keep"));
                 return false;
@@ -2123,7 +2120,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 nodePtr = NEWNODE(tyDst, span, Unsize, mv$(nodePtr), tyDst);
                 return true;
         }
-        UNREACHABLE();
     }
 
     enum class AssociatedCheckResult {
