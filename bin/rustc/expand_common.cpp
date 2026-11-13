@@ -666,7 +666,7 @@ namespace {
             } else if (a.name() == "allow" || a.name() == "warn" || a.name() == "deny" || a.name() == "forbid" || a.name() == "expect") {
             } else if (a.name() == "doc") {
             } else {
-                TODO(sp, StringView("non-cfg attributes - ") << a);
+                ERROR(sp, E0000, StringView("attribute is not allowed in this position: ") << a);
             }
         }));
         return !remove;
@@ -1250,7 +1250,7 @@ namespace {
             ExpandPattern(es, mod, arg.pat, false);
             ExpandType(es, mod, arg.ty);
             ExpandAttrs(es, arg.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
-                TODO(sp, StringView("attributes on function arguments - ") << a);
+                ERROR(sp, E0000, StringView("attribute is not allowed on function parameters: ") << a);
             }));
         }
         ExpandType(es, mod, e.rettype());
