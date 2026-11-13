@@ -2570,7 +2570,9 @@ auto ProcMacroVisitor::visitStruct(const RcString& name, const ASTVisibility& vi
                 this->visitAttrs(si.attrs);
                 this->visitVis(si.vis);
                 this->visitType(si.type);
-                pmi.sendSymbol(",");
+                if (&si != &se.ents.back() || str.tupleTrailingComma) {
+                    pmi.sendSymbol(",");
+                }
             }
             pmi.sendSymbol(")");
             this->visitBounds(str.params());

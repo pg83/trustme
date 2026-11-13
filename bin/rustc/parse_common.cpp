@@ -2356,6 +2356,7 @@ namespace {
 
         if (tok.type() == TOK_PAREN_OPEN) {
             std::vector<ASTTupleItem> refs;
+            bool trailingComma = false;
             while (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
                 auto itemAttrs = ParseItemAttrs(lex);
                 SET_ATTRS(lex, itemAttrs);
@@ -2367,13 +2368,16 @@ namespace {
                     CHECK_TOK(tok, TOK_PAREN_CLOSE);
                     break;
                 }
+                trailingComma = lex.lookahead(0) == TOK_PAREN_CLOSE;
             }
 
             if (lex.getTokenIf(TOK_RWORD_WHERE)) {
                 ParseWhereClause(lex, params);
             }
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-            return ASTStruct(mv$(params), mv$(refs));
+            auto rv = ASTStruct(mv$(params), mv$(refs));
+            rv.tupleTrailingComma = trailingComma;
+            return rv;
         } else {
             if (tok.type() == TOK_RWORD_WHERE) {
                 ParseWhereClause(lex, params);

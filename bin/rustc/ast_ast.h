@@ -513,6 +513,7 @@ class ASTStruct {
 
 public:
     ASTStructData data;
+    bool tupleTrailingComma = false;
 
     struct Markings {
         Markings();

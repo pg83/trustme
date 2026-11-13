@@ -189,7 +189,9 @@ ASTStruct ASTStruct::clone() const {
             for (const auto& f : e.ents) {
                 newFields.push_back(f.clone());
             }
-            return ASTStruct(params_.clone(), mv$(newFields));
+            auto rv = ASTStruct(params_.clone(), mv$(newFields));
+            rv.tupleTrailingComma = tupleTrailingComma;
+            return rv;
         }
         case ASTStructData::TAG_Struct: {
             auto& e = data.as_Struct();
