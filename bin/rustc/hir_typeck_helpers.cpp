@@ -12254,10 +12254,6 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         }
 
         void pathParams(const HIRPathParams& candidate, const HIRPathParams& value) {
-            if (candidate.types.size() != value.types.size() || candidate.values.size() != value.values.size()) {
-                failed = true;
-                return;
-            }
             for (size_t i = 0; i < candidate.types.size(); i++) {
                 this->type(candidate.types[i], value.types[i]);
             }
@@ -17009,10 +17005,6 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
         for (auto& equality : response.equalities) {
             if (equality.left == outputSlot) {
                 output = equality.right;
-                continue;
-            }
-            if (equality.right == outputSlot) {
-                output = equality.left;
                 continue;
             }
             retainedEqualities.push_back(std::move(equality));
