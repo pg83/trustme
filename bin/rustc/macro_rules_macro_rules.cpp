@@ -2697,9 +2697,6 @@ namespace {
                         case PatternHeadRv::Closed:
                             if (ent.name == "+") {
                                 return PatternHeadRv::Closed;
-                            } else if (ent.name == "*" || ent.name == "?") {
-                            } else {
-                                BUG(Span(), StringView("Unknown loop type ") << ent.name);
                             }
                             break;
                         case PatternHeadRv::NotFound:
@@ -2798,8 +2795,15 @@ namespace {
                         skipConds.push_back(::makeVec1<SimplePatIfCheck>({ee.ty, ee.tok}));
                     }
 
-                    const size_t MAX_CONDITION_ADD = 2;
-                    for (size_t iterations = 0; iterations < MAX_CONDITION_ADD; iterations++) {
+                    size_t maxConditionAdd = 2;
+                    bool literalBody = true;
+                    for (const auto& part : ent.subpats) {
+                        literalBody = literalBody && part.type == MacroPatEnt::PAT_TOKEN;
+                    }
+                    if (literalBody && ent.subpats.size() > maxConditionAdd) {
+                        maxConditionAdd = ent.subpats.size();
+                    }
+                    for (size_t iterations = 0; iterations < maxConditionAdd; iterations++) {
                         bool didExtend = false;
                         for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
                             auto sIt = std::find(skipConds.begin(), skipConds.end(), *eIt);
@@ -2853,7 +2857,7 @@ namespace {
                     for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
                         auto sIt = std::find(skipConds.begin(), skipConds.end(), *eIt);
                         if (sIt != skipConds.end()) {
-                            TODO(ent.sp, StringView("Entry and skip patterns share an entry (max extend ") << MAX_CONDITION_ADD << StringView("), ambigious - ") << *eIt);
+                            TODO(ent.sp, StringView("Entry and skip patterns share an entry (max extend ") << maxConditionAdd << StringView("), ambigious - ") << *eIt);
                         }
                     }
                     for (const auto& e : entryConds) {
@@ -2966,8 +2970,6 @@ namespace {
                             push(SimplePatEnt::make_Jump({bodySkippable && ent.tok != TOK_NULL ? bodyStart : rewriteStart}));
                         } else if (ent.name == "?") {
                             ASSERT_BUG(sp, ent.tok == TOK_NULL, StringView("$()? with a separator isn't valid"));
-                        } else {
-                            BUG(sp, StringView(""));
                         }
                         size_t postLoop = rv.size();
                         for (size_t i = rewriteStart; i < postLoop; i++) {
@@ -2983,8 +2985,6 @@ namespace {
                             }
                         }
                         push(SimplePatEnt::make_LoopEnd({/*ent.name_index*/}));
-                    } else {
-                        TODO(sp, StringView("Handle loop type '") << ent.name << StringView("'"));
                     }
                 } break;
                 case MacroPatEnt::PAT_TOKEN:
