@@ -48,10 +48,7 @@ HIRItemPath::HIRItemPath(const HIRSimplePath& path)
 }
 
 HIRSimplePath HIRItemPath::getSimplePath() const {
-    if (wrapped) {
-        BUG_ASSERT(wrapped->data.is_Generic());
-        return wrapped->data.as_Generic().path;
-    } else if (trait && !name) {
+    if (trait && !name) {
         return trait->clone();
     } else if (parent) {
         BUG_ASSERT(name);

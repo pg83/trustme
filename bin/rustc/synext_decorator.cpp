@@ -2950,12 +2950,6 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, Vector<ASTType
         case TypeData::TAG_Path: {
             auto& e = ty->data.as_Path();
             switch (e->cls.tag()) {
-                case ASTPathClass::TAG_Invalid: {
-                    break;
-                }
-                case ASTPathClass::TAG_Local: {
-                    break;
-                }
                 case ASTPathClass::TAG_Relative: {
                     auto& pe = e->cls.as_Relative();
                     if (pe.nodes.size() > 1) {

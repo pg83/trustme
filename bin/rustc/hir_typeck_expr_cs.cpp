@@ -6101,10 +6101,7 @@ bool anyOrderCut(const Context& context) {
 void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionIndex) {
     DEBUG(StringView("--- Associated types"));
     const auto cuts = argumentBindingCuts(context, coercionIndex);
-    /* Rebuilt whenever a response added a rule - the sweep only ever appends to
-       `linkCoerce`, so the places a rule was matched against stay the ones there are. */
-    auto bindingOrders = argumentBindingOrders(context);
-    size_t bindingOrdersAt = context.linkCoerce.size();
+    const auto bindingOrders = argumentBindingOrders(context);
     Vector<unsigned> cutIvars;
     /* Upstream's fulfillment processes its obligations in the order they were
        registered, so an earlier one has the first say: the callee's bound `F:
@@ -6155,10 +6152,6 @@ void processAssociatedRules(Context& context, const IvarCoercionIndex& coercionI
         rule.order = indexedRule.order;
         rule.orderEnd = indexedRule.orderEnd;
 
-        if (bindingOrdersAt != context.linkCoerce.size()) {
-            bindingOrders = argumentBindingOrders(context);
-            bindingOrdersAt = context.linkCoerce.size();
-        }
         DEBUG(StringView("- ") << rule);
         if (associatedStillStalled(context, coercionIndex, rule) || ((!cuts.empty() || coercionIndex.pendingNodeCut || !coercionIndex.pendingArgumentRegions.empty()) && associatedPastArgumentCut(context, coercionIndex, cuts, cutIvars, rule)) || (!bindingOrders.empty() && associatedWaitsForArgumentBinding(context, coercionIndex, bindingOrders, cutIvars, rule))) {
             context.storeAssociated(i, mv$(rule), indexedKey);
@@ -7571,12 +7564,6 @@ const HIRType* Context::revealOpaqueTypes(const HIRType* type) const {
 }
 
 void Context::addRpitType(const HIRPath& origin, unsigned int index, const HIRType* type) {
-    for (const auto& entry : rpitTypes) {
-        if (entry.index == index && *entry.origin == origin) {
-            ASSERT_BUG(Span(), entry.ourType == type, StringView("RPIT hidden type registered twice for ") << origin << StringView("#") << index);
-            return;
-        }
-    }
     rpitTypes.push_back(RpitEntry{&origin, index, type, false});
 }
 
