@@ -2933,14 +2933,8 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
             closure.cls = std::max(closure.cls, HIRExprNodeClosure::Class::Mut);
             break;
         case HIRValueUsage::Move:
-            // TODO: Why is this disabled? Maybe for efficiency? as copies are marked as ValueUsage::Borrow anyway
-            if (typeIsCopyHere(sp, variableTypes[slot])) {
-                capTypeName = "Borrow (copy)";
-                closure.cls = std::max(closure.cls, HIRExprNodeClosure::Class::Shared);
-            } else {
-                capTypeName = "Move";
-                closure.cls = std::max(closure.cls, HIRExprNodeClosure::Class::Once);
-            }
+            capTypeName = "Move";
+            closure.cls = std::max(closure.cls, HIRExprNodeClosure::Class::Once);
             break;
     }
     DEBUG(StringView("Captured ") << slot << StringView(" - ") << variableTypes[slot] << StringView(" :: ") << capTypeName);
