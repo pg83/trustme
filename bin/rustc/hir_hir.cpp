@@ -406,7 +406,6 @@ bool HIRPublicity::isVisible(const HIRSimplePath& p) const {
         case Kind::Restricted:
             return p.startsWith(*visPath);
     }
-    UNREACHABLE();
 }
 
 void HIRPublicity::fmt(ZeroCopyOutput& out) const {

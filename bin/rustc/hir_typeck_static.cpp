@@ -1742,7 +1742,6 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
         }
     }
     BUG_ASSERT(!"Fell off the end of type_needs_drop_glue");
-    UNREACHABLE();
 }
 
 const HIRType* StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRType* ty, HIRPath& path) const {
