@@ -364,7 +364,10 @@ Token::Token(const Token& t)
             break;
         }
         case TokenData::TAG_Fragment: {
-            BUG(Span(Span(), t.pos), StringView("Attempted to copy a fragment - ") << t);
+            auto copied = t.clone();
+            data_ = mv$(copied.data_);
+            copied.type_ = TOK_NULL;
+            break;
         }
     }
 }
@@ -1089,8 +1092,7 @@ bool Token::operator==(const Token& r) const {
             return e.datatype == re.datatype && e.floatval == re.floatval;
         }
         case Data::TAG_Fragment: {
-            BUG_ASSERT(!"Token equality on Fragment");
-            break;
+            return false;
         }
     }
     UNREACHABLE();
