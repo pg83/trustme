@@ -3598,9 +3598,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     }
 
     if (trait == langPointeeSized()) {
-        if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
-            return true;
-        }
         return callback.visit(SolverImpl(type, {}, HIRTraitPath::assocListT()));
     } else if (trait == langMetaSized()) {
         StaticTraitResolve metadataResolve(this->board());
@@ -3613,9 +3610,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     }
 
     if (trait == langDestruct()) {
-        if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
-            return true;
-        }
         return callback.visit(SolverImpl(type, {}, HIRTraitPath::assocListT()));
     }
 
