@@ -414,7 +414,6 @@ namespace {
             case ASTBoundConstness::Maybe:
                 return HIRBoundConstness::Maybe;
         }
-        UNREACHABLE();
     }
 
     HIRPatternBinding::Type convertBindingType(ASTPatternBinding::Type pbt) {
@@ -426,7 +425,6 @@ namespace {
             case ASTPatternBinding::Type::MUTREF:
                 return HIRPatternBinding::Type::MutRef;
         }
-        UNREACHABLE();
     }
 
     GenericParamLayout getPathGenericParams(const Span& sp, const HIRCrate& crate, const HIRSimplePath& hirPath, const ASTPath& path, FromASTPathClass pc) {
@@ -3581,7 +3579,6 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                         case ASTProcMacroTy::Attribute:
                             return HIRProcMacro::Ty::Attribute;
                     }
-                    UNREACHABLE();
                 }
             };
 

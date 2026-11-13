@@ -6927,7 +6927,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             case Ordering::AcqRel:
                 return "__ATOMIC_ACQ_REL";
         }
-        UNREACHABLE();
     };
     auto getAtomicOrdering = [&](const RcString& name, size_t prefixLen) -> Ordering {
         if (name.size() < prefixLen) {
@@ -6951,7 +6950,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         } else {
             MIR_BUG(localMirRes, StringView("Unknown atomic ordering suffix - '") << suffix << StringView("'"));
         }
-        UNREACHABLE();
     };
     auto getPrimSize = [&localMirRes](const HIRType* ty) -> unsigned {
         if (ty->is_Pointer()) {

@@ -10274,7 +10274,6 @@ auto pointerChainLub(PointerCoercionForm left, PointerCoercionForm right) -> std
             case PointerCoercionForm::ConstRaw:
                 return false;
         }
-        UNREACHABLE();
     };
     if (canCoerceTo(left, right)) {
         return right;

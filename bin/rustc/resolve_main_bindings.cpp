@@ -3429,7 +3429,6 @@ namespace {
             case IndexName::Macro:
                 return mod.macroItems;
         }
-        UNREACHABLE();
     }
 
     bool spanIsFromMacro(const Span& sp) {
@@ -6746,5 +6745,4 @@ void stl::output<ZeroCopyOutput, IndexName>(ZeroCopyOutput& os, IndexName loc) {
             os << StringView("macro");
             return;
     }
-    UNREACHABLE();
 }
