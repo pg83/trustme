@@ -8032,7 +8032,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
             break;
         }
 
-        bool hasResponse = false;
         bool selected = false;
         this->context.resolve.probeTraitGoalMayApply(
             node.span(),
@@ -8043,7 +8042,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
             if (!probe.candidate) {
                 return false;
             }
-            hasResponse = true;
             context.applySolverResponse(node.span(), probe.effects);
             selected = true;
             return true;
@@ -8058,11 +8056,6 @@ auto ExprVisitorRevisit::visit(HIRExprNodeIndex& node) -> void {
         if (selected) {
             break;
         }
-        if (hasResponse) {
-            currentTy = nullptr;
-            break;
-        }
-
         derefCount += 1;
         currentTy = this->context.resolve.autoderef(node.span(), ty);
         if (currentTy) {
