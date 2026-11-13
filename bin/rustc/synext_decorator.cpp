@@ -2463,7 +2463,7 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
     } else if (linkageStr == "external") {
     } else if (linkageStr == "internal" || linkageStr == "private") {
     } else {
-        TODO(sp, StringView("#[linkage=\"") << linkageStr << StringView("\"]"));
+        ERROR(sp, E0000, StringView("unsupported linkage name `") << linkageStr << StringView("`"));
     }
 
     if (auto* f = i.opt_Function()) {
