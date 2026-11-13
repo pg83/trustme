@@ -594,6 +594,34 @@ namespace {
         return mv$(stringNp->value);
     }
 
+    bool isValidUtf8(StringView text) {
+        for (size_t i = 0; i < text.length();) {
+            const u8 lead = text[i++];
+            if (lead < 0x80) {
+                continue;
+            }
+            const unsigned length = lead >= 0xC2 && lead <= 0xDF ? 2
+                : lead >= 0xE0 && lead <= 0xEF ? 3
+                : lead >= 0xF0 && lead <= 0xF4 ? 4 : 0;
+            if (length == 0 || length - 1 > text.length() - i) {
+                return false;
+            }
+            u32 codepoint = lead & (0x7Fu >> length);
+            for (unsigned offset = 1; offset < length; offset++) {
+                const u8 next = text[i++];
+                if ((next & 0xC0) != 0x80) {
+                    return false;
+                }
+                codepoint = (codepoint << 6) | (next & 0x3F);
+            }
+            const u32 minimum = length == 2 ? 0x80 : length == 3 ? 0x800 : 0x10000;
+            if (codepoint < minimum || codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     u32 parseUtf8(const char* s, int& outLen) {
         u8 v1 = s[0];
         if (v1 < 0x80) {
@@ -2946,8 +2974,12 @@ auto CIncludeStrExpander::expand(const Span& sp, const WireBoard& wb, const ASTC
     std::stringstream ss;
     ss << is.rdbuf();
 
+    auto value = ss.str();
+    if (!isValidUtf8(StringView(reinterpret_cast<const u8*>(value.data()), value.size()))) {
+        ERROR(sp, E0000, StringView("include_str! input is not valid UTF-8: ") << filePath);
+    }
     std::vector<TokenTree> toks;
-    toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
+    toks.push_back(Token(TOK_STRING, mv$(value), {}));
     return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
 }
 
