@@ -243,7 +243,7 @@ namespace {
 
         if (lex.lookahead(0) == TOK_DOUBLE_PIPE) {
             if (hadPat) {
-                TODO(lex.pointSpan(), StringView("lazy boolean or in let chains not yet implemented (not yet valid rust, at 1.75)"));
+                ERROR(lex.pointSpan(), E0000, StringView("boolean or is not allowed in let chains"));
             } else {
                 auto prev = std::move(conditions[0].value);
                 for (size_t i = 1; i < conditions.size(); i++) {
