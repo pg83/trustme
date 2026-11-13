@@ -3603,9 +3603,16 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         }
         return callback.visit(SolverImpl(type, {}, HIRTraitPath::assocListT()));
     } else if (trait == langMetaSized()) {
-        TODO(sp, StringView("MetaSized"));
-
-        //case MetadataType::Zero:    // TODO: Does zero apply here?
+        if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
+            return true;
+        }
+        StaticTraitResolve metadataResolve(this->board());
+        metadataResolve.setBothGenericsRaw(implGenerics_, itemGenerics_);
+        const auto metadata = metadataResolve.metadataType(sp, type);
+        if (metadata == MetadataType::Zero) {
+            return false;
+        }
+        return callback.visit(SolverImpl(type, {}, HIRTraitPath::assocListT()), metadata == MetadataType::Unknown ? SolverCertainty::Ambiguous : SolverCertainty::Proven);
     }
 
     if (trait == langDestruct()) {
