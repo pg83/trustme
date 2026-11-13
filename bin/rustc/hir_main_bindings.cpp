@@ -1460,11 +1460,6 @@ void HIRDump(ZeroCopyOutput& sink, HIRCrate& crate) {
 }
 
 void HIRDumpExpr(ZeroCopyOutput& sink, HIRExprPtr& expr) {
-    if (!expr) {
-        sink << StringView("/*NULL*/");
-        return;
-    }
-
     BUG_ASSERT(expr.state);
     HIRDumpExpr(sink, expr.state->types, *expr);
 }
