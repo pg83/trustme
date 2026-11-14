@@ -4289,9 +4289,6 @@ HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGe
 bool TraitResolution::implsOverlap(const Span& sp, const SolverImpl& left, const SolverImpl& right) const {
     const auto* leftImpl = left.traitImpl;
     const auto* rightImpl = right.traitImpl;
-    if (left.traitPath != right.traitPath) {
-        return false;
-    }
     if (leftImpl == rightImpl) {
         return true;
     }
@@ -5314,8 +5311,6 @@ InherentImplSelection TraitResolution::selectInherentImpl(const Span& sp, const 
                 publicity = &it->second.publicity;
             } else if (auto constant = impl.constants.find(item); constant != impl.constants.end()) {
                 publicity = &constant->second.publicity;
-            } else if (auto type = impl.types.find(item); type != impl.types.end()) {
-                publicity = &type->second.publicity;
             }
             if (publicity && !publicity->isVisible(*scope)) {
                 DEBUG(StringView("inherent ") << item << StringView(" of ") << impl.type << StringView(" is not visible from ") << *scope);
@@ -5479,9 +5474,7 @@ bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePat
 
         if (pt.path.path == des) {
             DEBUG(StringView("Found potential ") << ptMono);
-            if (callback.visit(ptMono)) {
-                return true;
-            }
+            callback.visit(ptMono);
         }
     }
 
