@@ -4206,10 +4206,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
                     auto& ve = e.src.as_Use();
                     const HIRType* tmp;
                     const auto& ty = localMirRes.getLvalueType(ve);
-                    if (ty == crate.types.diverge()) {
-                        of << StringView("abort()");
-                        break;
-                    }
 
                     if (ve.is_Field() && this->typeIsBadZst(ty)) {
                         break;

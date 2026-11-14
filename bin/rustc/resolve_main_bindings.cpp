@@ -2765,10 +2765,6 @@ namespace {
                 auto& e = path.data.as_UfcsKnown();
                 return ASTPath::newUfcsTrait(HIRTypeToAST(context, span, e.type), HIRGenericPathToAST(context, span, e.trait), {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))});
             }
-            case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                return ASTPath::newUfcsTy(HIRTypeToAST(context, span, e.type), {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))});
-            }
         }
         UNREACHABLE();
     }
