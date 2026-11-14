@@ -2545,14 +2545,9 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
                 SET_MODULE((*ttl), mod);
 
                 bool addSilenceIfEnd = false;
-                std::shared_ptr<ASTModule> tmpLocalMod;
-                auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
+                auto& localModPtr = this->currentBlock->localMod;
                 DEBUG(StringView("-- Parsing as statement line"));
                 auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
-
-                if (tmpLocalMod) {
-                    TODO(node.span(), StringView("Handle edge case where a macro expansion outside of a _Block creates an item"));
-                }
 
                 if (newexpr) {
                     nodesOut->push_back({addSilenceIfEnd, mv$(newexpr)});

@@ -478,8 +478,6 @@ namespace {
             const Monomorph& monomorph;
             const std::map<unsigned, unsigned>& variableRewrites;
 
-            HIRExprNodeP replacement_;
-
             ExprVisitorGeneratorRewrite(const Monomorph& monomorph, const std::map<unsigned, unsigned>& rewrites);
 
             [[nodiscard]] const HIRType* visitType(const HIRType* ty) override;
@@ -3900,8 +3898,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         asyncOncePattern = argsPat.clone();
     }
     switch (node.cls) {
-        case HIRExprNodeClosure::Class::Unknown:
-            node.cls = HIRExprNodeClosure::Class::NoCapture;
         case HIRExprNodeClosure::Class::NoCapture: {
             DEBUG(StringView("class=NoCapture"));
 
@@ -4750,9 +4746,6 @@ auto ClosureExprVisitorExtract::DeferredExprFixup::visitRoot(HIRExprPtr& root) -
     for (auto& type : mutRange(root.bindings)) {
         type = visitType(type);
     }
-    for (auto& type : mutRange(root.erasedTypes)) {
-        type = visitType(type);
-    }
 }
 
 auto ClosureExprVisitorExtract::DeferredExprFixup::visitType(const HIRType* type) -> const HIRType* {
@@ -4976,9 +4969,6 @@ auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visitPathParams(HIR
 
 auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visitNodePtr(HIRExprNodeP& nodePtr) -> void {
     HIRExprVisitorDef::visitNodePtr(nodePtr);
-    if (replacement_) {
-        nodePtr = std::move(replacement_);
-    }
 }
 
 auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeVariable& node) -> void {
@@ -5667,9 +5657,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
     if (promotionRootIsConstant) {
         {
             auto vpp = valuePtrPtr;
-            while (auto* innerNode = cast<HIRExprNodeField>(vpp->get())) {
-                vpp = &innerNode->value;
-            }
             if (auto* innerNode = cast<HIRExprNodeDeref>(vpp->get())) {
                 allConstant_ = savedAllConstant;
                 isConstant = wholeValueIsConstant;

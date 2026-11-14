@@ -514,20 +514,11 @@ Float128::operator double() const {
 
 Float128::operator u64() const {
     const auto value = unpack(hi, lo);
-    switch (value.kind) {
-        case Kind::Zero:
-        case Kind::NotANumber:
-            return 0;
-        case Kind::Infinity:
-            return value.negative ? 0 : UINT64_MAX;
-        case Kind::Finite:
-            break;
+    if (value.kind == Kind::Zero || value.kind == Kind::NotANumber) {
+        return 0;
     }
     if (value.negative || value.exponent < 0) {
         return 0;
-    }
-    if (value.exponent >= 64) {
-        return UINT64_MAX;
     }
     return static_cast<u64>(value.significand >> (significandBits - value.exponent));
 }

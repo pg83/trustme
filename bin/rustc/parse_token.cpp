@@ -219,8 +219,6 @@ Token Token::makeFloat(FloatValue val, enum eCoreType datatype, RcString spellin
 
 Token::Token(const InterpolatedFragment& frag) {
     switch (frag.type) {
-        case InterpolatedFragment::TT:
-            UNREACHABLE();
         case InterpolatedFragment::VIS:
             type_ = TOK_INTERPOLATED_VIS;
             data_ = Data::make_Fragment({new ASTVisibility(*reinterpret_cast<const ASTVisibility*>(frag.ptr)), frag.tokens});
@@ -270,8 +268,6 @@ Token::Token(const InterpolatedFragment& frag) {
 
 Token::Token(TagTakeIP, InterpolatedFragment frag) {
     switch (frag.type) {
-        case InterpolatedFragment::TT:
-            UNREACHABLE();
         case InterpolatedFragment::VIS:
             type_ = TOK_INTERPOLATED_VIS;
             data_ = Data::make_Fragment({frag.ptr, frag.tokens});
