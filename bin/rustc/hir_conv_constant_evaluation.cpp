@@ -1586,8 +1586,6 @@ IValue* MIREvalRelocPtr::asValuePtr() const {
         case TAG_StaticRef:
             BUG_ASSERT(asStaticref());
             return asStaticref();
-        case 3:
-            BUG_ASSERT(!"Unexpected tag 3");
     }
     abort();
 }

@@ -1401,8 +1401,6 @@ const HIRType* HMTypeInferrence::expandIvars(const HIRType* type) {
     };
 
     switch (data.tag()) {
-        default:
-            UNREACHABLE();
         case HIRType::TAG_Path: {
             auto& e = data.as_Path();
             H::expandIvarsPath(*this, e.path);
@@ -3293,8 +3291,8 @@ bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRType* type,
                 relation = probeTypeRelation(sp, boundType, type);
             }
         }
-        if (relation != SolverCertainty::NoSolution && cb.visit(boundType, b.first.second, b.second)) {
-            return true;
+        if (relation != SolverCertainty::NoSolution) {
+            cb.visit(boundType, b.first.second, b.second);
         }
     }
     return false;
