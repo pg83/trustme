@@ -1729,12 +1729,6 @@ auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
         case ASTExprNodeUniOp::RawBorrow:
             os << StringView("&raw const ");
             break;
-        case ASTExprNodeUniOp::PinBorrow:
-            os << StringView("&pin const ");
-            break;
-        case ASTExprNodeUniOp::PinBorrowMut:
-            os << StringView("&pin mut ");
-            break;
         case ASTExprNodeUniOp::RawBorrowMut:
             os << StringView("&raw mut ");
             break;
@@ -1755,9 +1749,6 @@ auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
         os << StringView(")");
     }
     switch (n.type) {
-        case ASTExprNodeUniOp::QMARK:
-            os << StringView("?");
-            break;
         case ASTExprNodeUniOp::AWait:
             os << StringView(".await");
             break;

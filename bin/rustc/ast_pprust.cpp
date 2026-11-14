@@ -1772,9 +1772,6 @@ void State::printType(const ASTType* ty) {
             this->printMac(inv->path(), RcString(), false, false, inv->inputTt());
             break;
         }
-        case TypeData::TAG_Primitive:
-            this->word(StringView(coretypeName(data.as_Primitive().coreType)));
-            break;
         case TypeData::TAG_Function: {
             const auto& info = data.as_Function().info;
             this->ibox(INDENT_UNIT);
