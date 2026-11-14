@@ -3330,8 +3330,6 @@ Token MacroExpander::realGetToken() {
             case MacroExpansionEnt::TAG_NamedValue: {
                 const auto e = ent.as_NamedValue();
                 switch (e & ~NAMEDVALUE_VALMASK) {
-                    default:
-                        BUG(this->pointSpan(), StringView("Unknown macro metavar - 0x") << formatHex(e));
                     case NAMEDVALUE_TY_COUNT: {
                         const auto value = e & NAMEDVALUE_VALMASK;
                         auto count = mappings_.getVariableCount(this->pointSpan(), state.iterations(), value & NAMEDVALUE_COUNT_IDXMASK, value >> NAMEDVALUE_COUNT_DEPTHSHIFT);
