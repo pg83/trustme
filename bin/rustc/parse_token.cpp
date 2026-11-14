@@ -603,12 +603,6 @@ std::string Token::toStr() const {
         case TOK_EOF:
             return "/*eof*/";
 
-        case TOK_NEWLINE:
-            return "\n";
-        case TOK_WHITESPACE:
-            return " ";
-        case TOK_COMMENT:
-            return "/*" + data_.as_String().value + "*/";
         case TOK_INTERPOLATED_TYPE:
             pprustTypeToString(ss, **reinterpret_cast<const ::ASTType* const*>(data_.as_Fragment().ptr));
             return takeString();

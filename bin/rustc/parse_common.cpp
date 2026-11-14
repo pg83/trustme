@@ -2972,8 +2972,6 @@ namespace {
                 if (!lex.editionAfter(ASTEdition::Rust2018)) {
                     if (auto* relative = path.cls.opt_Relative()) {
                         path = ASTPath("", mv$(relative->nodes));
-                    } else if (const auto* local = path.cls.opt_Local()) {
-                        path = ASTPath("", {ASTPathNode(local->name)});
                     }
                 }
                 if (!lex.getTokenIf(TOK_DOUBLE_COLON)) {
@@ -4215,9 +4213,6 @@ TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
         items.push_back(TokenTree(edition, lex.getHygiene(), mv$(tok)));
     }
     while (!lex.getTokenIf(closer, tok) && !lex.getTokenIf(TOK_EOF, tok)) {
-        if (lex.lookahead(0) == TOK_NULL) {
-            parseErrorUnexpected(lex, lex.getToken());
-        }
         items.push_back(ParseTT(lex, false));
     }
     if (!unwrapped) {
