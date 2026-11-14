@@ -291,11 +291,7 @@ namespace {
         MIREvalStaticRef* asStaticref() const;
 
         friend ZeroCopyOutput& operator<<(ZeroCopyOutput& os, const MIREvalRelocPtr& ptr) {
-            if (ptr.ptr) {
-                ptr.asValuePtr()->fmtIdent(os);
-            } else {
-                os << StringView("NULL");
-            }
+            ptr.asValuePtr()->fmtIdent(os);
             return os;
         }
 
