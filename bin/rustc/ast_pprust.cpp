@@ -770,9 +770,6 @@ TokenSpacing State::printFlatItem(const Vector<FlatTok>& flat, size_t index, siz
     const FlatTok& item = flat[index];
     if (!flatIsOpen(item)) {
         next = index + 1;
-        if (item.tok == nullptr) {
-            return TokenSpacing::Alone;
-        }
         const auto text = item.tok->toStr();
         this->word(StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
         return item.tok->spacing();
