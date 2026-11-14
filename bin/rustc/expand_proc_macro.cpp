@@ -799,9 +799,6 @@ Token ProcMacroInv::realGetToken_() {
     switch (static_cast<TokenClass>(v)) {
         case TokenClass::EndOfStream:
             TODO(this->parentSpan, StringView("EndOfStream"));
-        case TokenClass::SpanRef:
-        case TokenClass::Joined:
-            UNREACHABLE();
         case TokenClass::SpanDef:
             TODO(this->parentSpan, StringView("SpanDef"));
         case TokenClass::Fragment: {
@@ -900,10 +897,6 @@ void ProcMacroDefinitionDecorator::unexpected(const Span& sp, const ASTAttribute
 }
 
 auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
-    if (i.is_None()) {
-        return;
-    }
-
     if (!i.is_Function()) {
         unexpected(sp, attr, "item");
     }
@@ -936,10 +929,6 @@ auto DecoratorProcMacroDerive::handle(const Span& sp, const ASTAttribute& attr, 
 }
 
 auto DecoratorProcMacroAttribute::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
-    if (i.is_None()) {
-        return;
-    }
-
     if (!i.is_Function()) {
         unexpected(sp, attr, "item");
     }
@@ -948,10 +937,6 @@ auto DecoratorProcMacroAttribute::handle(const Span& sp, const ASTAttribute& att
 }
 
 auto DecoratorProcMacro::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
-    if (i.is_None()) {
-        return;
-    }
-
     if (!i.is_Function()) {
         unexpected(sp, attr, "item");
     }

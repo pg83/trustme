@@ -330,20 +330,12 @@ void stl::output<ZeroCopyOutput, ASTBoundConstness>(ZeroCopyOutput& out, ASTBoun
 
 template <>
 void stl::output<ZeroCopyOutput, ASTType*>(ZeroCopyOutput& out, ASTType* type) {
-    if (type) {
-        out << *type;
-    } else {
-        out << StringView("(null-type)");
-    }
+    out << *type;
 }
 
 template <>
 void stl::output<ZeroCopyOutput, const ASTType*>(ZeroCopyOutput& out, const ASTType* type) {
-    if (type) {
-        out << *type;
-    } else {
-        out << StringView("(null-type)");
-    }
+    out << *type;
 }
 
 

@@ -59,8 +59,6 @@ auto ASTImpl::clone() const -> ASTImpl {
         } else if (const auto* invocation = data.opt_MacroInv()) {
             result.addMacroInvocation(invocation->clone());
             result.items_.back().attrs = item.attrs.clone();
-        } else {
-            BUG(item.sp, StringView("Unexpected impl item in clone: ") << data.tagStr());
         }
     }
     return result;

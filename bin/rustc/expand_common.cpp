@@ -1283,8 +1283,6 @@ namespace {
             }
 
             switch ((*i.data).tag()) {
-                default:
-                    BUG(Span(), StringView("Unknown item type in impl block - ") << i.data->tagStr());
                 case ASTItem::TAG_None: {
                     break;
                 }
@@ -1362,11 +1360,6 @@ namespace {
 
             auto dat = std::move(i.data);
             switch (dat.tag()) {
-                default:
-                    BUG(Span(), StringView("Unexpected item type - ") << dat.tagStr());
-                case ASTItem::TAG_None: {
-                    break;
-                }
                 case ASTItem::TAG_Type: {
                     auto& e = dat.as_Type();
                     ExpandType(es, mod, e.type());
