@@ -1117,9 +1117,6 @@ auto RustPrinter::visit(ASTExprNodeFlow& n) -> void {
         case ASTExprNodeFlow::CONTINUE:
             os << StringView("continue ");
             break;
-        case ASTExprNodeFlow::YEET:
-            os << StringView("do yeet ");
-            break;
     }
     if (n.target.name != "") {
         os << StringView("'") << n.target << StringView(" ");
@@ -1416,13 +1413,6 @@ auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
 
 auto RustPrinter::printIntegerLiteral(enum eCoreType datatype, const U128& value) -> void {
     switch (datatype) {
-        case CORETYPE_INVAL:
-            os << StringView("0x") << formatHex(value) << StringView("_/*INVAL*/");
-            break;
-        case CORETYPE_BOOL:
-        case CORETYPE_STR:
-            os << StringView("0x") << formatHex(value) << StringView("_/*bool/str*/");
-            break;
         case CORETYPE_CHAR:
             if (value >= 0x20 && value < 128) {
                 switch (value.truncateU64()) {

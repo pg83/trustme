@@ -6974,15 +6974,11 @@ unsigned int TraitResolution::autoderefFindMethod(
 std::optional<const HIRType*> TraitResolution::conventionalMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRType* actual, TraitResolution::MethodAccess access) const {
     switch (fcn.receiver) {
         case HIRFunction::Receiver::Free:
+        case HIRFunction::Receiver::BorrowOwned:
             return std::nullopt;
         case HIRFunction::Receiver::Value:
             if (access >= TraitResolution::MethodAccess::Move) {
                 return this->ivars.getType(actual);
-            }
-            break;
-        case HIRFunction::Receiver::BorrowOwned:
-            if (const auto* borrow = actual->opt_Borrow(); borrow && borrow->type == HIRBorrowType::Owned && access >= TraitResolution::MethodAccess::Move) {
-                return this->ivars.getType(borrow->inner);
             }
             break;
         case HIRFunction::Receiver::BorrowUnique:

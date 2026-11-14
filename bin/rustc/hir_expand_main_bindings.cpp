@@ -4783,19 +4783,8 @@ auto ClosureExprVisitorExtract::DeferredItemFixup::visitExpr(HIRExprPtr& expr) -
 
 auto ClosureExprVisitorExtract::DeferredItemFixup::visitGeneratedStruct(HIRStruct& item) -> void {
     visitParams(item.params);
-    switch (item.data.tag()) {
-        case HIRStructData::TAG_Unit:
-            break;
-        case HIRStructData::TAG_Tuple:
-            for (auto& field : item.data.as_Tuple()) {
-                field.ent = visitType(field.ent);
-            }
-            break;
-        case HIRStructData::TAG_Named:
-            for (auto& field : item.data.as_Named()) {
-                field.ty = visitType(field.ty);
-            }
-            break;
+    for (auto& field : item.data.as_Tuple()) {
+        field.ent = visitType(field.ent);
     }
 }
 
