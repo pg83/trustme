@@ -2232,8 +2232,6 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
         auto itemPath = HIRItemPath(traitIp, item.name.c_str());
 
         switch (item.data.tag()) {
-            default:
-                BUG(item.span, StringView("Encountered unexpected item type in trait"));
             case ASTItem::TAG_None: {
                 break;
             }
