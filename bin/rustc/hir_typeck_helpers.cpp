@@ -11882,9 +11882,6 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             if (relation == Certainty::NoSolution) {
                 return false;
             }
-            if (assemblyCertainty == Certainty::NoSolution) {
-                return false;
-            }
             if (assemblyCertainty == Certainty::Ambiguous) {
                 relation = Certainty::Ambiguous;
             }
@@ -12079,12 +12076,6 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
         }
 
         const HIRType* getType(const Span& sp, const HIRGenericRef& generic) const override {
-            for (const auto& binding : typeBindings_) {
-                const auto* stable = binding.stable->opt_Generic();
-                if (stable && *stable == generic) {
-                    return binding.probe;
-                }
-            }
             if (const auto* bound = boundExistential(generic)) {
                 return this->monomorphType(sp, bound, true);
             }
@@ -12156,9 +12147,6 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(Candidate& candidate, HIRPathP
            (rayon's `fold(|| 0, |a, b| a + b).find_any(..)`: `U: Send` on it had no
            solution). */
         void candidateType(const HIRType* candidate, const HIRType* value) {
-            if (failed) {
-                return;
-            }
             const auto pattern = instantiate_.monomorphType(span_, candidate, true);
             const auto instantiatedValue = instantiate_.monomorphType(span_, value, true);
             DEBUG(StringView("relations.candidateType pattern ") << pattern << StringView(" value ") << instantiatedValue);
