@@ -822,16 +822,10 @@ namespace {
         }
 
         switch (t.tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                UNREACHABLE();
-            }
             case HIRConstGeneric::TAG_Unevaluated: {
                 const auto te = t.as_Unevaluated();
                 const auto xe = x.as_Unevaluated();
                 return te->equivalent(*xe) ? HIRCompare::Equal : HIRCompare::Fuzzy;
-            }
-            case HIRConstGeneric::TAG_Generic: {
-                UNREACHABLE();
             }
             case HIRConstGeneric::TAG_Evaluated: {
                 const auto te = t.as_Evaluated();
