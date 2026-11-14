@@ -14,6 +14,7 @@ program with the given flags. CLI checks accept `OWN_FLAGS || NATIVE_FLAGS`.
 compile variants retain their own flags.
 `compile-fail-exit-code` optionally checks our compiler's exact rejection status.
 `stdin-source` feeds the unit's exact bytes to the primary compiler input `-`.
+`cli-no-input` omits the source argument for one compile-fail CLI invocation.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -41,6 +42,7 @@ def main() -> int:
     test_harness = "//@ test-harness" in source_text
     compile_only = bool(re.search(r"^//@\s*compile-only\s*$", source_text, re.MULTILINE))
     stdin_source = bool(re.search(r"^//@\s*stdin-source\s*$", source_text, re.MULTILINE))
+    cli_no_input = bool(re.search(r"^//@\s*cli-no-input\s*$", source_text, re.MULTILINE))
     primary_source = "-" if stdin_source else src
     compiler_input = {}
     if stdin_source:
@@ -130,6 +132,9 @@ def main() -> int:
     native_static_aux_builds = re.findall(
         r"^//@\s*native-static-aux-build:\s*(\S+)\s*$", source_text, re.MULTILINE
     )
+    if cli_no_input and (not compile_fail_match or stdin_source or aux_builds
+                         or proc_macro_aux_builds or native_static_aux_builds):
+        raise RuntimeError("cli-no-input requires compile-fail without stdin-source or auxiliary builds")
 
     with lib.workdir() as work:
         binary = os.path.join(work, "t")
@@ -232,7 +237,7 @@ def main() -> int:
         cli_library_args = [] if system_rustc else ["-L", os.path.join(libstd, "release")]
 
         def wrap_primary(command):
-            return command if stdin_source else lib.wrap_gdb(command)
+            return command if stdin_source or cli_no_input else lib.wrap_gdb(command)
 
         def run_primary(command):
             if stdin_source:
@@ -276,13 +281,20 @@ def main() -> int:
                 raise RuntimeError(f"option output failed: {extra!r}, expected {expected!r}")
             print(f"option output: {extra!r}: {expected}", flush=True)
         command = wrap_primary(
-            [rustc, primary_source, "-L", os.path.join(libstd, "release"), "-o", binary,
+            [rustc, *([] if cli_no_input else [primary_source]),
+             "-L", os.path.join(libstd, "release"), "-o", binary,
              *mode, "--edition", edition, *dependency_args, *main_flags]
         )
+        if cli_no_input:
+            print(f"CLI invocation: {shlex.join(command)}", flush=True)
         expected_failure = compile_fail_match is not None
         if expected_failure:
             result = subprocess.run(command, env=env, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, check=False, **compiler_input)
+            if cli_no_input:
+                sys.stdout.buffer.write(result.stdout)
+                sys.stderr.buffer.write(result.stderr)
+                print(f"CLI exit code: {result.returncode}", flush=True)
             if result.returncode == 0:
                 raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
             internal_failure = re.search(

@@ -99,9 +99,7 @@ namespace {
         indexMutableOwnersInModule(cache, crate.rootModule);
         for (auto& pair : crate.newValues) {
             auto& item = pair.second->ent;
-            if (auto* value = item.opt_Function()) {
-                cache.functions.insert(*value, *value);
-            } else if (auto* value = item.opt_Static()) {
+            if (auto* value = item.opt_Static()) {
                 cache.statics.insert(*value, *value);
             } else if (auto* value = item.opt_Constant()) {
                 cache.constants.insert(*value, *value);

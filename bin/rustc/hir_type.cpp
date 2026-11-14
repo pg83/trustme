@@ -1461,9 +1461,6 @@ namespace {
             auto* head = static_cast<TypeNode*>(nodes.find(hash));
             for (const auto* node = head; node; node = node->same) {
                 if (exactTypeDataEqual(*node, data)) {
-                    if (slot) {
-                        *slot = node;
-                    }
                     return node;
                 }
             }
@@ -1615,9 +1612,6 @@ bool HIRType::equalsIgnoringRegions(const HIRType* x) const {
             // TODO: Should comparing inferrence vars be an error?
             return te.index == xe.index;
         }
-        case HIRType::TAG_Diverge: {
-            return true;
-        }
         case HIRType::TAG_Primitive: {
             auto& te = (*this).as_Primitive();
             auto& xe = (*x).as_Primitive();
@@ -1733,8 +1727,8 @@ bool HIRType::equalsIgnoringRegions(const HIRType* x) const {
             auto& xe = (*x).as_NodeType();
             return te == xe;
         }
+        default: UNREACHABLE();
     }
-    UNREACHABLE();
 }
 
 Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r) {
