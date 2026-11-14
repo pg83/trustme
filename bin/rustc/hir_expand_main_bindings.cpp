@@ -1966,9 +1966,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeRawBorrow& node) -> void {
         case HIRBorrowType::Unique:
             usage.pushBack(HIRValueUsage::Mutate);
             break;
-        case HIRBorrowType::Owned:
-            usage.pushBack(HIRValueUsage::Move);
-            break;
     }
 
     this->visitNodePtr(node.value);

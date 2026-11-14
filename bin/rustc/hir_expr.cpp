@@ -1174,9 +1174,6 @@ HIRExprVisitorDef::HIRExprVisitorDef(HIRTypeInterner& types)
 template <>
 void stl::output<ZeroCopyOutput, HIRValueUsage>(ZeroCopyOutput& os, HIRValueUsage x) {
     switch (x) {
-        case HIRValueUsage::Unknown:
-            os << StringView("Unknown");
-            break;
         case HIRValueUsage::Borrow:
             os << StringView("Borrow");
             break;

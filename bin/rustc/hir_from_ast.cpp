@@ -2640,17 +2640,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 if (e->inner == realSelfType) {
                     argSelfTy = crate->types.borrow(e->type, crate->types.self());
                 }
-                switch (e->type) {
-                    case HIRBorrowType::Owned:
-                        receiver = HIRFunction::Receiver::BorrowOwned;
-                        break;
-                    case HIRBorrowType::Unique:
-                        receiver = HIRFunction::Receiver::BorrowUnique;
-                        break;
-                    case HIRBorrowType::Shared:
-                        receiver = HIRFunction::Receiver::BorrowShared;
-                        break;
-                }
+                receiver = e->type == HIRBorrowType::Unique ? HIRFunction::Receiver::BorrowUnique : HIRFunction::Receiver::BorrowShared;
             } else {
                 auto inner = e->inner;
                 if (const auto* valid = ivcr.validCustomReceiver(inner)) {
@@ -4018,9 +4008,6 @@ auto LifetimeIdentity::type(const ASTType& value) -> void {
             break;
         case TypeData::TAG_Unit:
             append('u');
-            break;
-        case TypeData::TAG_Macro:
-            append('m');
             break;
         case TypeData::TAG_Primitive:
             append('c');
