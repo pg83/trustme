@@ -676,8 +676,6 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRType* valu
                 default:
                     return false;
             }
-        case TypeckPrimitiveOperator::Deref:
-            return false;
         default:
             return false;
     }
