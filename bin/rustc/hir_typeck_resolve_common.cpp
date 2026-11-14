@@ -27,9 +27,6 @@ namespace {
     }
 
     bool sameBound(const HIRGenericBound& a, const HIRGenericBound& b) {
-        if (a.tag() != b.tag()) {
-            return false;
-        }
         switch (a.tag()) {
             case HIRGenericBound::TAG_TraitBound: {
                 auto& ae = a.as_TraitBound();

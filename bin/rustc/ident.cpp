@@ -44,12 +44,6 @@ namespace {
         if (a == b) {
             return OrdEqual;
         }
-        if (!a) {
-            return b ? OrdLess : OrdEqual;
-        }
-        if (!b) {
-            return OrdGreater;
-        }
         auto rv = compareContexts(a->parent, b->parent);
         if (rv != OrdEqual) {
             return rv;
@@ -60,9 +54,6 @@ namespace {
     Ordering compareMacroDefinitions(const Ident::Hygiene::Inner* a, const Ident::Hygiene::Inner* b) {
         if (a == b) {
             return OrdEqual;
-        }
-        if (!a) {
-            return b ? OrdLess : OrdEqual;
         }
         if (!b) {
             return OrdGreater;
