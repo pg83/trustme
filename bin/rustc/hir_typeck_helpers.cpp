@@ -10318,10 +10318,6 @@ auto NextTraitGoalEvaluator::orphanVisitResolvedType(const HIRType* type, Orphan
         return OrphanVisit::NonLocal;
     }
 
-    if (type->is_NodeType()) {
-        return perspective == OrphanPerspective::Local ? OrphanVisit::LocalKey : OrphanVisit::NonLocal;
-    }
-
     if (type->is_ErasedType() && typeHasUnknown(type)) {
         return perspective == OrphanPerspective::Remote ? OrphanVisit::LocalKey : OrphanVisit::Uncovered;
     }
