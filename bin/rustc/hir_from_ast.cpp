@@ -2757,8 +2757,6 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         case ASTLinkage::Weak:
             linkage.type = HIRLinkage::Type::Weak;
             break;
-        case ASTLinkage::ExternWeak:
-            BUG(sp, StringView("Invalid linkage on function"));
     }
     linkage.section = f.markings.linkSection;
 
