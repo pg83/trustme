@@ -13165,9 +13165,6 @@ auto NextTraitGoalEvaluator::evaluateBuiltinSizedCopyClone(Candidate* candidate,
                                 return Certainty::Proven;
                             case HIRStructMarkings::DstType::Possible: {
                                 const auto* nominal = path.path.data.opt_Generic();
-                                if (!nominal) {
-                                    return Certainty::Ambiguous;
-                                }
                                 ASSERT_BUG(span(), structure.structMarkings.unsizedParam < nominal->params.types.size(), StringView("Malformed unsized struct markings"));
                                 return evaluateInner(nominal->params.types[structure.structMarkings.unsizedParam]);
                             }
@@ -13184,9 +13181,6 @@ auto NextTraitGoalEvaluator::evaluateBuiltinSizedCopyClone(Candidate* candidate,
                                         break;
                                 }
                                 const auto* nominal = path.path.data.opt_Generic();
-                                if (!nominal) {
-                                    return Certainty::Ambiguous;
-                                }
                                 auto tail = MonomorphStatePtr(crate.types, type, &nominal->params, nullptr).monomorphType(span(), tailTemplate);
                                 tail = resolve_.expandAssociatedTypes(span(), tail);
                                 return evaluateInner(tail);
@@ -14007,9 +14001,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
            candidate is gone and nothing later needs preparing. */
         for (; boundsRuledOut < boundIndex; boundsRuledOut++) {
             const auto& earlier = preparedBounds[boundsRuledOut];
-            if (!earlier.ready) {
-                continue;
-            }
             if (boundIsOpen(earlier.type) || std::any_of(earlier.params.types.begin(), earlier.params.types.end(), boundIsOpen) || std::any_of(earlier.params.values.begin(), earlier.params.values.end(), [](const HIRConstGeneric& value) { return value.is_Infer(); })) {
                 continue;
             }
@@ -14038,9 +14029,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
     ThinVector<size_t> pendingSized;
     for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
         if (!implParamsDef->types[i].isSized) {
-            continue;
-        }
-        if (boundParams->types[i] == nullptr) {
             continue;
         }
         const auto* bound = underHead(boundParams->types[i]);
@@ -14499,9 +14487,6 @@ auto NextTraitGoalEvaluator::matchRootAssociated(const HIRSimplePath& trait, Can
     const auto& params = assocParams ? *assocParams : noParams;
     auto output = impl.getType(crate.types, assocName, params);
     if (output == nullptr) {
-        if (impl.isTraitImpl()) {
-            return Certainty::Ambiguous;
-        }
         return !assocType || typeHasUnknown(assocType) ? Certainty::Proven : Certainty::Ambiguous;
     }
     if (!assocType) {
