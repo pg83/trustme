@@ -345,10 +345,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                 case ASTItem::TAG_None: {
                     break;
                 }
-                case ASTItem::TAG_MacroInv: {
-                    // TODO: Dump macro invocations
-                    break;
-                }
                 case ASTItem::TAG_Static: {
                     auto& e = (*it.data).as_Static();
                     handleStatic(it.vis, it.name, e);
@@ -987,11 +983,7 @@ auto RustPrinter::visit(ASTExprNodeBlock& n) -> void {
         }
         os << indent();
         exprRoot = true;
-        if (!child.node) {
-            os << StringView("/* nil */");
-        } else {
-            ASTNodeVisitor::visit(child.node);
-        }
+        ASTNodeVisitor::visit(child.node);
         if (child.hasSemicolon) {
             os << StringView(";");
         }

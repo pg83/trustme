@@ -288,11 +288,7 @@ void ASTPath::printPretty(ZeroCopyOutput& os, bool isTypeContext, bool isDebug) 
             auto& ent = cls.as_UFCS();
             if (ent.trait) {
                 os << StringView("<") << *ent.type << StringView(" as ");
-                if (ent.trait->cls.is_Invalid()) {
-                    os << StringView("_");
-                } else {
-                    os << *ent.trait;
-                }
+                os << *ent.trait;
                 os << StringView(">");
             } else {
                 os << StringView("<") << *ent.type << StringView(">");

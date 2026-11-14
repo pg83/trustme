@@ -9445,8 +9445,6 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRType* ty
     }
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     switch ((*ty).tag()) {
-        default:
-            UNREACHABLE();
         case HIRType::TAG_ErasedType: {
             break;
         }

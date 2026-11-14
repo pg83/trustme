@@ -1261,11 +1261,7 @@ namespace {
                     e = nodeExpr(cast<const ASTExprNodeUniOp>(e.node)->value);
                     break;
                 case Kind::Binary:
-                    if (e.isChain()) {
-                        e = condExpr(e.conds, e.count - 1);
-                    } else {
-                        e = nodeExpr(cast<const ASTExprNodeBinOp>(e.node)->left);
-                    }
+                    e = nodeExpr(cast<const ASTExprNodeBinOp>(e.node)->left);
                     break;
                 case Kind::Call:
                     if (const auto* n = cast<const ASTExprNodeCallObject>(e.node)) {
@@ -2552,9 +2548,6 @@ void State::printExprBinary(PExpr e, Fixup fixup) {
     }
     const Kind leftKind = kindOf(lhs);
     if (leftKind == Kind::Cast && (text == StringView("<") || text == StringView("<<"))) {
-        leftNeedsParen = true;
-    }
-    if (leftKind == Kind::Let && !letScrutineeNeedsPar(binopPrec)) {
         leftNeedsParen = true;
     }
     this->printExprCondParen(lhs, leftNeedsParen, leftFixup);
