@@ -1058,9 +1058,6 @@ auto BigUint::topBits(size_t bits, bool& sticky) const -> u128 {
 }
 
 auto BigUint::toDecimal() const -> std::string {
-    if (isZero()) {
-        return "0";
-    }
     std::string reversed;
     BigUint copy = *this;
     while (!copy.isZero()) {

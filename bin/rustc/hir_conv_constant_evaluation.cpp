@@ -541,9 +541,6 @@ namespace {
     }
 
     bool unevaluatedUsedSlotsAreConcrete(HIRTypeInterner& types, const HIRConstGenericUnevaluated& ue) {
-        if (!ue.expr || !(*ue.expr).state) {
-            return false;
-        }
         if (!*ue.expr) {
             return unevaluatedEnvIsConcrete(ue);
         }
