@@ -1411,9 +1411,6 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                         e2.params = mv$(params);
                         break;
                     }
-                    case HIRPathData::TAG_UfcsUnknown: {
-                        UNREACHABLE();
-                    }
                 }
                 /* Alias expansion can repeat one opaque argument. Keep its
                    source identity while assigning function-local indices. */

@@ -1012,8 +1012,6 @@ namespace {
                     DEBUG(StringView("impl") << impl.second.params.fmtArgs() << StringView(" Fn") << impl.second.traitArgs << StringView(" for ") << impl.second.type);
                     pushTraitImpl(crate.getLangItemPath(sp, "fn"), box$(impl.second));
                     break;
-                case HIRExprNodeClosure::Class::NoCapture:
-                    BUG(sp, StringView(""));
                 case HIRExprNodeClosure::Class::Unknown:
                     BUG(Span(), StringView("Encountered Unkown closure type in new impls"));
             }
