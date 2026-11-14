@@ -1148,9 +1148,7 @@ namespace {
             } else if (litPtr) {
                 DEBUG(StringView("Replace constant ") << *ce.p << StringView(" with ") << *litPtr);
                 auto newRval = MIRCleanupLiteralToRValue(state, mutator, *litPtr, cTy, params, mv$(*ce.p));
-                if (auto* lv = newRval.opt_Use()) {
-                    p = MIRParam::make_LValue(std::move(*lv));
-                } else if (auto* c = newRval.opt_Constant()) {
+                if (auto* c = newRval.opt_Constant()) {
                     p = MIRParam::make_Constant(std::move(*c));
                 } else {
                     auto tmpLv = mutator.inTemporary(mv$(cTy), mv$(newRval));
