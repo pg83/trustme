@@ -360,9 +360,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                     handleFunction(it.vis, it.name, e);
                     break;
                 }
-                default: {
-                    BUG(Span(), StringView("Unexpected item type in impl block - ") << it.data->tagStr());
-                }
             }
         }
         decIndent();

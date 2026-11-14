@@ -246,9 +246,6 @@ namespace {
         if (a.isInert()) {
             return false;
         }
-        if (a.isDeriveHelper()) {
-            return false;
-        }
         DEBUG(a);
         auto runDecorator = [&](const RcString& name, const ExpandDecorator& d) {
             if (d.stage() != stage) {
