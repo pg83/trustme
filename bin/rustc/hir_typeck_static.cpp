@@ -265,9 +265,6 @@ const HIRType* StaticTraitResolve::expandAssociatedTypes(const Span& sp, const H
 
 namespace {
     bool signatureNamesOpaque(const HIRCrate& crate, const HIRTraitImpl& impl, const HIRSimplePath& implTrait, const HIRSimplePath& aliasPath, const HIRType* signature, unsigned depth = 0) {
-        if (!signature) {
-            return false;
-        }
         bool named = false;
         visitTyWith(signature, [&](const HIRType* inner) {
             if (const auto* erased = inner->opt_ErasedType()) {

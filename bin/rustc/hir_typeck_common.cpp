@@ -6,7 +6,6 @@
 #include "trans_target.h"
 #include "hir_conv_constant_evaluation.h"
 
-#include <std/alg/defer.h>
 #include <std/alg/range.h>
 #include <std/lib/vector.h>
 
@@ -25,8 +24,6 @@ namespace {
 
     template <template <typename> typename W>
     struct TyVisitor {
-        const LList<const HIRType*>* curRecurseStack = nullptr;
-
         virtual typename W<HIRType>::T& getTyData(const HIRType* ty) const = 0;
 
         virtual bool visitConstGeneric(typename W<HIRConstGeneric>::T&);
@@ -747,20 +744,6 @@ auto TyVisitor<W>::visitPath(typename W<HIRPath>::T& path) -> bool {
 
 template <template <typename> typename W>
 auto TyVisitor<W>::visitType(const HIRType* ty) -> bool {
-    if (curRecurseStack) {
-        for (const auto* p : *curRecurseStack) {
-            if (p == ty) {
-                return false;
-            }
-        }
-    }
-
-    LList<const HIRType*> recurseNode(curRecurseStack, ty);
-    curRecurseStack = &recurseNode;
-    STD_DEFER {
-        curRecurseStack = recurseNode.prev;
-    };
-
     {
         auto& tuMatch = (this->getTyData(ty));
         switch (tuMatch.tag()) {
