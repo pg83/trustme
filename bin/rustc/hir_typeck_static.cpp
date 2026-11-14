@@ -620,11 +620,7 @@ const HIRType* StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, co
                     return rv;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
-                    const bool wasUnbound = e.binding.is_Unbound();
                     const bool wasOpaque = e.binding.is_Opaque();
-                    if (!wasUnbound && !wasOpaque) {
-                        return input;
-                    }
 
                     if (wasOpaque) {
                         auto rv = input;
