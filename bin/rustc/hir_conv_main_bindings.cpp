@@ -4290,9 +4290,6 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
     // TODO: This is VERY arbitary and possibly nowhere near what rustc does.
 
     this->resolve_.probeImplMayApply(sp, traitPath.path, nullptr, type, [&](SolverMayApply probe) -> bool {
-        if (probe.effects.certainty == SolverCertainty::NoSolution) {
-            return false;
-        }
         auto pp = probe.candidate ? probe.candidate->getTraitParams(crate.types) : traitPath.params.clone();
         struct KillPlaceholders: public Monomorphiser {
             explicit KillPlaceholders(HIRTypeInterner& types)

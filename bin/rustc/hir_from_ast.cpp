@@ -447,9 +447,6 @@ namespace {
             }
             return {};
         }
-        if (pc != FromASTPathClass::Type) {
-            return {};
-        }
 
         const auto& binding = path.bindings.type.binding;
         if (const auto* e = binding.opt_Struct(); e && (e->struct_ || e->hir)) {
