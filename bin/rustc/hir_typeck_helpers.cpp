@@ -15857,9 +15857,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
 
             const auto& first = candidateSlots.front();
             for (size_t slot = 0; slot < solverResponse.slots.types.size(); slot++) {
-                if (slot >= first.types.size()) {
-                    break;
-                }
                 const auto common = first.types[slot];
                 bool shared = true;
                 for (size_t candidate = 1; candidate < candidateSlots.size(); candidate++) {
@@ -15874,9 +15871,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 }
             }
             for (size_t slot = 0; slot < solverResponse.slots.values.size(); slot++) {
-                if (slot >= first.values.size()) {
-                    break;
-                }
                 const auto common = first.values[slot].clone();
                 bool shared = true;
                 for (size_t candidate = 1; candidate < candidateSlots.size(); candidate++) {
@@ -16586,9 +16580,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         candidate->specializationItemSource = nullptr;
     }
     auto recordItemSource = [&](Candidate* winner, const Candidate* shadowed) {
-        if (!shadowed->impl.isTraitImpl()) {
-            return;
-        }
         if (!winner->specializationItemSource || specializes(trait, *shadowed->impl.traitImpl, *winner->specializationItemSource->impl.traitImpl)) {
             winner->specializationItemSource = shadowed;
         }
