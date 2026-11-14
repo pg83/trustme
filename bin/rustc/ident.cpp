@@ -55,9 +55,6 @@ namespace {
         if (a == b) {
             return OrdEqual;
         }
-        if (!b) {
-            return OrdGreater;
-        }
         auto rv = compareMacroDefinitions(a->parent, b->parent);
         if (rv != OrdEqual) {
             return rv;

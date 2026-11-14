@@ -162,9 +162,6 @@ bool U128::bit(unsigned idx) const {
     if (idx < 64) {
         return ((lo >> idx) & 1) != 0;
     }
-    if (idx < 128) {
-        return ((hi >> (idx - 64)) & 1) != 0;
-    }
     return false;
 }
 

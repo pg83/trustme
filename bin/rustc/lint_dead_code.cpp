@@ -151,8 +151,6 @@ void LintDeadCode(const WireBoard& wb, HIRCrate& crate) {
             continue;
         }
         switch (candidate.level) {
-            case CfgLintLevel::Allow:
-                break;
             case CfgLintLevel::Warn:
             case CfgLintLevel::ForceWarn:
                 WARNING(candidate.function->span, W0000, StringView("function `") << candidate.name << StringView("` is never used"));
