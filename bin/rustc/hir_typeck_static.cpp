@@ -1694,15 +1694,6 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRType* ty) co
             }
             return typeNeedsDropGlue(sp, e.inner);
         }
-        case HIRType::TAG_Pointer: {
-            return false;
-        }
-        case HIRType::TAG_NamedFunction: {
-            return false;
-        }
-        case HIRType::TAG_Function: {
-            return false;
-        }
         case HIRType::TAG_Primitive: {
             return false;
         }
