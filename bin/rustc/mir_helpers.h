@@ -715,9 +715,6 @@ public:
                 state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                 visitStmt(stmt);
             }
-            if (block.terminator.isDead()) {
-                continue;
-            }
             state.setCurStmtTerm(blockIdx);
             visitTerminator(block.terminator);
         }
