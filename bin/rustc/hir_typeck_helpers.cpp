@@ -7731,15 +7731,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             if (!typeHasMethodSlot(coercion.destination)) {
                 continue;
             }
-            const auto hasCallerIvar = [&](const HIRType* type) {
-                return visitTyWith(type, [&](const HIRType* inner) {
-                    const auto* infer = inner->opt_Infer();
-                    return infer && infer->index != ~0u && infer->index < snapshot.ivarCount;
-                });
-            };
-            if (!hasCallerIvar(coercion.destination) && !hasCallerIvar(coercion.source)) {
-                continue;
-            }
             const auto stableEndpoint = [&](const HIRType* endpoint) {
                 const auto* resolved = resolve_.ivars.expandIvars(endpoint);
                 return typeHasMethodSlot(endpoint) ? resolved : endpoint;
