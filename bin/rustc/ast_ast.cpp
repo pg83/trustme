@@ -414,10 +414,6 @@ ASTItem ASTItem::clone() const {
             auto& e = (*this).as_Static();
             return ASTItem(e.clone());
         }
-        case ASTItem::TAG_GlobalAsm:
-            /* global_asm! produces this item after fragment cloning, in an
-             * owning token stream that moves it into its destination module. */
-            break;
     }
     UNREACHABLE();
 }

@@ -1145,10 +1145,6 @@ namespace {
                 prec = Prec::Assign;
                 fixity = 1;
                 break;
-            case ASTExprNodeBinOp::RANGE:
-                UNREACHABLE();
-            case ASTExprNodeBinOp::RANGE_INC:
-                UNREACHABLE();
         }
     }
 
