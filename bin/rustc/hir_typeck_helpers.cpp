@@ -6764,11 +6764,10 @@ TraitResolution::Autoderef TraitResolution::autoderefStep(const Span& sp, const 
     } else {
         std::optional<const HIRType*> candidateTarget;
         std::optional<const HIRType*> candidateImplType;
-        SolverCertainty certainty = SolverCertainty::NoSolution;
         bool ambiguous = false;
 
         this->probeTraitGoalMayApply(sp, langDeref_, HIRPathParams{}, ty, [&](SolverMayApply probe) {
-            const auto inspect = [&](const SolverImpl& solverImpl, SolverCertainty candidateCertainty) {
+            const auto inspect = [&](const SolverImpl& solverImpl) {
                 if (solverImpl.getImplType(crate.types)->is_Pointer()) {
                     return;
                 }
@@ -6780,11 +6779,10 @@ TraitResolution::Autoderef TraitResolution::autoderefStep(const Span& sp, const 
                 }
                 candidateTarget = foundTarget;
                 candidateImplType = solverImpl.getImplType(crate.types);
-                certainty = candidateCertainty;
             };
 
             if (probe.candidate) {
-                inspect(*probe.candidate, probe.effects.certainty);
+                inspect(*probe.candidate);
                 return true;
             }
 
@@ -6798,9 +6796,6 @@ TraitResolution::Autoderef TraitResolution::autoderefStep(const Span& sp, const 
         }
 
         if (!candidateTarget) {
-            return {AutoderefResult::NoMatch, nullptr, {}};
-        }
-        if (certainty == SolverCertainty::NoSolution) {
             return {AutoderefResult::NoMatch, nullptr, {}};
         }
 
@@ -6965,8 +6960,6 @@ std::optional<const HIRType*> TraitResolution::conventionalMethodReceiver(const 
                 return this->ivars.getType(borrow->inner);
             }
             break;
-        case HIRFunction::Receiver::Custom:
-            return std::nullopt;
         case HIRFunction::Receiver::Box:
             if (const auto* inner = this->typeIsOwnedBox(sp, actual); inner && access >= TraitResolution::MethodAccess::Move) {
                 return this->ivars.getType(inner);
