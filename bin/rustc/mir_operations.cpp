@@ -5830,9 +5830,6 @@ namespace {
                     if (!it->is_Assign()) {
                         continue;
                     }
-                    if (it->as_Assign().src.isDead()) {
-                        continue;
-                    }
                     auto& toReplaceLval = it->as_Assign().dst;
                     if (toReplaceLval.is_Local()) {
                         const auto& vu = valUses.localUses[toReplaceLval.as_Local()];
@@ -5845,9 +5842,6 @@ namespace {
 
                     for (auto it2 = it + 1; it2 != block.statements.end(); ++it2) {
                         if (!it2->is_Assign()) {
-                            continue;
-                        }
-                        if (it2->as_Assign().src.isDead()) {
                             continue;
                         }
                         if (!it2->as_Assign().src.is_Use()) {
