@@ -2117,8 +2117,6 @@ namespace {
                 DEBUG(i << StringView(" ") << pat);
                 if (pat.is_End()) {
                     break;
-                } else if (pat.is_If()) {
-                    BUG(sp, StringView("Unexpected If pattern during final matching - ") << pat);
                 } else if (const auto* e = pat.opt_ExpectTok()) {
                     auto tok = lex.getToken();
                     DEBUG(i << StringView(" ExpectTok(") << *e << StringView(") == ") << tok);
@@ -2242,9 +2240,6 @@ namespace {
             if (tok.type() == open) {
                 depth++;
             } else if (tok.type() == close) {
-                if (depth == 0) {
-                    compileErrorGeneric(FMT(StringView("Unmatched ") << Token(close) << StringView(" in macro pattern")).c_str());
-                }
                 depth--;
             }
 
