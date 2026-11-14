@@ -407,9 +407,6 @@ auto MirDumper::fmtVal(ZeroCopyOutput& os, const MIRParam& param) -> void {
                 case HIRBorrowType::Unique:
                     os << StringView("mut ");
                     break;
-                case HIRBorrowType::Owned:
-                    os << StringView("move ");
-                    break;
             }
             os << StringView("(");
             fmtVal(os, e.val);

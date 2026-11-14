@@ -357,9 +357,6 @@ bool ASTAbsolutePath::operator==(const ASTAbsolutePath& x) const {
 }
 
 bool ASTAbsolutePath::isParentOf(const ASTAbsolutePath& other) const {
-    if (this->crate != other.crate) {
-        return false;
-    }
     if (this->nodes.length() > other.nodes.length()) {
         return false;
     }

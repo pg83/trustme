@@ -1719,8 +1719,6 @@ auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
         case ASTExprNodeUniOp::RawBorrowMut:
             os << StringView("&raw mut ");
             break;
-        case ASTExprNodeUniOp::QMARK:
-            break;
         case ASTExprNodeUniOp::AWait:
         case ASTExprNodeUniOp::AWaitNext:
         case ASTExprNodeUniOp::USE:

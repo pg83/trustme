@@ -58,8 +58,6 @@ void ASTVisibility::fmt(ZeroCopyOutput& out) const {
             out << StringView("pub(in ");
             if (inPath_) {
                 out << *inPath_;
-            } else {
-                out << StringView("???");
             }
             out << StringView(")");
             break;

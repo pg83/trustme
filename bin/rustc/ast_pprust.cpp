@@ -1582,11 +1582,7 @@ void State::printPath(const ASTPath& path, bool colonsBeforeParams) {
             if (e.trait) {
                 this->space();
                 this->wordSpace(StringView("as"));
-                if (e.trait->cls.is_Invalid()) {
-                    this->word(StringView("_"));
-                } else {
-                    this->printPath(*e.trait, false);
-                }
+                this->printPath(*e.trait, false);
             }
             this->word(StringView(">"));
             for (const auto& node : e.nodes) {
