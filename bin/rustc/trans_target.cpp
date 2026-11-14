@@ -2833,10 +2833,6 @@ auto TransmuteLayoutBuilder::number(size_t count) -> Built {
 }
 
 auto TransmuteLayoutBuilder::exact(U128 value, size_t count) -> Built {
-    if (count > 16) {
-        supported = false;
-        return {nfa.uninhabited(), count};
-    }
     u8 raw[16] = {};
     value.toLeBytes(raw, count);
     auto rv = nfa.empty();
@@ -2903,19 +2899,12 @@ auto TransmuteLayoutBuilder::addVariantPayload(std::vector<Segment>& segments, c
     ASSERT_BUG(sp, variant < outerRepr.fields.size(), StringView("Enum variant field is missing"));
     const auto& outerField = outerRepr.fields[variant];
     const auto* payloadRepr = TargetGetTypeRepr(sp, resolve, outerField.ty);
-    if (!payloadRepr) {
-        supported = false;
-        return;
-    }
 
     int skipField = -1;
     if (skipSyntheticTag && !payloadRepr->fields.empty()) {
         const auto& candidate = payloadRepr->fields.back();
         size_t candidateSize = 0;
-        if (!TargetGetSizeOf(sp, resolve, candidate.ty, candidateSize)) {
-            supported = false;
-            return;
-        }
+        TargetGetSizeOf(sp, resolve, candidate.ty, candidateSize);
         if (outerField.offset + candidate.offset == tagOffset && candidateSize == tagSize) {
             skipField = payloadRepr->fields.size() - 1;
         }
@@ -3005,19 +2994,12 @@ auto TransmuteLayoutBuilder::build(const HIRType* ty) -> Built {
     }
     if (const auto* primitive = ty->opt_Primitive()) {
         size_t size = 0;
-        if (!TargetGetSizeOf(sp, resolve, ty, size)) {
-            supported = false;
-            return {nfa.uninhabited(), 0};
-        }
+        TargetGetSizeOf(sp, resolve, ty, size);
         if (*primitive == HIRCoreType::Bool) {
             return bytes(1, byteRange(0, 1));
         }
         if (*primitive == HIRCoreType::Char) {
             return character();
-        }
-        if (*primitive == HIRCoreType::Str) {
-            supported = false;
-            return {nfa.uninhabited(), size};
         }
         return number(size);
     }

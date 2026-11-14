@@ -10076,10 +10076,6 @@ auto CodeGeneratorC::emitCtypeCb(const HIRType* ty, CTypeCallback& inner, bool i
     }
 
     switch ((*ty).tag()) {
-        case HIRType::TAG_Infer: {
-            of << StringView("@") << ty << StringView("@") << inner;
-            break;
-        }
         case HIRType::TAG_Diverge: {
             of << StringView("tBANG");
             if (!inner.empty()) {

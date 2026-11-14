@@ -990,9 +990,6 @@ auto Token::rawData() const -> const TokenData& {
 }
 
 Token& Token::operator=(Token&& t) {
-    if (this == &t) {
-        return *this;
-    }
     this->~Token();
     new (this) Token(std::move(t));
     return *this;
