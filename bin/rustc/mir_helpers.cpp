@@ -1412,12 +1412,9 @@ bool MIRVisitorMut::visitLvalue(MIRLValue& lv, MIRValUsage u) {
     for (auto& w : lv.wrappers) {
         if (w.is_Index()) {
             auto lv = MIRLValue::newLocal(w.as_Index());
-            bool rv = visitLvalue(lv, MIRValUsage::Read);
+            visitLvalue(lv, MIRValUsage::Read);
             ASSERT_BUG(Span(), lv.is_Local(), StringView("visit_lvalue on Index mutated the index to a non-local"));
             w = MIRLValue::Wrapper::newIndex(lv.as_Local());
-            if (rv) {
-                return true;
-            }
         }
     }
     return false;
