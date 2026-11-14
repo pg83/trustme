@@ -275,9 +275,6 @@ namespace {
         std::string wide = work.toDecimal();
         const char extra = wide.back();
         wide.pop_back();
-        while (!wide.empty() && wide.front() == '0') {
-            wide.erase(wide.begin());
-        }
         bool roundUp;
         if (extra > '5') {
             roundUp = true;

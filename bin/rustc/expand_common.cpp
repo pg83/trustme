@@ -281,9 +281,6 @@ namespace {
                 importedProcMacro = 0;
                 const auto& want = a.name().elems[0];
                 for (const auto* ll = &es.modstack; ll && importedProcMacro == 0; ll = ll->prev) {
-                    if (!ll->item) {
-                        continue;
-                    }
                     for (const auto& i : ll->item->items) {
                         const auto* u = i->data.opt_Use();
                         if (!u) {
@@ -324,9 +321,6 @@ namespace {
             {
                 const auto& want = a.name().elems[0];
                 for (const auto* ll = &es.modstack; ll && !found; ll = ll->prev) {
-                    if (!ll->item) {
-                        continue;
-                    }
                     for (const auto& i : ll->item->items) {
                         const auto* u = i->data.opt_Use();
                         if (!u) {
