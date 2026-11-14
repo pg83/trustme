@@ -9139,9 +9139,6 @@ SolverCertainty TraitResolution::findMethod(
 const HIRType* TraitResolution::findField(const Span& sp, const HIRType* ty, const RcString& name) const {
     if (const auto* e = ty->opt_Path()) {
         switch (e->binding.tag()) {
-            case HIRTypePathBinding::TAG_Unbound: {
-                TODO(sp, StringView("Handle TypePathBinding::Unbound - ") << ty);
-            }
             case HIRTypePathBinding::TAG_Opaque: {
                 break;
             }
