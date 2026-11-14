@@ -1429,11 +1429,9 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 if (pbe.hir) {
                     BUG_ASSERT(pbe.hir);
                     return findSourceTraitHir(sp, path, *pbe.hir, name, ns, ms);
-                } else if (pbe.trait_) {
+                } else {
                     BUG_ASSERT(pbe.trait_);
                     return findSourceTraitAst(sp, path, *pbe.trait_, name, ns, ms);
-                } else {
-                    BUG(sp, StringView("Unbound path"));
                 }
             } else if (pb.is_TraitAlias()) {
                 const auto& pbe = pb.as_TraitAlias();
@@ -3715,10 +3713,6 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(ASTExprNode& e, unsigned firstSlot) {
     LowerHIRExprNodeVisitor v(*this);
 
     e.visit(v);
-
-    if (!v.rv) {
-        BUG(e.span(), typeid(e).name() << StringView(" - Yielded a nullptr HIR node"));
-    }
 
     struct InitialiseResultTypes final: HIRExprVisitorDef {
         explicit InitialiseResultTypes(HIRTypeInterner& types)
