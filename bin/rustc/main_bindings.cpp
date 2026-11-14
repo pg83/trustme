@@ -828,8 +828,6 @@ namespace {
                 }
             }
             switch (crateType) {
-                case ASTCrate::Type::Unknown:
-                    UNREACHABLE();
                 case ASTCrate::Type::RustLib: {
                     TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
                 } break;
