@@ -10238,9 +10238,6 @@ auto NextTraitGoalEvaluator::typeHasCandidatePlaceholder(const HIRType* type) ->
 }
 
 auto NextTraitGoalEvaluator::typeHasUfcsUnknown(const HIRType* type) -> bool {
-    if (!type) {
-        return false;
-    }
     return visitTyWith(type, [](const HIRType* inner) {
         const auto* path = inner->opt_Path();
         return path && path->path.data.is_UfcsUnknown();
