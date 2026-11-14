@@ -3664,16 +3664,13 @@ tryAgain:
         ASSERT_BUG(sp, innerType != HIRStructMarkings::Coerce::None, StringView("CoerceUnsized impl differs on a non-CoerceUnsized type - ") << ip << StringView(" fld=") << fieldTy);
 
         const auto& paramTy = gp.params.types.at(innerIdx);
-        switch (innerType) {
-            case HIRStructMarkings::Coerce::None:
-            case HIRStructMarkings::Coerce::PerDestination:
-                UNREACHABLE();
-            case HIRStructMarkings::Coerce::Passthrough:
-                fieldTy = paramTy;
-                goto tryAgain;
-            case HIRStructMarkings::Coerce::Pointer:
-                outParamIdx = getUnsizeParamIdx(sp, paramTy);
-                return HIRStructMarkings::Coerce::Pointer;
+        if (innerType == HIRStructMarkings::Coerce::Passthrough) {
+            fieldTy = paramTy;
+            goto tryAgain;
+        }
+        if (innerType == HIRStructMarkings::Coerce::Pointer) {
+            outParamIdx = getUnsizeParamIdx(sp, paramTy);
+            return HIRStructMarkings::Coerce::Pointer;
         }
     } else if (const auto* te = fieldTy->opt_Generic()) {
         outParamIdx = te->binding;
