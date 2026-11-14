@@ -546,8 +546,6 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
 
 bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct) {
     switch (ic) {
-        case HIRInferClass::None:
-            return true;
         case HIRInferClass::Float:
             switch (ct) {
                 case HIRCoreType::F16:
