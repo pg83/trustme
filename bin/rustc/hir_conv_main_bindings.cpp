@@ -3296,9 +3296,6 @@ auto ReceiverValidator::forEachImpl(HIRCrate::ImplGroup<std::unique_ptr<Impl>>& 
             callback(*impl);
         }
     }
-    for (auto& impl : group.nonNamed) {
-        callback(*impl);
-    }
     for (auto& impl : group.generic) {
         callback(*impl);
     }
@@ -4413,8 +4410,6 @@ auto UfcsVisitor::resolve_UfcsUnknown_inherent(const HIRSimplePath& visPath, con
                     return false;
                 }
                 break;
-            case HIRVisitor::PathContext::TRAIT:
-                return false;
             case HIRVisitor::PathContext::TYPE:
                 if (impl.types.find(e.item) == impl.types.end()) {
                     return false;

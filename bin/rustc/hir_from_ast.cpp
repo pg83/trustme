@@ -1727,8 +1727,6 @@ const HIRType* AST2HIR::LowerHIRType(::ASTType* ty) {
                     case ASTPatternValue::TAG_ByteString: {
                         ERROR(sp, E0000, StringView("byte-string pattern types are not supported"));
                     }
-                    default:
-                        UNREACHABLE();
                 }
             };
 
@@ -2118,8 +2116,6 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
                 } else if (const auto* ve = var.data.opt_Struct()) {
                     auto fields = LowerHIRStructFields(path, params, ve->fields, outMod);
                     data = HIRStruct::Data::make_Named(mv$(fields));
-                } else {
-                    UNREACHABLE();
                 }
 
                 auto tyName = RcString::newInterned(FMT(path.name << StringView("#") << var.name));
