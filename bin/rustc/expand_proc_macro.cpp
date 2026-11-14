@@ -1823,11 +1823,7 @@ auto ProcMacroVisitor::visitTuplePattern(const ASTPattern::TuplePat& v) -> void 
 }
 
 auto ProcMacroVisitor::visitLifetime(const ASTLifetimeRef& x) -> void {
-    if (x.binding() == ASTLifetimeRef::BINDING_STATIC) {
-        pmi.sendLifetime("static");
-    } else if (x.binding() == ASTLifetimeRef::BINDING_INFER) {
-        pmi.sendLifetime("_");
-    } else if (x.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
+    if (x.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
     } else {
         pmi.sendLifetime(x.name().name.c_str());
     }
@@ -2054,9 +2050,6 @@ auto ProcMacroVisitor::visitPathParams(const ASTPathParams& args, bool isExpr) -
         return;
     }
 
-    if (isExpr) {
-        pmi.sendSymbol("::");
-    }
     pmi.sendSymbol("<");
     bool first = true;
     for (const auto& ent : args.entries) {

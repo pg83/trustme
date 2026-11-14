@@ -1830,8 +1830,6 @@ namespace {
                         }
 
                         switch (ti.data.tag()) {
-                            default:
-                                BUG(Span(), StringView("Unknown item type in trait block - ") << ti.data.tagStr());
                             case ASTItem::TAG_None: {
                                 break;
                             }
