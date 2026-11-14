@@ -5502,9 +5502,7 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                 definition = itemGenerics_;
             }
             if (definition && generic->idx() < definition->types.size() && definition->types[generic->idx()].isSized) {
-                if (callback.visit(SolverImpl(type, nullptr, nullptr))) {
-                    return true;
-                }
+                callback.visit(SolverImpl(type, nullptr, nullptr));
             }
         }
     }
