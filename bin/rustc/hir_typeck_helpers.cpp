@@ -8201,9 +8201,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
         const auto heldSnapshot = resolve_.ivars.snapshot();
         for (const auto& bound : definition.bounds) {
             const auto* traitBound = bound.opt_TraitBound();
-            if (!traitBound) {
-                continue;
-            }
             const auto* boundType = monomorph.monomorphType(callSpan, traitBound->type, true);
             if (isOpenVariable(boundType)) {
                 continue;
@@ -9899,9 +9896,6 @@ auto NextTraitGoalEvaluator::canonicalizeGoal(const HIRPathParams& params, const
 }
 
 auto NextTraitGoalEvaluator::availableDepthForNested() -> std::optional<size_t> {
-    if (frameDepth == 0) {
-        return ROOT_DEPTH;
-    }
     auto& parent = *frames[frameDepth - 1];
     if (parent.availableDepth == 0) {
         parent.encounteredOverflow = true;
