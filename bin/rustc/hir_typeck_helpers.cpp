@@ -9074,9 +9074,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
 
     bool inScopeAmbiguous = false;
     for (const auto& traitRef : ::reverse(traits)) {
-        if (!traitRef.first) {
-            break;
-        }
         if (crate.edition < ASTEdition::Rust2021 && traitRef.second->skipArrayDuringMethodDispatch && receiver->is_Array()) {
             continue;
         }
