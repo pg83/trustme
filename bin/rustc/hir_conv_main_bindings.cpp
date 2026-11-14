@@ -551,21 +551,16 @@ namespace {
     }
 
     std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansionGP(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
-        const auto& ti = crate.getTypeitemByPath(sp, path.path);
-        if (const auto* ep = ti.opt_TraitAlias()) {
-            const auto& ta = *ep;
-            auto pp = ConvertHIRCompleteAliasParams(crate.types, sp, ta.params, path, isExpr);
-            auto ms = MonomorphStatePtr(crate.types, nullptr, &pp, nullptr);
-            std::vector<HIRTraitPath> rv;
-            rv.reserve(ta.traits.size());
-            for (const auto& exp : ta.traits) {
-                rv.push_back(ms.monomorphTraitpath(sp, exp, false));
-            }
-            DEBUG(path << StringView("\n -> ") << path.path << pp << StringView("\n -> {") << rv << StringView("}"));
-            return rv;
-        } else {
-            return std::vector<HIRTraitPath>();
+        const auto& ta = crate.getTypeitemByPath(sp, path.path).as_TraitAlias();
+        auto pp = ConvertHIRCompleteAliasParams(crate.types, sp, ta.params, path, isExpr);
+        auto ms = MonomorphStatePtr(crate.types, nullptr, &pp, nullptr);
+        std::vector<HIRTraitPath> rv;
+        rv.reserve(ta.traits.size());
+        for (const auto& exp : ta.traits) {
+            rv.push_back(ms.monomorphTraitpath(sp, exp, false));
         }
+        DEBUG(path << StringView("\n -> ") << path.path << pp << StringView("\n -> {") << rv << StringView("}"));
+        return rv;
     }
 
     std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span& sp, const HIRCrate& crate, /*const*/ HIRTraitPath& path, bool isExpr) {
