@@ -14106,9 +14106,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                             return false;
                         }
                     }
-                    if (!probe.candidate && response.certainty != Certainty::Ambiguous) {
-                        return false;
-                    }
                     bool hasEffects = !response.equalities.empty() || !response.valueEqualities.empty() || !response.obligations.empty();
                     for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
                         hasEffects |= response.slots.typeInputs[i] != response.slots.types[i];
@@ -14615,9 +14612,6 @@ auto NextTraitGoalEvaluator::appendResponseObligations(ThinVector<SolverObligati
 }
 
 auto NextTraitGoalEvaluator::implDefinesValue(const SolverImpl& impl, const char* valueName) -> bool {
-    if (!impl.traitImpl) {
-        return false;
-    }
     const auto name = RcString::newInterned(valueName);
     return impl.traitImpl->constants.count(name) || impl.traitImpl->methods.count(name);
 }
@@ -14646,9 +14640,6 @@ auto NextTraitGoalEvaluator::responsesEqual(const Candidate& leftCandidate, cons
         return resolvedLhs == resolvedRhs || resolvedLhs->equalsIgnoringRegions(resolvedRhs);
     };
     auto paramsEqual = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
-        if (lhs.types.size() != rhs.types.size() || lhs.values.size() != rhs.values.size()) {
-            return false;
-        }
         for (size_t i = 0; i < lhs.types.size(); i++) {
             if (!typesEqual(lhs.types[i], rhs.types[i])) {
                 return false;
@@ -14764,9 +14755,6 @@ auto NextTraitGoalEvaluator::specializesUncached(const HIRSimplePath& trait, con
        impl may specialize a positive one.  A const parent is only specialized by a const
        child. */
     TRACE_FUNCTION_F(StringView("child=") << child.type << StringView(" : ") << child.traitArgs << StringView(" parent=") << parent.type << StringView(" : ") << parent.traitArgs);
-    if (child.isReservation || parent.isReservation) {
-        return false;
-    }
     if (parent.isConst && !child.isConst) {
         return false;
     }
@@ -14974,13 +14962,9 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     frames[frameIndex]->availableDepth = ROOT_DEPTH;
 
     STD_DEFER {
-        const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
         BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
-        if (encounteredOverflow && frameIndex > 0) {
-            frames[frameIndex - 1]->encounteredOverflow = true;
-        }
     };
 
     const auto& traitDef = crate.getTraitByPath(callSpan, trait);
