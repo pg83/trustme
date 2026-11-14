@@ -1,0 +1,14 @@
+[target]
+arch = "x86_64"
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+trace-tab = "before\tafter"
+
+[backend.c]
+variant = "gnu"
+target = "x86_64-linux-gnu"
+emulate-i128 = false
+compiler-opts = []
+linker-opts-pre = []
+linker-opts-post = []

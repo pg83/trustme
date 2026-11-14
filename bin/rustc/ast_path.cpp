@@ -308,9 +308,6 @@ void ASTPath::printPretty(ZeroCopyOutput& os, bool isTypeContext, bool isDebug) 
         os << StringView("/*");
         bool printed = false;
         if (!bindings.value.is_Unbound()) {
-            if (printed) {
-                os << StringView(",");
-            }
             os << StringView("v:") << bindings.value;
             printed = true;
         }

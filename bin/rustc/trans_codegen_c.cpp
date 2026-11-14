@@ -9873,9 +9873,6 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
                         of << StringView("(int128_t)( ((uint128_t)") << c.v.getInner().getHi() << StringView("ull << 64) | (uint128_t)") << c.v.getInner().getLo() << StringView("ull)");
                     }
                     break;
-                default:
-                    of << c.v;
-                    break;
             }
             break;
         }

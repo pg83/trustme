@@ -766,9 +766,6 @@ namespace {
 
             TransList items = [&]() {
                 switch (crateType) {
-                    case ASTCrate::Type::Unknown:
-                        sysE << StringView("BUG? Unknown crate type") << endL;
-                        exit(1);
                     case ASTCrate::Type::RustLib:
                     case ASTCrate::Type::RustDylib:
                     case ASTCrate::Type::CDylib:

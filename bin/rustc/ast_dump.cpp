@@ -1430,11 +1430,6 @@ auto RustPrinter::printIntegerLiteral(enum eCoreType datatype, const U128& value
                 os << StringView("'\\u{") << formatHex(value) << StringView("}'");
             }
             break;
-        case CORETYPE_F16:
-        case CORETYPE_F32:
-        case CORETYPE_F64:
-        case CORETYPE_F128:
-            break;
         case CORETYPE_U8:
         case CORETYPE_U16:
         case CORETYPE_U32:

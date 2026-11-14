@@ -3012,10 +3012,6 @@ auto TransmuteLayoutBuilder::build(const HIRType* ty) -> Built {
         return aggregate(*repr);
     }
     if (const auto* array = ty->opt_Array()) {
-        if (!array->size.is_Known()) {
-            supported = false;
-            return {nfa.uninhabited(), 0};
-        }
         auto rv = nfa.empty();
         size_t size = 0;
         for (u64 i = 0; i < array->size.as_Known(); i++) {

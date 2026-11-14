@@ -1,0 +1,13 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+arch = "x86_64"
+
+[backend.c]
+variant = "gnu"
+target = "x86_64-linux-gnu"
+emulate-i128 = false
+compiler-opts = [{ outer = { value = 1 } }, "-ffunction-sections", "-pthread"]
+linker-opts-pre = ["-fuse-ld=lld", "-Wl,--start-group"]
+linker-opts-post = ["-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"]
