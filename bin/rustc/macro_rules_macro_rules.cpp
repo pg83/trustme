@@ -4247,9 +4247,6 @@ void stl::output<ZeroCopyOutput, MacroPatEnt::Type>(ZeroCopyOutput& os, MacroPat
         case MacroPatEnt::PAT_TOKEN_AMBIGUOUS:
             os << StringView("PAT_TOKEN_AMBIGUOUS");
             break;
-        case MacroPatEnt::PAT_LOOP:
-            os << StringView("PAT_LOOP");
-            break;
         case MacroPatEnt::PAT_TT:
             os << StringView("PAT_TT");
             break;

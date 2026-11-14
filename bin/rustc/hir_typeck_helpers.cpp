@@ -13470,16 +13470,10 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
             cached->valid = 0;
         }
         cached->valid |= mask;
-        switch (builtin) {
-            case StructuralTrait::Sized:
-                cached->sized = certainty;
-                break;
-            case StructuralTrait::Copy:
-                cached->copy = certainty;
-                break;
-            case StructuralTrait::Clone:
-                cached->clone = certainty;
-                break;
+        if (builtin == StructuralTrait::Sized) {
+            cached->sized = certainty;
+        } else {
+            cached->copy = certainty;
         }
     }
     return certainty;

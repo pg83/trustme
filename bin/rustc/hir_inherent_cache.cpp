@@ -233,6 +233,7 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
 
         switch (fcn.receiver) {
             case HIRFunction::Receiver::Free:
+            case HIRFunction::Receiver::BorrowOwned:
                 break;
             case HIRFunction::Receiver::Custom:
                 ASSERT_BUG(sp, fcn.receiverType, StringView("Custom receiver without a receiver type"));
@@ -244,9 +245,6 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
                 break;
             case HIRFunction::Receiver::Value:
                 items[name].byvalue.insert(sp, impl);
-                break;
-            case HIRFunction::Receiver::BorrowOwned:
-                H::g(items[name].refMove).byvalue.insert(sp, impl);
                 break;
             case HIRFunction::Receiver::BorrowUnique:
                 H::g(items[name].refMut).byvalue.insert(sp, impl);
