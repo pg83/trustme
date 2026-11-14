@@ -1212,18 +1212,13 @@ namespace {
     bool visitMirLvalueMut(MIRLValue& lv, MIRValUsage u, LvalueRefVisitorMut& cb) {
         auto lvr = MIRLValue::MRef(lv);
         do {
-            if (cb.visitLvalue(lvr, u)) {
-                return true;
-            }
+            cb.visitLvalue(lvr, u);
             // TODO: Use a TU_MATCH?
             if (lvr.is_Index()) {
                 auto ilv = MIRLValue::newLocal(lvr.as_Index());
                 auto ilvR = MIRLValue::MRef(ilv);
-                bool rv = cb.visitLvalue(ilvR, MIRValUsage::Read);
+                cb.visitLvalue(ilvR, MIRValUsage::Read);
                 BUG_ASSERT(ilv.is_Local() && ilv.as_Local() == lvr.as_Index());
-                if (rv) {
-                    return true;
-                }
             } else if (lvr.is_Field()) {
                 // HACK: If "moving", use a "Read" value usage (covers some quirks)
                 if (u == MIRValUsage::Move) {
