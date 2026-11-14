@@ -5697,9 +5697,7 @@ SolverCoercionResponse TraitResolution::evaluateCoercionGoal(const Span& sp, con
     );
     auto normalizationCertainty = SolverCertainty::Proven;
     auto normalizationEffects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
-        if (response.certainty == SolverCertainty::NoSolution) {
-            normalizationCertainty = SolverCertainty::NoSolution;
-        } else if (response.certainty == SolverCertainty::Ambiguous && normalizationCertainty == SolverCertainty::Proven) {
+        if (response.certainty == SolverCertainty::Ambiguous && normalizationCertainty == SolverCertainty::Proven) {
             normalizationCertainty = SolverCertainty::Ambiguous;
         }
         for (size_t i = 0; i < response.slots.types.size(); i++) {
@@ -6338,9 +6336,6 @@ SolverCertainty TraitResolution::evaluateCoercionConstraint(const Span& sp, cons
         }
         SolverCertainty result = SolverCertainty::NoSolution;
         solveTraitGoal(sp, unsizeTrait, HIRPathParams(destination), source, [&](SolverResponse response) {
-            if (response.certainty == SolverCertainty::NoSolution) {
-                return false;
-            }
             result = response.certainty;
             if (equalities) {
                 for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
