@@ -136,10 +136,6 @@ eTokenType TokenStream::lookahead(unsigned int i) {
         i--;
     }
 
-    if (i >= MAX_LOOKAHEAD) {
-        compileErrorBugCheck("Excessive lookahead");
-    }
-
     while (i >= lookaheadCount_) {
         DEBUG(StringView("lookahead - read #") << lookaheadCount_);
         auto tok = this->innerGetToken();
@@ -282,9 +278,6 @@ void stl::output<ZeroCopyOutput, ParseState>(ZeroCopyOutput& os, const ParseStat
     os << StringView("ParseState {");
     if (ps.disallowStructLiteral) {
         os << StringView(" disallow_struct_literal");
-    }
-    if (ps.noExpandMacros) {
-        os << StringView(" no_expand_macros");
     }
     os << StringView(" }");
     return;
