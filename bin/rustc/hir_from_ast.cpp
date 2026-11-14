@@ -697,9 +697,6 @@ namespace {
 
     template <typename Cb>
     void collectTypeLifetimes(const ASTType* ty, const Cb& cb) {
-        if (!ty) {
-            return;
-        }
         switch (ty->data.tag()) {
             case TypeData::TAG_Borrow: {
                 const auto& e = ty->data.as_Borrow();
@@ -2246,9 +2243,6 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             case ASTItem::TAG_None: {
                 break;
             }
-            case ASTItem::TAG_MacroInv: {
-                break;
-            }
             case ASTItem::TAG_Type: {
                 auto& i = item.data.as_Type();
                 bool isSized = true;
@@ -3016,9 +3010,6 @@ HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vect
             case ASTItem::TAG_None: {
                 break;
             }
-            case ASTItem::TAG_Macro: {
-                break;
-            }
             case ASTItem::TAG_MacroInv: {
                 break;
             }
@@ -3051,9 +3042,6 @@ HIRModule AST2HIR::LowerHIRModule(ASTModule& astMod, HIRItemPath path, std::vect
             }
             case ASTItem::TAG_ExternBlock: {
                 auto& e = item.data.as_ExternBlock();
-                if (e.items().size() > 0) {
-                    TODO(sp, StringView("Expand ExternBlock"));
-                }
                 for (const auto& lib : e.libraries) {
                     crate->extLibs.push_back(HIRExternLibrary{lib.libName});
                 }
