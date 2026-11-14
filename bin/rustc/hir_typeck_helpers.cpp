@@ -3750,8 +3750,8 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         return true;
                     }, {.ambiguity = SolverAmbiguityPolicy::Report});
                 }
-                if (callable && futureType != nullptr && findAsyncCallable(params.types.front()->as_Tuple(), futureType, true, true)) {
-                    return true;
+                if (callable && futureType != nullptr) {
+                    findAsyncCallable(params.types.front()->as_Tuple(), futureType, true, true);
                 }
             }
             break;
@@ -4289,9 +4289,6 @@ HIRPathParams TraitResolution::materializeImplParams(const Span& sp, const HIRGe
 bool TraitResolution::implsOverlap(const Span& sp, const SolverImpl& left, const SolverImpl& right) const {
     const auto* leftImpl = left.traitImpl;
     const auto* rightImpl = right.traitImpl;
-    if (!leftImpl || !rightImpl) {
-        return !leftImpl && !rightImpl && left.getImplType(crate.types) == right.getImplType(crate.types) && left.getTraitParamsRef(crate.types) == right.getTraitParamsRef(crate.types);
-    }
     if (left.traitPath != right.traitPath) {
         return false;
     }
