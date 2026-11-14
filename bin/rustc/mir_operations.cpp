@@ -5445,8 +5445,6 @@ namespace {
                     vals = std::move(se->vals);
                 } else if (auto* se = src.opt_EnumVariant()) {
                     vals = std::move(se->vals);
-                } else if (auto* se = src.opt_UnionVariant()) {
-                    vals.push_back(mv$(se->val));
                 } else {
                     MIR_BUG(state, StringView("Unexpected rvalue type in SplitAggregates - ") << src);
                 }
@@ -7118,9 +7116,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
     });
     MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
 
-    while (MIROptimiseInlining(state, fcn, true)) {
-        MIRCleanup(resolve, path, fcn, args, retType);
-    }
+    MIROptimiseInlining(state, fcn, true);
 
     MIROptimiseBlockSimplify(state, fcn);
     MIROptimiseUnifyBlocks(state, fcn);
@@ -7190,9 +7186,7 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
             changeHappened = true;
         }
 
-        if (MIROptimiseUselessReborrows(state, fcn)) {
-            changeHappened = true;
-        }
+        MIROptimiseUselessReborrows(state, fcn);
 
         if (MIROptimiseGotoAssign(state, fcn)) {
             changeHappened = true;
