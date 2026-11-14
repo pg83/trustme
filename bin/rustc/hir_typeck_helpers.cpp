@@ -7132,14 +7132,6 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
     const auto valueOpaqueForCaller = [](const HIRConstGeneric& value) {
         return value.is_Generic() && value.as_Generic().isSolverExistential();
     };
-    const auto traitOpaqueForCaller = [&](const HIRTraitPath& trait) {
-        for (const auto* type : trait.path.params.types) {
-            if (opaqueForCaller(type)) {
-                return true;
-            }
-        }
-        return false;
-    };
     const auto withoutOpaqueEffects = [&](const SolverResponse& source) {
         SolverResponse result;
         result.certainty = source.certainty;
@@ -7169,7 +7161,7 @@ auto TraitResolution::NextTraitGoalEvaluator::evaluateMethod(
             }
         }
         for (const auto& obligation : source.obligations) {
-            if (!opaqueForCaller(obligation.type) && !traitOpaqueForCaller(obligation.trait)) {
+            if (!opaqueForCaller(obligation.type)) {
                 result.obligations.push_back(SolverObligation{obligation.type, obligation.trait.clone()});
             }
         }
