@@ -4333,12 +4333,6 @@ auto UfcsVisitor::locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContex
             return true;
         }
     }
-    for (const auto& pt : trait.allParentTraits) {
-        if (this->locateItemInTrait(pc, *pt.traitPtr, pd)) {
-            // TODO: Modify path parameters based on the current trait's params
-            return setFromTraitImpl(sp, pc, pt.path, *pt.traitPtr, pd);
-        }
-    }
     return false;
 }
 
