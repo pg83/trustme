@@ -50,12 +50,6 @@ HIRGenericBound HIRGenericBound::clone() const {
 }
 
 bool HIRGenericParams::isEmpty() const {
-    if (!types.empty()) {
-        return false;
-    }
-    if (!values.empty()) {
-        return false;
-    }
     if (!bounds.empty()) {
         return false;
     }
