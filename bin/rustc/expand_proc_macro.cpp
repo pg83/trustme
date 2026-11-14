@@ -1659,8 +1659,6 @@ auto ProcMacroVisitor::visitFragment(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_VIS:
             visitVis(tok.fragVis());
             break;
-        default:
-            BUG(sp, StringView("Not a fragment: ") << tok);
     }
 }
 

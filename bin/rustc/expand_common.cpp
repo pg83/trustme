@@ -331,9 +331,7 @@ namespace {
                                 continue;
                             }
                             RcString target;
-                            if (ent.path.cls.is_Local()) {
-                                target = ent.path.cls.as_Local().name;
-                            } else if (!ent.path.nodes().empty()) {
+                            if (!ent.path.nodes().empty()) {
                                 target = ent.path.nodes().back().name();
                             }
                             if (target != RcString()) {
