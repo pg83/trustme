@@ -12417,9 +12417,6 @@ auto NextTraitGoalEvaluator::bindCandidateResponse(Candidate& candidate, const H
     } else if (candidate.markerImpl) {
         candidateParams = &candidate.markerImplParams;
     }
-    if (!candidateParams) {
-        return CandidateBindingResult::Unchanged;
-    }
 
     const auto binding = this->unifyCandidateParams(candidate, *candidateParams, [&](auto& relations) {
         relations.type(nestedType, response.getImplType(crate.types));
@@ -12512,9 +12509,6 @@ auto NextTraitGoalEvaluator::solveRelationGoal(Candidate& candidate, const HIRSi
     Certainty certainty = Certainty::NoSolution;
     auto callback = makeCallable<SolverMayApplyCb>([&](SolverMayApply probe) {
         auto& response = probe.effects;
-        if (!probe.candidate && response.certainty != Certainty::Ambiguous) {
-            return false;
-        }
         certainty = response.certainty;
         appendRelationEffects(candidate, std::move(response));
         return true;
@@ -13363,8 +13357,6 @@ auto NextTraitGoalEvaluator::evaluateStructuralTraitCertainty(const Span& callSp
                     return cached->sized;
                 case StructuralTrait::Copy:
                     return cached->copy;
-                case StructuralTrait::Clone:
-                    return cached->clone;
             }
         }
     }
