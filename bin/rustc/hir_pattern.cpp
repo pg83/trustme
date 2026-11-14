@@ -416,16 +416,10 @@ void stl::output<ZeroCopyOutput, HIRPattern>(ZeroCopyOutput& os, const HIRPatter
         }
         case HIRPatternData::TAG_Ref: {
             auto& e = x.data.as_Ref();
-            switch (e.type) {
-                case HIRBorrowType::Shared:
-                    os << StringView("&");
-                    break;
-                case HIRBorrowType::Unique:
-                    os << StringView("&mut ");
-                    break;
-                case HIRBorrowType::Owned:
-                    os << StringView("&move ");
-                    break;
+            if (e.type == HIRBorrowType::Shared) {
+                os << StringView("&");
+            } else {
+                os << StringView("&mut ");
             }
             os << *e.sub;
             break;

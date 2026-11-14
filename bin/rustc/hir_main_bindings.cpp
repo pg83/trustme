@@ -2783,15 +2783,8 @@ auto TreeVisitor::visit(HIRExprNodeBorrow& node) -> void {
 
 auto TreeVisitor::visit(HIRExprNodeRawBorrow& node) -> void {
     os << StringView("&raw ");
-    switch (node.type) {
-        case HIRBorrowType::Shared:
-            break;
-        case HIRBorrowType::Unique:
-            os << StringView("mut ");
-            break;
-        case HIRBorrowType::Owned:
-            os << StringView("move ");
-            break;
+    if (node.type == HIRBorrowType::Unique) {
+        os << StringView("mut ");
     }
 
     bool skipParens = this->nodeIsLeaf(*node.value) || NODE_IS(node.value, Deref);

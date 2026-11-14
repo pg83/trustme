@@ -17178,12 +17178,6 @@ void stl::output<ZeroCopyOutput, TraitResolution::AutoderefBorrow>(ZeroCopyOutpu
 template <>
 void stl::output<ZeroCopyOutput, TraitResolution::MethodAccess>(ZeroCopyOutput& os, TraitResolution::MethodAccess x) {
     switch (x) {
-        case TraitResolution::MethodAccess::Shared:
-            os << StringView("Shared");
-            break;
-        case TraitResolution::MethodAccess::Unique:
-            os << StringView("Unique");
-            break;
         case TraitResolution::MethodAccess::Move:
             os << StringView("Move");
             break;
