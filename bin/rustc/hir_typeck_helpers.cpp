@@ -1811,10 +1811,6 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
     ASSERT_BUG(sp, !values[leftSlot].isAlias(), StringView("slot ") << leftSlot);
     ASSERT_BUG(sp, !values[rightSlot].isAlias(), StringView("slot ") << rightSlot);
 
-    if (leftSlot == rightSlot) {
-        return;
-    }
-
     if (/*const auto* re =*/values[rightSlot].val->opt_Infer()) {
         DEBUG(StringView("Set ValIVar ") << rightSlot << StringView(" = @") << leftSlot);
         values[rightSlot].alias = leftSlot;
@@ -2237,9 +2233,6 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
             auto& le = (*l).as_Primitive();
             auto& re = (*r).as_Primitive();
             return le == re;
-        }
-        case HIRType::TAG_Diverge: {
-            return true;
         }
         case HIRType::TAG_Generic: {
             auto& le = (*l).as_Generic();

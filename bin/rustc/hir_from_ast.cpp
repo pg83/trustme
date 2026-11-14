@@ -3304,8 +3304,6 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 for (const auto& item : impl.items()) {
                     HIRItemPath itemPath(path, item.name.c_str());
                     switch ((*item.data).tag()) {
-                        default:
-                            BUG(item.sp, StringView("Unexpected item type in trait impl - ") << item.data->tagStr());
                         case ASTItem::TAG_None: {
                             break;
                         }
