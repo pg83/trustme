@@ -3965,9 +3965,6 @@ namespace {
             size_t replaced = 0;
             hashedBlocks.clear();
             for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
-                if (fcn.blocks[bbIdx].terminator.isDead()) {
-                    continue;
-                }
                 if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
                     continue;
                 }
