@@ -5947,9 +5947,6 @@ void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int t
             }
         }
     }
-    if (scopeStack[stackPos] != targetIdx) {
-        BUG(sp, StringView("Moving values to a scope not on the stack - scope ") << targetIdx);
-    }
     auto& tgtScopeDef = scopes.at(targetIdx);
     DEBUG(StringView("To S") << targetIdx << StringView(": ") << tgtScopeDef.data.tagStr());
     ASSERT_BUG(sp, tgtScopeDef.data.is_Owning(), StringView("Rasising scopes can only be done on temporaries (target)"));

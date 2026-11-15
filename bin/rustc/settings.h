@@ -114,9 +114,6 @@ struct Settings {
     std::optional<CfgLintLevel> lintCap;
 
     static bool lintGroupContains(const std::string& group, const std::string& name) {
-        if (group == "warnings") {
-            return true;
-        }
         if (group == "unused") {
             return name == "unused_must_use" || name == "unused_variables" || name == "unused_imports" || name == "unused_mut" || name == "unused_parens" || name == "unused_attributes" || name == "dead_code";
         }
