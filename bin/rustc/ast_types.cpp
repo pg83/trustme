@@ -65,13 +65,12 @@ ASTType* ASTType::clone() const {
     switch (data.tag()) {
 #define _COPY(VAR)                                                      \
     case TypeData::TAG_##VAR:                                           \
-        return mkType(p, span_, TypeData::make_##VAR(data.as_##VAR())); \
-        break;
+        return mkType(p, span_, TypeData::make_##VAR(data.as_##VAR()));
 #define _CLONE(VAR, ...)                                            \
     case TypeData::TAG_##VAR: {                                     \
         const auto& old = data.as_##VAR();                          \
         return mkType(p, span_, TypeData::make_##VAR(__VA_ARGS__)); \
-    } break;
+    }
         _COPY(Any)
         _COPY(Bang)
         _CLONE(Macro, {p.make<ASTMacroInvocation>(old.inv->clone())})
