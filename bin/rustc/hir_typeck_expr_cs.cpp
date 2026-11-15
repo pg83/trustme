@@ -4884,8 +4884,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                 };
                 bool rv = false;
                 switch (pattern.data.tag()) {
-                    default:
-                        UNREACHABLE();
                     case HIRPatternData::TAG_Value: {
                         auto& pe = pattern.data.as_Value();
                         checkScalarValue(pe.val);
@@ -5058,8 +5056,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         context.equateTypes(sp, ty, *possibleType);
 
                         switch (e.binding.tag()) {
-                            default:
-                                UNREACHABLE();
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 const auto& str = *be;
