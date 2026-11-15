@@ -10153,8 +10153,6 @@ auto PossibleType::fmt(ZeroCopyOutput& os) const -> ZeroCopyOutput& {
     os << StringView(" ");
     if (hasType()) {
         os << ty;
-    } else {
-        os << StringView("<removed>");
     }
     return os;
 }
