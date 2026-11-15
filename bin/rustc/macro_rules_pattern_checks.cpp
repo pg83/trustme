@@ -124,9 +124,8 @@ namespace {
                     return tt != TOK_RWORD_PRIV;
                 }
                 return isTokenType(tt);
-            default:
-                return true;
         }
+        __builtin_unreachable();
     }
 
     const char* fragmentName(Ent::Type type) {
@@ -159,9 +158,8 @@ namespace {
                 return "lifetime";
             case Ent::PAT_LITERAL:
                 return "literal";
-            default:
-                return "";
         }
+        __builtin_unreachable();
     }
 
     bool isRestricted(Ent::Type type) {
@@ -194,9 +192,8 @@ namespace {
             case Ent::PAT_VIS:
                 return "`,`, an identifier other than `priv`, a token that begins a type, or an "
                        "`ident`, `ty` or `path` fragment";
-            default:
-                return "";
         }
+        __builtin_unreachable();
     }
 
     void checkRun(const Ent* ents, size_t count, const Ents& outer) {
