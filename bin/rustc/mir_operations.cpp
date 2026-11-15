@@ -2360,8 +2360,6 @@ namespace {
                     case 1:
                         p = params.fcnParamsDef;
                         break;
-                    default:
-                        TODO(sp, StringView("Typecheck const generics - look up the type"));
                 }
                 ASSERT_BUG(sp, p, StringView("No generic list for ") << ce);
                 ASSERT_BUG(sp, ce.idx() < p->values.size(), StringView("Generic param index out of range"));
