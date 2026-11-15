@@ -1,0 +1,4 @@
+target.arch = "x86_64"
+backend.c.emulate-i128 = false
+backend.c.compiler-opts = [
+    "-fno-strict-aliasing"]

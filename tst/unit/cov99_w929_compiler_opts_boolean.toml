@@ -1,0 +1,2 @@
+[backend.c]
+compiler-opts = true

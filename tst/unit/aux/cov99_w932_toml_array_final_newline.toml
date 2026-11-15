@@ -1,0 +1,10 @@
+[target]
+arch = "x86_64"
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+
+[backend.c]
+emulate-i128 = false
+compiler-opts = ["-fno-strict-aliasing"
+]
