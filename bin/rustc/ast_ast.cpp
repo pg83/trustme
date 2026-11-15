@@ -27,7 +27,6 @@ ASTTrait::ASTTrait(ASTGenericParams params, std::vector<Spanned<TypeTraitPath>> 
 
 ASTTrait::~ASTTrait() = default;
 ASTTrait::ASTTrait(ASTTrait&&) = default;
-ASTTrait& ASTTrait::operator=(ASTTrait&&) = default;
 
 ASTImpl::ASTImpl(ASTImplDef def)
     : def_(mv$(def))
@@ -251,7 +250,6 @@ ASTExternBlock::ASTExternBlock(std::string abi)
 
 ASTExternBlock::~ASTExternBlock() = default;
 ASTExternBlock::ASTExternBlock(ASTExternBlock&&) = default;
-ASTExternBlock& ASTExternBlock::operator=(ASTExternBlock&&) = default;
 
 void ASTExternBlock::addItem(ASTNamed<ASTItem> namedItem) {
     ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), StringView("Incorrect item type for ExternBlock - ") << namedItem.data.tagStr());

@@ -376,7 +376,6 @@ public:
     ASTTrait(ASTGenericParams params, std::vector<Spanned<TypeTraitPath>> supertraits, std::vector<Spanned<ASTLifetimeRef>> lifetimes);
     ~ASTTrait();
     ASTTrait(ASTTrait&&);
-    ASTTrait& operator=(ASTTrait&&);
 
     const ASTGenericParams& params() const {
         return params_;
@@ -728,7 +727,6 @@ public:
     ASTExternBlock(std::string abi);
     ~ASTExternBlock();
     ASTExternBlock(ASTExternBlock&&);
-    ASTExternBlock& operator=(ASTExternBlock&&);
 
     const std::string& abi() const {
         return abi_;
