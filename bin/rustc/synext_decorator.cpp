@@ -3890,7 +3890,6 @@ auto DeriverHash::discriminantCoreType(const ASTEnum& enm) -> eCoreType {
         case ASTEnum::Markings::Repr::Isize:
             return CORETYPE_INT;
     }
-    return CORETYPE_INT;
 }
 
 auto DeriverHash::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
