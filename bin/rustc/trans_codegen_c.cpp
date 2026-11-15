@@ -5021,8 +5021,6 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
             case HIRCoreType::Usize:
                 bits = TargetGetCurSpec(wb_).arch.pointerBits;
                 break;
-            default:
-                MIR_BUG(localMirRes, StringView("Bad float to integer cast - ") << ty << StringView(" to ") << ve.type);
         }
         const auto emitTarget = [&]() {
             of << StringView("(");
