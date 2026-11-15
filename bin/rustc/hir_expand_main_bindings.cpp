@@ -3927,8 +3927,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                         case HIRExprNodeClosure::Class::Shared:
                             fcn = H::makeFn(types, mv$(params), mv$(traitParams), closureType, mv$(argsArg), retType, mv$(dispatchNode));
                             break;
-                        default:
-                            UNREACHABLE();
                     }
                     return std::make_pair(c, mv$(fcn));
                 }

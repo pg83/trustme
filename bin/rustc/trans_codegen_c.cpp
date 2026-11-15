@@ -2300,8 +2300,6 @@ auto CodeGeneratorC::emitStaticProto(const HIRPath& p, const HIRStatic& item, co
         }
     }
     switch (item.linkage.type) {
-        case HIRLinkage::Type::External:
-            break;
         case HIRLinkage::Type::Auto:
             break;
         case HIRLinkage::Type::Weak:
