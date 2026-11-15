@@ -5251,10 +5251,7 @@ MIRLValue MirBuilder::getResultUnwrapLvalue(const Span& sp) {
     }
 }
 
-MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const HIRType* ty, bool allowMissingValue /*=false*/) {
-    if (allowMissingValue && !blockActive()) {
-        return newTemporary(ty);
-    }
+MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const HIRType* ty, bool) {
     auto rv = getResult(sp);
     if (rv.is_Use()) {
         auto& e = rv.as_Use();
@@ -5266,10 +5263,7 @@ MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const HIRType* ty, bool 
     }
 }
 
-MIRParam MirBuilder::getResultInParam(const Span& sp, const HIRType* ty, bool allowMissingValue) {
-    if (allowMissingValue && !blockActive()) {
-        return newTemporary(ty);
-    }
+MIRParam MirBuilder::getResultInParam(const Span& sp, const HIRType* ty, bool) {
 
     auto rv = getResult(sp);
     if (auto* e = rv.opt_Constant()) {
