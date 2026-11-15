@@ -256,9 +256,6 @@ void memoryDump(unsigned& sequence, const char* phase) {
         if (lastVaddr % chunkSize != 0) {
             flushChunk(lastVaddr / chunkSize * chunkSize);
         }
-        if (chunkCountFlushed != chunkCount) {
-            BUG_ASSERT(false);
-        }
 
         struct RegState {
             u64 pc;

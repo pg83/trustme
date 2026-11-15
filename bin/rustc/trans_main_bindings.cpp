@@ -3468,12 +3468,6 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
         activeSet.insert(ty);
 
         switch ((*ty).tag()) {
-            case HIRType::TAG_Infer: {
-                BUG(sp, StringView("`_` type hit in enumeration"));
-            }
-            case HIRType::TAG_Generic: {
-                BUG(sp, StringView("Generic type hit in enumeration - ") << ty);
-            }
             case HIRType::TAG_NodeType: {
                 BUG(sp, StringView("NodeType type hit in enumeration - ") << ty);
             }

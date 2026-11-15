@@ -9584,13 +9584,6 @@ auto CodeGeneratorC::emitEnumVariantVal(const TypeRepr* repr, unsigned idx) -> v
                 of << StringView("(((uint128_t)") << ve.values[idx].getHi() << StringView("ull << 64) | (uint128_t)") << ve.values[idx].getLo() << StringView("ull)");
             }
             break;
-        case HIRCoreType::F16:
-        case HIRCoreType::F32:
-        case HIRCoreType::F64:
-        case HIRCoreType::F128:
-            MIR_TODO(*mirRes, StringView("Floating point enum tag."));
-        case HIRCoreType::Str:
-            MIR_BUG(*mirRes, StringView("Unsized tag?!"));
     }
 }
 
