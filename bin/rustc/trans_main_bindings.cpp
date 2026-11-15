@@ -2925,10 +2925,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
 }
 
 void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const std::vector<HIRPath>& paths) {
-    if (paths.empty()) {
-        return;
-    }
-
     EnumState state{wb};
     state.collected = &list;
     for (const auto& path : paths) {
