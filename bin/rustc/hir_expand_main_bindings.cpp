@@ -7354,8 +7354,6 @@ VisitorImplTrait::VisitorImplTrait(HIRTypeInterner& types)
                     tys.pushBack(std::move(ty));
                 }
                 DEBUG(StringView("Add to trait: ") << tyName << StringView(" = ") << tys.back());
-            } else {
-                BUG(Span(), StringView("Neither target impl nor target trait set"));
             }
 
             ty = typeInterner().path(HIRPath(selfTy ? selfTy : typeInterner().self(), HIRGenericPath(traitPath->clone(), traitArgs->clone()), tyName, methodParams->makeNopParams(typeInterner(), 1)), {});
