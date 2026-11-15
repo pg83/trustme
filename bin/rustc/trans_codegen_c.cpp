@@ -1566,9 +1566,6 @@ auto CodeGeneratorC::emitTypeProto(const HIRType* ty) -> void {
                 case HIRTypePathBinding::TAG_Unbound: {
                     UNREACHABLE();
                 }
-                case HIRTypePathBinding::TAG_Opaque: {
-                    UNREACHABLE();
-                }
                 case HIRTypePathBinding::TAG_Struct: {
                     of << StringView("struct s_") << TransMangle(te.path) << StringView(";\n");
                     break;
@@ -5430,8 +5427,6 @@ auto CodeGeneratorC::emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, co
         cb.emit(SIZE_MAX);
         of << StringView("\n");
         of << indent << StringView("}\n");
-    } else {
-        MIR_BUG(localMirRes, StringView("SwitchValue with unknown value type - ") << values.tagStr());
     }
 }
 
