@@ -2945,9 +2945,6 @@ auto AnnotateExprVisitorMark::markUsedVariable(const Span& sp, unsigned int slot
     BUG_ASSERT(closureStack.size() > 0);
     auto& ent = closureStack.back();
     switch (ent.tag()) {
-        case Scope::TAG_None: {
-            UNREACHABLE();
-        }
         case Scope::TAG_Closure: {
             auto& e = ent.as_Closure();
             markUsedVariableClosure(sp, e, slot, fields, usage);
