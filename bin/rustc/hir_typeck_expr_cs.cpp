@@ -4621,8 +4621,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     return binding.is_Enum() ? actualPath == getParentPath(patternGeneric).path : actualPath == patternGeneric.path;
                 };
                 switch (pattern.data.tag()) {
-                    default:
-                        UNREACHABLE();
                     case HIRPatternData::TAG_Box: {
                         return type->is_Path();
                     }
