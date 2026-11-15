@@ -9495,8 +9495,6 @@ auto ExprVisitorConv::visit(HIRExprNodeAssign& node) -> void {
 #define _(v) HIRExprNodeAssign::Op::v
         MIRBinOp op;
         switch (node.op) {
-            case _(None):
-                UNREACHABLE();
             case _(Add):
                 op = MIRBinOp::ADD;
                 if (0) {
@@ -9694,9 +9692,6 @@ auto ExprVisitorConv::visit(HIRExprNodeBinOp& node) -> void {
             this->generateCheckedBinop(sp, res.clone(), op, mv$(left), tyL, mv$(right), tyR);
             break;
 
-        case HIRExprNodeBinOp::Op::BoolAnd:
-        case HIRExprNodeBinOp::Op::BoolOr:
-            BUG(node.span(), StringView(""));
     }
     builder.setResult(node.span(), mv$(res));
 }
