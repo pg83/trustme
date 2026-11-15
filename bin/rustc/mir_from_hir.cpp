@@ -5426,8 +5426,6 @@ bool MirBuilder::assignReplacing(const Span& sp, const MIRLValue& dst, const MIR
         pushStmt(sp, MIRStatement::make_Assign({dst.clone(), MIRRValue::make_Use(rhs.clone())}));
         if (const auto* cleanup = afterReplace.opt_Cleanup()) {
             endBlock(MIRTerminator::make_Goto(*cleanup));
-        } else {
-            endBlock(MIRTerminator::make_UnwindResume({}));
         }
     }
     setCurBlock(nextBlock);
