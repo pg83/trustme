@@ -10460,8 +10460,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeBlock& node) -> void {
                         defer = true;
                         break;
                 }
-            } else if (this->nodeDiverges(*snp)) {
-                diverges = true;
             } else {
                 diverges = false;
             }
@@ -10962,8 +10960,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
                 case HIRExprNodeBinOp::Op::CmpGtE:
                     itemName = "partial_ord";
                     break;
-                default:
-                    break;
             }
             BUG_ASSERT(itemName);
             const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
@@ -10990,8 +10986,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeBinOp& node) -> void {
             const char* itemName = nullptr;
             auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
-                default:
-                    break;
 
                 case HIRExprNodeBinOp::Op::Add:
                     itemName = "add";

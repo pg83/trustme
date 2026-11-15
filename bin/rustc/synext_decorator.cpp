@@ -4409,9 +4409,6 @@ namespace {
 auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     cfgEvalItem(wb, i);
     switch (i.tag()) {
-        case ASTItem::TAG_None: {
-            break;
-        }
         case ASTItem::TAG_Union: {
             auto& e = i.as_Union();
             deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);

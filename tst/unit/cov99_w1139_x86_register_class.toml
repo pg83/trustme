@@ -1,0 +1,13 @@
+[target]
+family = "unix"
+os-name = "linux"
+env-name = "gnu"
+arch = "x86"
+
+[backend.c]
+variant = "gnu"
+target = "x86_64-linux-gnu"
+emulate-i128 = false
+
+[arch]
+pointer-bits = 64
