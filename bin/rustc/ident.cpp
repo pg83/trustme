@@ -172,12 +172,7 @@ Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope
 
 Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
     BUG_ASSERT(inner && inner->depth);
-    if (!inner->parent || !inner->parent->searchModule) {
-        return Hygiene(inner->parent);
-    }
-    Inner v = *inner->parent;
-    v.searchModule.reset();
-    return Hygiene(store(pool, std::move(v)));
+    return Hygiene(inner->parent);
 }
 
 bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
