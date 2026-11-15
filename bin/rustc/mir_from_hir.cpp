@@ -7773,9 +7773,6 @@ auto ExprVisitorConv::findAsyncDrop(const Span& sp, const HIRType* ty, HIRPath& 
 
 auto ExprVisitorConv::hasDropImpl(const Span& sp, const HIRType* ty) const -> bool {
     const auto& trait = builder.resolve().langDrop();
-    if (trait.components().empty()) {
-        return false;
-    }
     return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](SolverSelection selection) {
         return selection.impl.traitImpl;
     });
