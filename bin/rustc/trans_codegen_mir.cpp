@@ -489,13 +489,6 @@ auto CodeGeneratorMonoMir::emitStrByte(u8 b) -> void {
 }
 
 auto CodeGeneratorMonoMir::emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) -> void {
-    MIRFunction emptyFcn;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
-        os << StringView("static ") << p;
-    });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
-    mirRes = &topMirRes;
-
     TRACE_FUNCTION_F(p);
     auto type = params.monomorph(resolve_, item.type);
 
@@ -516,18 +509,9 @@ auto CodeGeneratorMonoMir::emitStaticLocal(const HIRPath& p, const HIRStatic& it
     }
     of << StringView("}");
     of << StringView(";\n");
-
-    mirRes = nullptr;
 }
 
 auto CodeGeneratorMonoMir::emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) -> void {
-    MIRFunction emptyFcn;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
-        os << StringView("extern fn ") << p;
-    });
-    MIRTypeResolve topMirRes{sp, resolve_, pathCallback, nullptr, {}, emptyFcn};
-    mirRes = &topMirRes;
-
     if (item.linkage.name != "") {
         const HIRType* retTypeTmp;
         const auto& retType = monomorphiseFcnReturn(item, params);
