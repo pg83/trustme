@@ -2417,8 +2417,6 @@ HIRCompare HIRType::compareWithPlaceholders(const Span& sp, const HIRType* x, tC
         return HIRCompare::Unequal;
     }
     switch ((*left).tag()) {
-        default:
-            UNREACHABLE();
         case HIRType::TAG_Diverge: {
             return HIRCompare::Equal;
         }
