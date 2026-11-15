@@ -3507,9 +3507,6 @@ const MacroExpansionEnt* MacroExpandState::nextEnt(const Span& sp) {
             } else {
                 offsets.popBack();
                 iterations_.popBack();
-                if (offsets.empty()) {
-                    break;
-                }
                 curEnts = getCurLayer();
             }
         } else {

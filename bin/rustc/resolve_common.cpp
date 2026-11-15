@@ -744,9 +744,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                                     }
                                     return ResolveItemRefType::make_HirRoot(&*crate.externCrates.at(tmp.crate).hir);
                                 }
-                                case ResolveModuleRef::TAG_ImplicitPrelude: {
-                                    UNREACHABLE();
-                                }
                                 case ResolveModuleRef::TAG_None: {
                                     break;
                                 }
