@@ -9387,9 +9387,6 @@ auto CodeGeneratorC::emitTupleDestructor(const MIRLValue& slot, const HIRType::D
         }
         field.incField();
     }
-    if (fields.empty()) {
-        return;
-    }
 
     auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
     of << indent << StringView("{ unsigned trustme_drop_progress = 0;\n");
