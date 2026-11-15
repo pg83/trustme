@@ -5077,9 +5077,6 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             for (auto& associated : realTrait.typeBounds) {
                 associated.second.type = this->expandAssociatedTypes(sp, std::move(associated.second.type));
             }
-            if (conditionalScope && (conditional.contains(sp, realType) || conditional.contains(sp, realTrait))) {
-                continue;
-            }
 
             bool sawResponse = false;
             bool boundInputsOpen = ivars.typeContainsIvars(realType, false) || ivars.pathparamsContainIvars(realTrait.path.params, false);
@@ -5231,9 +5228,6 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
             continue;
         }
         const auto* parameter = ivars.getType(parameters.types[i]);
-        if (conditionalScope && conditional.contains(sp, parameter)) {
-            continue;
-        }
         switch (this->typeIsSized(sp, parameter)) {
             case SolverCertainty::Proven:
                 break;
