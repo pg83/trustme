@@ -963,6 +963,4 @@ void stl::output<ZeroCopyOutput, ResolveNamespace>(ZeroCopyOutput& os, ResolveNa
             os << StringView("Macro");
             return;
     }
-    os << StringView("?");
-    return;
 }

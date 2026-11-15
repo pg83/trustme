@@ -6132,7 +6132,6 @@ auto Context::lookupModeMsg(LookupMode mode) -> const char* {
         case LookupMode::Variable:
             return "variable name";
     }
-    return "";
 }
 
 auto Context::lookup(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const -> ASTPath {
