@@ -4179,10 +4179,6 @@ void stl::output<ZeroCopyOutput, MacroPatEnt>(ZeroCopyOutput& os, const MacroPat
         default:
             os << StringView("$") << x.name << StringView(":");
             switch (x.type) {
-                case MacroPatEnt::PAT_TOKEN:
-                    UNREACHABLE();
-                case MacroPatEnt::PAT_LOOP:
-                    UNREACHABLE();
                 case MacroPatEnt::PAT_TT:
                     os << StringView("tt");
                     break;
