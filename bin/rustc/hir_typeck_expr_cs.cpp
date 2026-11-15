@@ -4662,9 +4662,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     }
                     case HIRPatternData::TAG_Value: {
                         auto& e = pattern.data.as_Value();
-                        if (e.val.is_Named()) {
-                            return true;
-                        }
                         if (e.val.is_String()) {
                             return type->is_Primitive() && type->as_Primitive() == HIRCoreType::Str;
                         }
