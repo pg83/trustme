@@ -4995,39 +4995,6 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
         }
     };
 
-    struct ContainsConditionalParameter final: MonomorphiserNop {
-        u32 scope;
-        mutable bool found = false;
-
-        ContainsConditionalParameter(HIRTypeInterner& types, u32 scope)
-            : MonomorphiserNop(types)
-            , scope(scope)
-        {
-        }
-
-        const HIRType* getType(const Span& sp, const HIRGenericRef& generic) const override {
-            found |= generic.solverScope == scope;
-            return MonomorphiserNop::getType(sp, generic);
-        }
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
-            found |= generic.solverScope == scope;
-            return MonomorphiserNop::getValue(sp, generic);
-        }
-
-        bool contains(const Span& sp, const HIRType* type) const {
-            found = false;
-            (void)this->monomorphType(sp, type, true);
-            return found;
-        }
-
-        bool contains(const Span& sp, const HIRTraitPath& trait) const {
-            found = false;
-            (void)this->monomorphTraitpath(sp, trait, true);
-            return found;
-        }
-    } conditional(crate.types, conditionalScope);
-
     struct ContainsTraitParameter final: MonomorphiserNop {
         mutable bool found = false;
 
@@ -5049,12 +5016,6 @@ SolverCertainty TraitResolution::evaluateGenericBounds(const Span& sp, const HIR
         bool contains(const Span& sp, const HIRType* type) const {
             found = false;
             (void)this->monomorphType(sp, type, true);
-            return found;
-        }
-
-        bool contains(const Span& sp, const HIRTraitPath& trait) const {
-            found = false;
-            (void)this->monomorphTraitpath(sp, trait, true);
             return found;
         }
     } containsTraitParameter(crate.types);
