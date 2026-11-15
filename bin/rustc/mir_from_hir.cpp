@@ -5417,9 +5417,7 @@ bool MirBuilder::assignReplacing(const Span& sp, const MIRLValue& dst, const MIR
     *rhsState = mv$(rhsBefore);
 
     const auto nextBlock = newBbUnlinked();
-    if (afterReplace.is_Terminate() || afterReplace.is_Unreachable()) {
-        endBlock(MIRTerminator::make_Drop({MIRDropKind::DEEP, dst.clone(), ~0u, nextBlock, mv$(afterReplace)}));
-    } else {
+    {
         const auto replaceBlock = newBbUnlinked();
         endBlock(MIRTerminator::make_Drop({MIRDropKind::DEEP, dst.clone(), ~0u, nextBlock, MIRUnwindAction::make_Cleanup(replaceBlock)}));
         setCurBlock(replaceBlock);
@@ -10286,8 +10284,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
         if (gpath.path.crateName() == "#intrinsics") {
             if (name == "offset_of") {
                 builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({name, gpath.params.clone()}), mv$(values)}));
-            } else {
-                ERROR(node.span(), E0000, StringView("Unknown builtin - ") << gpath.path);
             }
         } else if (fcn.abi == "rust-intrinsic" || (fcn.markings.isRustcIntrinsic && (name == "vtable_size" || name == "vtable_align" || MIRGetFloatAlgebraicBinOp(name, algebraicOp)))) {
             if (name == "ptr_metadata") {
