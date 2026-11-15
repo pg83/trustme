@@ -5548,9 +5548,6 @@ auto CodeGeneratorC::emitTermCall(const MIRTypeResolve& localMirRes, const MIRTe
                         // TODO: Monomorph.
                         break;
                     }
-                    case HIRPathData::TAG_UfcsUnknown: {
-                        break;
-                    }
                     case HIRPathData::TAG_UfcsInherent: {
                         auto& pe = e2.data.as_UfcsInherent();
                         omitAssign |= resolve_.hirCrate().findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
