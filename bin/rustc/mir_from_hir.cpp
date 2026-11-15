@@ -4367,7 +4367,6 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
                 builder.endBlock(MIRTerminator::make_Goto(bb));
                 return;
             }
-            idx++;
         }
 
         auto start = idx;

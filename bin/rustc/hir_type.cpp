@@ -2772,7 +2772,6 @@ void stl::output<ZeroCopyOutput, HIRCoreType>(ZeroCopyOutput& os, HIRCoreType ct
             return;
     }
     BUG_ASSERT(!"Bad CoreType value");
-    return;
 }
 
 template <>
