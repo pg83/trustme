@@ -1907,10 +1907,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRType* tyL, const H
         return HIRCompare::Unequal;
     }
     switch ((*v).tag()) {
-        case HIRType::TAG_Infer:
-        case HIRType::TAG_Generic: {
-            UNREACHABLE();
-        }
         case HIRType::TAG_Primitive: {
             auto& te = (*v).as_Primitive();
             auto& xe = (*x).as_Primitive();
