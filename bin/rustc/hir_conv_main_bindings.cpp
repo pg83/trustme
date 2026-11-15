@@ -2846,9 +2846,6 @@ auto Expander::visitPattern(HIRPattern& pat) -> void {
     switch (pat.data.tag()) {
         default:
             break;
-        case HIRPatternData::TAG_PathValue: {
-            BUG(sp, StringView("Value path pattern bound before alias expansion"));
-        }
         case HIRPatternData::TAG_PathTuple: {
             auto& e = pat.data.as_PathTuple();
             if (const auto* projection = e.path.data.opt_UfcsKnown()) {
