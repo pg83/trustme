@@ -7069,8 +7069,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 }
             } else if (innerTy->is_TraitObject()) {
                 emitDstSize(ty, e.args.at(0));
-            } else {
-                MIR_BUG(localMirRes, StringView("Unknown inner unsized type ") << innerTy << StringView(" for ") << ty);
             }
         }
         // TODO: Align up
@@ -7104,8 +7102,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 }
             } else if (innerTy->is_TraitObject()) {
                 emitDstAlign(ty, e.args.at(0));
-            } else {
-                MIR_BUG(localMirRes, StringView("Unknown inner unsized type ") << innerTy << StringView(" for ") << ty);
             }
         }
     } else if (name == "panic_if_uninhabited" || name == "assert_inhabited") {
