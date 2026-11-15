@@ -827,9 +827,6 @@ CodeGeneratorC::CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const
     , promotedValues(crate.pool)
     , indirectArgumentTypes(crate.pool) {
     options.emulatedI128 = TargetGetCurSpec(wb_).backendC.emulatedI128;
-    if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
-        WARNING(Span(), W0000, StringView("Potentially misconfigured target, 32-bit targets require i128 emulation"));
-    }
     const auto& targetSpec = TargetGetCurSpec(wb_);
     of << StringView("#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS 1\n") << StringView("#define TRUSTME_TARGET_EMULATED_I128 ") << options.emulatedI128 << StringView("\n") << StringView("#define TRUSTME_TARGET_U128_ALIGN ") << static_cast<unsigned>(targetSpec.arch.alignments.u128) << StringView("\n") << StringView("#define TRUSTME_TARGET_HAS_NATIVE_F128 ") << usesIntelCompilerAsmDialect() << StringView("\n") << StringView(CODEGEN_C_PRELUDE);
     of << StringView("}\nnamespace {\n") << StringView("extern const trustme_caller_location trustme_caller_locations[];\n") << StringView("}\nextern \"C\" {\n");
