@@ -118,9 +118,6 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             ASSERT_BUG(span, rv.is_Macro(), rv.tagStr());
             return std::move(rv.as_Macro());
         }
-        case ResolveModuleRef::TAG_ImplicitPrelude: {
-            return ResolveItemRefMacro::make_None({});
-        }
         case ResolveModuleRef::TAG_None: {
             return ResolveItemRefMacro::make_None({});
         }
