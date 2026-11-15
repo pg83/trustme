@@ -287,8 +287,6 @@ namespace {
                         case MIRStatement::TAG_SetDropFlag: {
                             break;
                         }
-                        default:
-                            UNREACHABLE();
                     }
                 }
                 mirRes.setCurStmtTerm(bbIdx);
@@ -404,8 +402,6 @@ namespace {
                         }
                         break;
                     }
-                    default:
-                        UNREACHABLE();
                 }
             }
         };
