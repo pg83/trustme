@@ -2588,9 +2588,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
             if (context.ivars.getType(dependency.index) != dependency.resolved) {
                 return false;
             }
-            if (dependency.index >= coercionIndex.count) {
-                return true;
-            }
             const auto& endpoints = coercionIndex[dependency.index].endpoints;
             return std::none_of(endpoints.begin(), endpoints.end(), [&](const auto& endpoint) {
                 if (endpoint.obligation && endpoint.obligation->argumentSite) {
