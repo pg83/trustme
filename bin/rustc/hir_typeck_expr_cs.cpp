@@ -3122,8 +3122,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                             for (const auto& argument : closure->args) {
                                 candidate.argTypes.pushBack(argument.second);
                             }
-                        } else {
-                            BUG(sp, StringView(""));
                         }
 
                         if (target) {
