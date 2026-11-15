@@ -4213,8 +4213,6 @@ auto UfcsVisitor::locateItemInTrait(HIRVisitor::PathContext pc, const HIRTrait& 
                 return true;
             }
             break;
-        case HIRVisitor::PathContext::TRAIT:
-            break;
         case HIRVisitor::PathContext::TYPE:
             if (trait.types.find(e.item) != trait.types.end()) {
                 return true;
