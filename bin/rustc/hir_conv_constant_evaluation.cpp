@@ -4601,8 +4601,6 @@ auto TypeInfo::mask(U128 v) const -> U128 {
         return U128(v.getLo());
     } else if (bits == 128) {
         return v;
-    } else {
-        UNREACHABLE();
     }
 }
 
