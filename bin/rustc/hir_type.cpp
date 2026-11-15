@@ -273,8 +273,6 @@ namespace {
                 auto& be = b.as_NodeType();
                 return ae == be;
             }
-            default:
-                UNREACHABLE();
         }
     }
 
