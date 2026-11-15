@@ -297,10 +297,6 @@ namespace {
             {
             }
 
-            const HIRType* monomorphType(const Span&, const HIRType* type, bool = true) const override {
-                return ivars.expandIvars(type);
-            }
-
             HIRConstGeneric monomorphConstgeneric(const Span&, const HIRConstGeneric& value, bool) const override {
                 auto resolved = value.clone();
                 ivars.expandIvars(resolved);

@@ -10558,7 +10558,6 @@ auto CodeGeneratorC::isDst(const HIRType* ty) const -> bool {
         case MetadataType::TraitObject:
             return true;
     }
-    return false;
 }
 
 CodeGeneratorC::AllocationNode::AllocationNode(const char* data, size_t length, u32 index, AllocationNode* hashNext)
