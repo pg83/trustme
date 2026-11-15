@@ -4352,8 +4352,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
             std::optional<const HIRType*> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
                 std::optional<const HIRType*> possibleType;
                 switch (pattern.data.tag()) {
-                    default:
-                        UNREACHABLE();
                     case HIRPatternData::TAG_Value: {
                         auto& pe = pattern.data.as_Value();
                         possibleType = getPossibleTypeVal(context, pe.val);
@@ -4409,8 +4407,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                     case HIRPatternData::TAG_PathValue: {
                         auto& e = pattern.data.as_PathValue();
                         switch (e.binding.tag()) {
-                            default:
-                                UNREACHABLE();
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
