@@ -2990,12 +2990,6 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, Vector<ASTType
 }
 
 auto Deriver::addFieldBound(Vector<ASTType*>& outList, ASTType* type) const -> void {
-    for (const auto& ty : outList) {
-        if (ty == type) {
-            return;
-        }
-    }
-
     outList.pushBack(type->clone());
 }
 
