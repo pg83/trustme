@@ -7468,8 +7468,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 case 64:
                     of << StringView("__builtin_bswap64");
                     break;
-                default:
-                    MIR_TODO(localMirRes, StringView("bswap<") << ty << StringView(">"));
             }
 
             of << StringView("(");
@@ -7497,8 +7495,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 case 64:
                     of << StringView("__trustme_bitrev64");
                     break;
-                default:
-                    MIR_TODO(localMirRes, StringView("bitreverse<") << ty << StringView(">"));
             }
             of << StringView("(");
             emitParam(e.args.at(0));
