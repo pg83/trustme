@@ -10993,8 +10993,6 @@ auto RulesetRef::operator[](size_t i) const -> const std::vector<PatternRule>& {
         const auto& parentRule = (*parent)[i][parentOfs];
         if (const auto* re = parentRule.opt_Variant()) {
             return re->subRules;
-        } else {
-            UNREACHABLE();
         }
     }
 }
