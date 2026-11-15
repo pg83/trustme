@@ -4420,8 +4420,6 @@ bool TraitResolution::hasAssociatedType(const HIRType* input) const {
     };
 
     switch ((*input).tag()) {
-        default:
-            UNREACHABLE();
         case HIRType::TAG_Infer: {
             const auto& ty = this->ivars.getType(input);
             if (ty != input) {
@@ -4676,8 +4674,6 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
 
     auto data = input->cloneData();
     switch (data.tag()) {
-        default:
-            UNREACHABLE();
         case HIRType::TAG_Infer: {
             const auto* ty = this->ivars.getType(input);
             if (ty != input) {
