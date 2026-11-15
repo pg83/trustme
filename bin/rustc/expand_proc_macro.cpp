@@ -1115,7 +1115,6 @@ auto ProcMacroInv::sendSpan(const Ident::Hygiene& h) -> void {
         this->sendSpanRef(1);
         return;
     }
-    this->sendSpan(h, parentSpan);
 }
 
 auto ProcMacroInv::sendSpan(const Ident::Hygiene& h, const Span& sp) -> void {
