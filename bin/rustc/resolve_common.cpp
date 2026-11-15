@@ -654,9 +654,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                     *outPath = mac.path;
                 }
                 switch (mac.ref.tag()) {
-                    case MacroRef::TAG_None: {
-                        BUG(sp, StringView("macro_imports_res had a None entry"));
-                    }
                     case MacroRef::TAG_MacroRules: {
                         const auto me = mac.ref.as_MacroRules();
                         return ResolveItemRefMacro(me);
@@ -815,9 +812,6 @@ auto ResolveState::searchItem(const ASTModule& mod, const RcString& name, Resolv
                             const auto _ = srcMod.as_None();
                             DEBUG(StringView("Unable to find ") << e.path);
                             break;
-                        }
-                        case ResolveModuleRef::TAG_ImplicitPrelude: {
-                            TODO(sp, StringView("ImplicitPrelude? ") << e.path);
                         }
                         case ResolveModuleRef::TAG_Ast: {
                             const auto sm = srcMod.as_Ast();
