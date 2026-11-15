@@ -1389,9 +1389,6 @@ void HIRConstGenericUnevaluated::fmt(ZeroCopyOutput& os) const {
             }
 
             void* imbueImpl(size_t* len) override {
-                if (*len > sizeof(buffer)) {
-                    *len = sizeof(buffer);
-                }
                 return buffer;
             }
 
