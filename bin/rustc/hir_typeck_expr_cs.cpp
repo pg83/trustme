@@ -9862,19 +9862,10 @@ auto IvarCoercionIndex::refreshCoercion(Context::Coercion& bound) const -> void 
     const auto response = context.resolve.evaluateCoercionGoal(bound.span(), destination, resolvedSource, SolverCoercionOp::Coercion);
     bound.deferred.clear();
     bound.alternativeGroups = 0;
-    ThinVector<std::pair<unsigned, unsigned>> groups;
     for (const auto& deferred : response.deferred) {
         unsigned group = 0;
         if (deferred.alternativeGroup != 0) {
-            const auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& existing) {
-                return existing.first == deferred.alternativeGroup;
-            });
-            if (found == groups.end()) {
-                group = ++bound.alternativeGroups;
-                groups.push_back({deferred.alternativeGroup, group});
-            } else {
-                group = found->second;
-            }
+            group = ++bound.alternativeGroups;
         }
         bound.deferred.push_back(SolverDeferredCoercion{deferred.destination, deferred.source, deferred.op, group});
     }
