@@ -1170,7 +1170,6 @@ namespace {
             case ASTExprNodeAssign::SHL:
                 return StringView("<<=");
         }
-        return StringView("=");
     }
 
     Prec precedenceOf(PExpr e) {

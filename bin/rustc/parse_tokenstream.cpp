@@ -157,7 +157,6 @@ ASTEdition TokenStream::lookaheadEdition(unsigned int i) {
         if (i == 0) {
             return edition;
         }
-        i--;
     }
     return lookaheadAt(i).edition;
 }
