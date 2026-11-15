@@ -5345,9 +5345,6 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
         case MIRRValue::TAG_DstMeta: {
             break;
         }
-        case MIRRValue::TAG_DstPtr: {
-            break;
-        }
         case MIRRValue::TAG_MakeDst: {
             auto& e = val.as_MakeDst();
             movedParam(e.ptrVal);
