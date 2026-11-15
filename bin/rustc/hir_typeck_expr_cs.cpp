@@ -2022,9 +2022,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
                 if (!leftInfer || !rightInfer) {
                     return false;
                 }
-                if (leftInfer->index == ~0u || rightInfer->index == ~0u) {
-                    return left == right;
-                }
                 return leftInfer->index == rightInfer->index;
             }
 
