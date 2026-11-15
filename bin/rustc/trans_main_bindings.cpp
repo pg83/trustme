@@ -2266,10 +2266,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                                 DEBUG(StringView("> Generate shim: ") << itemPath);
                                 newFcn.code.mir = generatedBody();
-                                auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
-                                    os << itemPath;
-                                });
-                                MIRTypeResolve localMirRes{sp, state.resolve, pathCallback, newFcn.returnType, newFcn.args, *newFcn.code.mir};
                                 Builder builder(state, *newFcn.code.mir);
                                 std::vector<MIRParam> callArgs;
                                 callArgs.push_back(MIRLValue::newDeref(MIRLValue::newArgument(0)));

@@ -363,10 +363,6 @@ namespace {
                         return AttrStage::Pre;
                     }
 
-                    bool runDuringIter() const override {
-                        return false;
-                    }
-
                     bool wantsAllAttrs() const override {
                         return true;
                     }
