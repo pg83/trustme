@@ -7494,10 +7494,6 @@ MIRBasicBlockId MirBuilder::unwindCleanupChain(const MIRLValue* consumedValue, b
 }
 
 MIRUnwindAction MirBuilder::makeUnwindAction(const Span& sp, const MIRLValue* consumedValue) {
-    if (buildingCleanup) {
-        return MIRUnwindAction::make_Terminate({});
-    }
-
     /* A saved-and-cloned region (a match guard) may only reference blocks it
        owns or blocks that predate it, so a chain built inside one stays
        private to it. */
@@ -10361,9 +10357,6 @@ auto ExprVisitorConv::visit(HIRExprNodeCallPath& node) -> void {
                             auto& c = tuMatch.as_Constant();
                             val = std::move(c);
                             break;
-                        }
-                        case MIRParam::TAG_Borrow: {
-                            TODO(node.span(), StringView("box_new with a borrow input?"));
                         }
                     }
                 }
