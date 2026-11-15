@@ -211,8 +211,6 @@ Token Token::makeFloat(FloatValue val, enum eCoreType datatype, RcString spellin
         case CORETYPE_F128:
         case CORETYPE_ANY:
             break;
-        default:
-            BUG(Span(), StringView("Bad type for float"));
     }
     return rv;
 }

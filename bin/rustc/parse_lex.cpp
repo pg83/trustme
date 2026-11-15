@@ -1230,8 +1230,6 @@ Token Lexer::getTokenInt() {
                     }
                     return this->withLiteralSuffix(Token(TOK_STRING, mv$(str), this->takeSpelling(), realGetHygiene()));
                 }
-                default:
-                    BUG_ASSERT(!"bugcheck");
             }
         }
     } catch (const Lexer::EndOfFile& /*e*/) {
