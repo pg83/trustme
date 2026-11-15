@@ -5898,7 +5898,6 @@ void MirBuilder::raiseToEnclosingTemporaries(const Span& sp, ScopeHandle source)
             return;
         }
     }
-    terminateScope(sp, mv$(source));
 }
 
 void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int targetIdx) {
@@ -5969,9 +5968,6 @@ void MirBuilder::raiseAllInto(const Span& sp, ScopeHandle source, unsigned int t
 void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, bool loopExit /*=false*/) {
     TRACE_FUNCTION_F(StringView("EARLY scope ") << scope.idx);
     auto it = std::find(scopeStack.begin(), scopeStack.end(), scope.idx);
-    if (it == scopeStack.end()) {
-        BUG(sp, StringView("Early-terminating scope not on the stack"));
-    }
     unsigned int slot = it - scopeStack.begin();
 
     bool useFrozenExitState = false;
@@ -6487,9 +6483,6 @@ const VarState& MirBuilder::getSlotState(const Span& sp, unsigned int idx, SlotT
     }
 
 outOfLoop:
-    if (aboveScope) {
-        BUG(sp, StringView("Scope ") << *aboveScope << StringView(" not found on stack"));
-    }
     switch (type) {
         case SlotType::Local:
             if (idx == ~0u) {
