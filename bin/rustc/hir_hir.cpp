@@ -462,8 +462,6 @@ U128 HIREnum::getValue(size_t idx) const {
         BUG_ASSERT(idx < e.variants.size());
 
         return e.variants[idx].val;
-    } else {
-        BUG_ASSERT(!"TODO: Enum::get_value on non-value enum?");
     }
 }
 
