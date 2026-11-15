@@ -309,8 +309,6 @@ auto Mangler::fmtName(const char* const s) -> void {
         } else if (*p == '#' || *p == '-') { // HACK: Treat '-' and '#' as the same in encoding
             // HACK: Only treat the last one as special, previous ones are replaced by underscores
             hashPos = p;
-        } else {
-            BUG(Span(), StringView("Encounteded invalid character in symbol name while mangling: '") << *p << StringView("' in '") << name << StringView("'"));
         }
     }
 
