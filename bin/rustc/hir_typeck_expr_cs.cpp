@@ -4690,8 +4690,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRType* type
                         case HIRPatternBinding::Type::Ref:
                             bindingType = (tmp = context.crate.types.borrow(HIRBorrowType::Shared, type));
                             break;
-                        default:
-                            TODO(sp, StringView("Assign variable type using mode ") << (int)bindingMode << StringView(" and ") << type);
                     }
                     BUG_ASSERT(bindingType);
                     context.equateTypes(sp, context.getVar(sp, pb.slot), bindingType);
@@ -10813,8 +10811,6 @@ auto ExprVisitorEnum::visit(HIRExprNodeAssign& node) -> void {
         const char* langItem = nullptr;
         auto operatorKind = TypeckPrimitiveOperator::None;
         switch (node.op) {
-            case HIRExprNodeAssign::Op::None:
-                UNREACHABLE();
             case HIRExprNodeAssign::Op::Add:
                 langItem = "add_assign";
                 operatorKind = TypeckPrimitiveOperator::AddAssign;
