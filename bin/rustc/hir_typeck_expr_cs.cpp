@@ -2638,9 +2638,6 @@ OrderPlace associatedPlace(const Context::Associated& rule) {
     bool typeHasIndependentUnresolvedIvar(const Context& context, const HIRType* type, unsigned int exceptIndex, const ActiveOperatorOutput* active) {
         bool found = false;
         visitTyWith(type, [&](const HIRType* inner) {
-            if (found) {
-                return true;
-            }
             const auto* resolved = context.getType(inner);
             if (resolved != inner) {
                 found = typeHasIndependentUnresolvedIvar(context, resolved, exceptIndex, active);
@@ -6037,9 +6034,6 @@ bool associatedWaitsForArgumentBinding(const Context& context, const IvarCoercio
     }
     for (const auto* type : rule.atyPp.types) {
         coercionIndex.collectIvars(context.getType(type), ivars);
-    }
-    if (ivars.empty()) {
-        return false;
     }
     for (const auto& coercion : context.linkCoerce) {
         if (!coercion->argumentSite || coercion->order != rule.order) {
