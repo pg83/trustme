@@ -324,9 +324,6 @@ U128 S128::uAbs() const {
 
 Ordering S128::ord(const S128& x) const {
     int c = cmp128s(this->inner, x.inner);
-    if (c == 0) {
-        return OrdEqual;
-    }
     return c < 0 ? OrdLess : OrdGreater;
 }
 
@@ -396,9 +393,6 @@ void U128::fmtHex(ZeroCopyOutput& os, unsigned width, bool uppercase) const {
         digits[length++] = chars[value.lo & 0xf];
         value >>= 4u;
     } while (value != 0);
-    while (length < width) {
-        digits[length++] = '0';
-    }
     while (length > 0) {
         os << digits[--length];
     }
