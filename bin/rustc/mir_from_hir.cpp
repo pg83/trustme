@@ -9225,8 +9225,6 @@ auto ExprVisitorConv::integerBits(HIRCoreType type) -> unsigned {
         case HIRCoreType::Usize:
         case HIRCoreType::Isize:
             return TargetGetPointerBits();
-        default:
-            return 0;
     }
 }
 
@@ -9442,8 +9440,6 @@ auto ExprVisitorConv::generateCheckedBinop(const Span& sp, MIRLValue resSlot, MI
                         case MIRBinOp::MUL:
                             generateOverflowingArithmetic(sp, mv$(resSlot), "mul_with_overflow", "panic_const_mul_overflow", mv$(valL), tyL, mv$(valR), updateDestState);
                             return;
-                        default:
-                            break;
                     }
                 }
             }
