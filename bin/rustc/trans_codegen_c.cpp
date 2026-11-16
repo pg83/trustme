@@ -2595,7 +2595,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("__attribute__((target(\"xsave,xsavec\"))) ");
         } else if (item.linkage.name == "llvm.x86.xsaves" || item.linkage.name == "llvm.x86.xrstors") {
             of << StringView("__attribute__((target(\"xsave,xsaves\"))) ");
-        } else if (item.linkage.name == "llvm.x86.sse.comigt.ss") {
+        } else if (item.linkage.name == "llvm.x86.sse.comigt.ss" || item.linkage.name == "llvm.x86.sse.stmxcsr") {
             of << StringView("__attribute__((target(\"sse\"))) ");
         }
         emitFunctionHeader(p, item, params);
@@ -2896,6 +2896,9 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\trv._0 = __builtin_sub_overflow(arg1, arg2, &rv._1);\n");
             of << StringView("\tif(arg0) rv._0 |= __builtin_sub_overflow(rv._1, 1, &rv._1);\n");
             of << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.sse.stmxcsr") {
+            of << StringView("\textern void trustme_x86_stmxcsr(void*) __asm__(\"llvm.x86.sse.stmxcsr\");\n");
+            of << StringView("\ttrustme_x86_stmxcsr(arg0);\n");
         } else if (item.linkage.name == "llvm.x86.fxsave") {
             of << StringView("\t__builtin_ia32_fxsave(arg0);\n");
         } else if (item.linkage.name == "llvm.x86.fxrstor") {
