@@ -2889,6 +2889,9 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\t__builtin_ia32_fxrstor((void*)arg0);\n");
         } else if (item.linkage.name == "llvm.x86.rdtsc") {
             of << StringView("\treturn __builtin_ia32_rdtsc();\n");
+        } else if (item.linkage.name == "llvm.x86.rdtscp") {
+            of << StringView("\trv._0 = __builtin_ia32_rdtscp(&rv._1);\n");
+            of << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.xgetbv") {
             of << StringView("\tu32 lo, hi;\n");
             of << StringView("\t__asm__ __volatile__ (\"xgetbv\" : \"=a\" (lo), \"=d\" (hi) : \"c\" (arg0) );\n");
