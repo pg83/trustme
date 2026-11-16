@@ -2597,7 +2597,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("__attribute__((target(\"xsave,xsaves\"))) ");
         } else if (item.linkage.name == "llvm.x86.sse.comigt.ss" || item.linkage.name == "llvm.x86.sse.stmxcsr" || item.linkage.name == "llvm.x86.sse.ldmxcsr") {
             of << StringView("__attribute__((target(\"sse\"))) ");
-        } else if (item.linkage.name == "llvm.x86.sse2.clflush") {
+        } else if (item.linkage.name == "llvm.x86.sse2.clflush" || item.linkage.name == "llvm.x86.sse2.maskmov.dqu") {
             of << StringView("__attribute__((target(\"sse2\"))) ");
         }
         emitFunctionHeader(p, item, params);
@@ -2906,6 +2906,11 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\ttrustme_x86_ldmxcsr(arg0);\n");
         } else if (item.linkage.name == "llvm.x86.sse2.clflush") {
             of << StringView("\t__builtin_ia32_clflush(arg0);\n");
+        } else if (item.linkage.name == "llvm.x86.sse2.maskmov.dqu") {
+            of << StringView("\ttypedef char trustme_v16qi __attribute__((vector_size(16)));\n");
+            of << StringView("\ttrustme_v16qi data, mask;\n");
+            of << StringView("\tmemcpy(&data, &arg0, sizeof(data)); memcpy(&mask, &arg1, sizeof(mask));\n");
+            of << StringView("\t__builtin_ia32_maskmovdqu(data, mask, (char*)arg2);\n");
         } else if (item.linkage.name == "llvm.x86.fxsave") {
             of << StringView("\t__builtin_ia32_fxsave(arg0);\n");
         } else if (item.linkage.name == "llvm.x86.fxrstor") {
