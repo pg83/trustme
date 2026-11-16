@@ -2587,6 +2587,9 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
 
     if (item.linkage.name.rfind("llvm.", 0) == 0) {
         of << StringView("static ");
+        if (item.linkage.name == "llvm.x86.xsave") {
+            of << StringView("__attribute__((target(\"xsave\"))) ");
+        }
         emitFunctionHeader(p, item, params);
         of << StringView(" {\n");
         of << StringView("\t");
@@ -2887,6 +2890,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\t__builtin_ia32_fxsave(arg0);\n");
         } else if (item.linkage.name == "llvm.x86.fxrstor") {
             of << StringView("\t__builtin_ia32_fxrstor((void*)arg0);\n");
+        } else if (item.linkage.name == "llvm.x86.xsave") {
+            of << StringView("\t__builtin_ia32_xsave(arg0, ((u64)arg1 << 32) | arg2);\n");
         } else if (item.linkage.name == "llvm.x86.rdtsc") {
             of << StringView("\treturn __builtin_ia32_rdtsc();\n");
         } else if (item.linkage.name == "llvm.x86.rdtscp") {
