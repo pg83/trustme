@@ -456,7 +456,18 @@ private:
     unsigned int rootIvarIndex(unsigned int slot) const;
     const IVar& getPointedIvar(unsigned int slot) const;
 
-    bool containsLiveIvar(const HIRType* type, unsigned int rootIndex) const;
+    enum class IvarOccurrence : u8 {
+        Absent,
+        Projected,
+        Structural,
+    };
+
+    struct TypeEquality {
+        const HIRType* left;
+        const HIRType* right;
+    };
+
+    IvarOccurrence ivarOccurrenceIn(const HIRType* type, unsigned int rootIndex, const stl::Vector<TypeEquality>& pending, const stl::Vector<TypeEquality>& revisiting) const;
 
     friend class Unifier;
 };
@@ -486,10 +497,7 @@ public:
         Mismatch,
     };
 
-    struct PendingEquality {
-        const HIRType* left;
-        const HIRType* right;
-    };
+    using PendingEquality = HMTypeInferrence::TypeEquality;
 
     struct PendingValueEquality {
         HIRConstGeneric left;
@@ -521,6 +529,7 @@ public:
     Outcome defer(const HIRType* left, const HIRType* right);
 
 private:
+    Outcome revisitPending();
     Outcome unifyResolved(const HIRType* left, const HIRType* right);
     Outcome unifyParams(const HIRPathParams& left, const HIRPathParams& right);
     Outcome unifyValuesResolved(const HIRConstGeneric& left, const HIRConstGeneric& right);
@@ -542,6 +551,7 @@ private:
     bool distinctRigidProjections_;
     bool leftNormalized_;
     stl::Vector<PendingEquality> pending_;
+    stl::Vector<PendingEquality> revisiting_;
     ThinVector<PendingValueEquality> pendingValues_;
     stl::Vector<PendingEquality> bindings_;
     ThinVector<PendingValueEquality> valueBindings_;

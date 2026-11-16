@@ -2362,52 +2362,114 @@ bool HMTypeInferrence::typesEqual(const HIRType* rl, const HIRType* rr) const {
 }
 
 bool HMTypeInferrence::ivarOccursIn(unsigned int slot, const HIRType* type) const {
-    return this->containsLiveIvar(type, this->rootIvarIndex(slot));
+    return this->ivarOccurrenceIn(type, this->rootIvarIndex(slot), {}, {}) != IvarOccurrence::Absent;
 }
 
-bool HMTypeInferrence::containsLiveIvar(const HIRType* type, unsigned int rootIndex) const {
-    /* A coroutine signature can still contain a wildcard before enumeration
-       assigns its inference slot. Only live slots of this table can recur. */
-    if (const auto* infer = type->opt_Infer(); infer && (infer->index == ~0u || isAliasInputInfer(infer->index) || infer->index >= ivars.size())) {
-        return false;
-    }
-    const auto* resolved = this->getType(type);
-    return visitTyWith(resolved, [&](const HIRType* inner) {
-        if (const auto* node = inner->opt_NodeType()) {
-            /* Upstream's closure and coroutine types carry their signatures as
-               generic arguments, so the occurs check walks them; here the node
-               is the type, and its signature is walked by hand. */
-            if (const auto* closure = node->opt_Closure()) {
-                for (const auto& arg : closure->args) {
-                    if (this->containsLiveIvar(arg.second, rootIndex)) {
-                        return true;
+auto HMTypeInferrence::ivarOccurrenceIn(const HIRType* type, unsigned int rootIndex, const stl::Vector<TypeEquality>& pending, const stl::Vector<TypeEquality>& revisiting) const -> IvarOccurrence {
+    struct Visitor final: HIRVisitor {
+        struct Visited {
+            unsigned index;
+            bool projected;
+        };
+
+        const HMTypeInferrence& table;
+        unsigned rootIndex;
+        const stl::Vector<TypeEquality>& pending;
+        const stl::Vector<TypeEquality>& revisiting;
+        stl::Vector<Visited> visited;
+        bool projected = false;
+        IvarOccurrence occurrence = IvarOccurrence::Absent;
+
+        Visitor(const HMTypeInferrence& table, unsigned rootIndex, const stl::Vector<TypeEquality>& pending, const stl::Vector<TypeEquality>& revisiting)
+            : HIRVisitor(nullptr, table.types)
+            , table(table)
+            , rootIndex(rootIndex)
+            , pending(pending)
+            , revisiting(revisiting)
+        {
+        }
+
+        void visitEqualities(unsigned index, const stl::Vector<TypeEquality>& equalities) {
+            const auto visitBinding = [&](const HIRType* variable, const HIRType* value) {
+                const auto* infer = variable->opt_Infer();
+                if (infer && infer->index != ~0u && !isAliasInputInfer(infer->index) && infer->index < table.ivars.size() && table.rootIvarIndex(infer->index) == index) {
+                    (void)this->visitType(value);
+                }
+            };
+            for (const auto& equality : equalities) {
+                visitBinding(equality.left, equality.right);
+                visitBinding(equality.right, equality.left);
+            }
+        }
+
+        void visitConstgeneric(HIRConstGeneric&) override {
+        }
+
+        const HIRType* visitType(const HIRType* inner) override {
+            if (occurrence == IvarOccurrence::Structural) {
+                return inner;
+            }
+            if (const auto* infer = inner->opt_Infer()) {
+                /* A coroutine signature can still contain a wildcard before enumeration
+                   assigns its inference slot. Only live slots of this table can recur. */
+                if (infer->index == ~0u || isAliasInputInfer(infer->index)) {
+                    return inner;
+                }
+                /* A signature variable of another table (a probe's, or the expression's
+                   seen from a scratch table) is not one of this table's. */
+                if (infer->index >= table.ivars.size()) {
+                    return inner;
+                }
+                const auto index = table.rootIvarIndex(infer->index);
+                if (index == rootIndex) {
+                    occurrence = projected ? IvarOccurrence::Projected : IvarOccurrence::Structural;
+                    return inner;
+                }
+                for (const auto& entry : visited) {
+                    if (entry.index == index && entry.projected == projected) {
+                        return inner;
                     }
                 }
-                return this->containsLiveIvar(closure->returnType, rootIndex);
+                visited.pushBack(Visited{index, projected});
+                if (const auto* bound = table.getType(inner); bound != inner) {
+                    (void)this->visitType(bound);
+                }
+                this->visitEqualities(index, pending);
+                this->visitEqualities(index, revisiting);
+                return inner;
             }
-            if (const auto* generator = node->opt_Generator()) {
-                return this->containsLiveIvar(generator->resumeTy, rootIndex) || this->containsLiveIvar(generator->yieldTy, rootIndex) || this->containsLiveIvar(generator->returnType, rootIndex);
+            const bool wasProjected = projected;
+            if (const auto* path = inner->opt_Path(); path && path->path.data.is_UfcsKnown() && (path->binding.is_Unbound() || path->binding.is_Opaque())) {
+                projected = true;
             }
-            if (const auto* async = node->opt_Async()) {
-                return (async->yieldTy && this->containsLiveIvar(async->yieldTy, rootIndex)) || this->containsLiveIvar(async->returnType, rootIndex);
+            if (const auto* node = inner->opt_NodeType()) {
+                /* Upstream's closure and coroutine types carry their signatures as
+                   generic arguments, so the occurs check walks them; here the node
+                   is the type, and its signature is walked by hand. */
+                if (const auto* closure = node->opt_Closure()) {
+                    for (const auto& arg : closure->args) {
+                        (void)this->visitType(arg.second);
+                    }
+                    (void)this->visitType(closure->returnType);
+                } else if (const auto* generator = node->opt_Generator()) {
+                    (void)this->visitType(generator->resumeTy);
+                    (void)this->visitType(generator->yieldTy);
+                    (void)this->visitType(generator->returnType);
+                } else if (const auto* async = node->opt_Async()) {
+                    if (async->yieldTy) {
+                        (void)this->visitType(async->yieldTy);
+                    }
+                    (void)this->visitType(async->returnType);
+                }
+            } else {
+                (void)HIRVisitor::visitType(inner);
             }
-            return false;
+            projected = wasProjected;
+            return inner;
         }
-        const auto* infer = inner->opt_Infer();
-        if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index)) {
-            return false;
-        }
-        /* A signature variable of another table (a probe's, or the expression's
-           seen from a scratch table) is not one of this table's. */
-        if (infer->index >= ivars.size()) {
-            return false;
-        }
-        if (this->rootIvarIndex(infer->index) == rootIndex) {
-            return true;
-        }
-        const auto* bound = this->getType(inner);
-        return bound != inner && this->containsLiveIvar(bound, rootIndex);
-    });
+    } visitor(*this, rootIndex, pending, revisiting);
+    (void)visitor.visitType(type);
+    return visitor.occurrence;
 }
 
 Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
@@ -2452,16 +2514,17 @@ Unifier::Outcome Unifier::defer(const HIRType* left, const HIRType* right) {
 
 Unifier::Outcome Unifier::unify(const HIRType* left, const HIRType* right) {
     const auto snapshot = table_.snapshot();
-    const auto pendingBefore = pending_.length();
+    const auto pendingBefore = pending_;
     const auto pendingValuesBefore = pendingValues_.size();
     const auto bindingsBefore = bindings_.length();
     const auto valueBindingsBefore = valueBindings_.size();
-    const auto outcome = this->unifyResolved(left, right);
+    auto outcome = this->unifyResolved(left, right);
+    if (outcome != Outcome::Mismatch && !pending_.empty()) {
+        outcome = this->revisitPending();
+    }
     if (outcome == Outcome::Mismatch) {
         table_.rollbackTo(snapshot);
-        while (pending_.length() > pendingBefore) {
-            pending_.popBack();
-        }
+        pending_ = pendingBefore;
         while (pendingValues_.size() > pendingValuesBefore) {
             pendingValues_.pop_back();
         }
@@ -2479,13 +2542,47 @@ Unifier::Outcome Unifier::unify(const HIRType* left, const HIRType* right) {
 
 Unifier::Outcome Unifier::unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right) {
     const auto snapshot = table_.snapshot();
-    const auto outcome = this->unifyValuesResolved(left, right);
+    const auto pendingBefore = pending_;
+    const auto pendingValuesBefore = pendingValues_.size();
+    const auto bindingsBefore = bindings_.length();
+    const auto valueBindingsBefore = valueBindings_.size();
+    auto outcome = this->unifyValuesResolved(left, right);
+    if (outcome != Outcome::Mismatch && !pending_.empty()) {
+        outcome = this->revisitPending();
+    }
     if (outcome == Outcome::Mismatch) {
         table_.rollbackTo(snapshot);
+        pending_ = pendingBefore;
+        while (pendingValues_.size() > pendingValuesBefore) {
+            pendingValues_.pop_back();
+        }
+        while (bindings_.length() > bindingsBefore) {
+            bindings_.popBack();
+        }
+        while (valueBindings_.size() > valueBindingsBefore) {
+            valueBindings_.pop_back();
+        }
     } else {
         table_.commit(snapshot);
     }
     return outcome == Outcome::Mismatch ? Outcome::Mismatch : pending_.empty() && pendingValues_.empty() ? Outcome::Proven : Outcome::Ambiguous;
+}
+
+Unifier::Outcome Unifier::revisitPending() {
+    BUG_ASSERT(revisiting_.empty());
+    u64 generation;
+    do {
+        generation = table_.mutationGeneration;
+        revisiting_.xchg(pending_);
+        for (const auto& equality : revisiting_) {
+            if (this->unifyResolved(equality.left, equality.right) == Outcome::Mismatch) {
+                revisiting_.clear();
+                return Outcome::Mismatch;
+            }
+        }
+        revisiting_.clear();
+    } while (!pending_.empty() && table_.mutationGeneration != generation);
+    return pending_.empty() && pendingValues_.empty() ? Outcome::Proven : Outcome::Ambiguous;
 }
 
 Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* rightRaw) {
@@ -2557,28 +2654,25 @@ Unifier::Outcome Unifier::unifyResolved(const HIRType* leftRaw, const HIRType* r
             return Outcome::Mismatch;
         }
         const auto rootIndex = table_.rootIvarIndex(infer->as_Infer().index);
-        if (table_.containsLiveIvar(other, rootIndex)) {
+        const auto occurrence = table_.ivarOccurrenceIn(other, rootIndex, pending_, revisiting_);
+        if (occurrence == HMTypeInferrence::IvarOccurrence::Structural) {
+            return Outcome::Mismatch;
+        }
+        if (occurrence == HMTypeInferrence::IvarOccurrence::Projected) {
             /* An alias that mentions the variable is not a type containing it until
                it is normalized: `<Map<I, closure> as Iterator>::Item` names the
                closure's return variable and normalizes to it.  Upstream relates an
                alias through an `AliasRelate` goal - the alias is normalized and the
                result related - and never fails an occurs check on the alias itself;
                one that does not normalize yet stays open. */
-            const bool hasDeferredProjection = visitTyWith(other, [&](const HIRType* inner) {
-                const auto* path = inner->opt_Path();
-                return path && path->path.data.is_UfcsKnown() && (path->binding.is_Unbound() || path->binding.is_Opaque())
-                    && table_.containsLiveIvar(inner, rootIndex);
-            });
-            if (hasDeferredProjection) {
-                if (resolve_) {
-                    const auto* normalized = resolve_->expandAssociatedTypes(sp_, other);
-                    if (normalized != other) {
-                        return this->unify(infer, normalized);
-                    }
+            if (resolve_) {
+                const auto* resolved = table_.expandIvars(other);
+                const auto* normalized = resolve_->expandAssociatedTypes(sp_, resolved);
+                if (normalized != resolved) {
+                    return this->unifyResolved(infer, normalized);
                 }
-                return this->defer(left, right);
             }
-            return Outcome::Mismatch;
+            return this->defer(left, right);
         }
         bindings_.pushBack(PendingEquality{infer, other});
         table_.setIvarTo(rootIndex, other);
@@ -13522,7 +13616,9 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
 
         const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override {
             const auto* infer = type->opt_Infer();
-            if (!infer || infer->index == ~0u || (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index))) {
+            const auto* generic = type->opt_Generic();
+            const bool existential = generic && generic->isSolverExistential();
+            if (!existential && (!infer || infer->index == ~0u || (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index)))) {
                 return MonomorphiserNop::monomorphType(sp, type, allowInfer);
             }
             for (const auto& binding : types) {
@@ -13530,7 +13626,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                     return binding.probe;
                 }
             }
-            auto probe = table.newIvarTr(infer->tyClass);
+            auto probe = table.newIvarTr(infer ? infer->tyClass : HIRInferClass::None);
             types.push_back(CandidateHeadTypeBinding{type, probe});
             return probe;
         }
@@ -13566,7 +13662,8 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
 
         const HIRType* monomorphType(const Span& sp, const HIRType* type, bool allowInfer = true) const override {
-            if (const auto* infer = type->opt_Infer()) {
+            const auto* infer = type->opt_Infer();
+            if (infer || (type->is_Generic() && type->as_Generic().isSolverExistential())) {
                 for (const auto& binding : types) {
                     /* Unifying two probes merges one into the other, and the survivor takes on
                        the class the merged one carried: an integer literal's variable unified
@@ -13577,7 +13674,7 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                        met is a probe of this table, so name it by index, as the value case
                        already does. */
                     const auto probeIndex = binding.probe->as_Infer().index;
-                    const bool matches = resolvingDepth == 0 ? binding.original == type : probeIndex == infer->index;
+                    const bool matches = resolvingDepth == 0 ? binding.original == type : infer && probeIndex == infer->index;
                     if (!matches) {
                         continue;
                     }
