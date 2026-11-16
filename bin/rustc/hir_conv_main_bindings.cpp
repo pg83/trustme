@@ -730,6 +730,19 @@ namespace {
     }
 
     void prepareUFCSHeaders(const WireBoard& wb, HIRCrate& crate) {
+        for (auto& implGroup : crate.traitImpls) {
+            auto expandList = [&](auto& implList) {
+                for (auto& impl : implList) {
+                    expandTraitImplDefaults(crate, implGroup.first, *impl);
+                }
+            };
+            for (auto& named : implGroup.second.named) {
+                expandList(named.second);
+            }
+            expandList(implGroup.second.nonNamed);
+            expandList(implGroup.second.generic);
+        }
+
         struct Headers final: UfcsVisitor {
             explicit Headers(const WireBoard& wb)
                 : UfcsVisitor(wb, false)
@@ -890,19 +903,6 @@ void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
 }
 
 void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
-    for (auto& implGroup : crate.traitImpls) {
-        auto expandList = [&](auto& implList) {
-            for (auto& impl : implList) {
-                expandTraitImplDefaults(crate, implGroup.first, *impl);
-            }
-        };
-        for (auto& named : implGroup.second.named) {
-            expandList(named.second);
-        }
-        expandList(implGroup.second.nonNamed);
-        expandList(implGroup.second.generic);
-    }
-
     prepareUFCSHeaders(wb, crate);
     UfcsVisitor exp{wb, false};
     exp.visitCrate(crate);
