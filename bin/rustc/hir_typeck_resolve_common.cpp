@@ -171,8 +171,6 @@ void TraitResolveCommon::buildIndex(const Span& sp, BoundIndex& index) const {
 
     this->iterateBounds([&](const HIRGenericBound& b) -> bool {
         switch (b.tag()) {
-            default:
-                break;
             case HIRGenericBound::TAG_TraitBound: {
                 auto& be = b.as_TraitBound();
                 this->prepIndexesAddTraitBound(sp, index, be.type, be.trait.clone());

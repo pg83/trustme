@@ -572,7 +572,6 @@ bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct) {
                     return false;
             }
     }
-    return false;
 }
 
 void checkTypeClassPrimitive(const Span& sp, const HIRType* type, HIRInferClass ic, HIRCoreType ct) {
