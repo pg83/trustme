@@ -1061,7 +1061,6 @@ const HIRType* HIRVisitor::visitType(const HIRType* ty) {
 
 void HIRVisitor::visitTypeDataChildren(HIRType& data) {
     switch (data.tag()) {
-        default: UNREACHABLE();
         case HIRType::TAG_Path: {
             auto& e = data.as_Path();
             this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
