@@ -2599,6 +2599,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("__attribute__((target(\"sse\"))) ");
         } else if (item.linkage.name == "llvm.x86.sse2.clflush" || item.linkage.name == "llvm.x86.sse2.maskmov.dqu") {
             of << StringView("__attribute__((target(\"sse2\"))) ");
+        } else if (item.linkage.name == "llvm.x86.avx.max.pd.256") {
+            of << StringView("__attribute__((target(\"avx\"))) ");
         }
         emitFunctionHeader(p, item, params);
         of << StringView(" {\n");
@@ -2713,6 +2715,12 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\tfloat result[4]; double input[2];\n") << StringView("\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (float)input[0];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.cvtss2sd") {
             of << StringView("\tdouble result[2]; float input[4];\n") << StringView("\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (double)input[0];\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.avx.max.pd.256") {
+            of << StringView("\ttypedef double trustme_v4df __attribute__((vector_size(32)));\n");
+            of << StringView("\ttrustme_v4df lhs, rhs;\n");
+            of << StringView("\tmemcpy(&lhs, &arg0, sizeof(lhs)); memcpy(&rhs, &arg1, sizeof(rhs));\n");
+            of << StringView("\ttrustme_v4df result = __builtin_ia32_maxpd256(lhs, rhs);\n");
+            of << StringView("\tmemcpy(&rv, &result, sizeof(rv));\n\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse2.min.pd" || item.linkage.name == "llvm.x86.sse2.min.sd" || item.linkage.name == "llvm.x86.sse2.max.pd" || item.linkage.name == "llvm.x86.sse2.max.sd") {
             const bool isMin = item.linkage.name == "llvm.x86.sse2.min.pd" || item.linkage.name == "llvm.x86.sse2.min.sd";
             const bool scalar = item.linkage.name == "llvm.x86.sse2.min.sd" || item.linkage.name == "llvm.x86.sse2.max.sd";
