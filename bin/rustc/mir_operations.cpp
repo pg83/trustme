@@ -5584,9 +5584,6 @@ namespace {
                 });
             };
             for (const auto& block : fcn.blocks) {
-                if (block.terminator.isDead()) {
-                    continue;
-                }
 
                 for (unsigned int stmtIdx = 0; stmtIdx < block.statements.size(); stmtIdx++) {
                     state.setCurStmt(&block - &fcn.blocks.front(), stmtIdx);
@@ -5789,9 +5786,6 @@ namespace {
 
                 for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
                     auto& block = fcn.blocks[blockIdx];
-                    if (block.terminator.isDead()) {
-                        continue;
-                    }
                     for (auto& stmt : block.statements) {
                         state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                         DEBUG(state << stmt);
@@ -5897,9 +5891,6 @@ namespace {
         {
             DEBUG(StringView("- Returns"));
             for (auto& block : fcn.blocks) {
-                if (block.terminator.isDead()) {
-                    continue;
-                }
 
                 if (block.terminator.is_Call()) {
                     // TODO: What if the destination located here is a 1:1 and its usage is listed to be replaced by the return value.
