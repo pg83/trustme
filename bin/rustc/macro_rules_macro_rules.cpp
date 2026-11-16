@@ -319,9 +319,6 @@ namespace {
     InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmtIsItem) {
         Token tok;
         switch (type) {
-            case MacroPatEnt::PAT_TOKEN:
-            case MacroPatEnt::PAT_TOKEN_AMBIGUOUS:
-                BUG(lex.pointSpan(), StringView("Encountered PAT_TOKEN when handling capture"));
             case MacroPatEnt::PAT_LOOP:
                 BUG(lex.pointSpan(), StringView("Encountered PAT_LOOP when handling capture"));
 

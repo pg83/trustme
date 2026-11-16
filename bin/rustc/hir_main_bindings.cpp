@@ -3823,9 +3823,6 @@ auto HirSerialiser::serialise(const ::SimplePatIfCheck& e) -> void {
 auto HirSerialiser::serialise(const ::SimplePatEnt& pe) -> void {
     out.writeTag(pe.tag());
     switch (pe.tag()) {
-        case SimplePatEnt::TAG_End: {
-            break;
-        }
         case SimplePatEnt::TAG_LoopStart: {
             auto& e = pe.as_LoopStart();
             out.writeCount(e.index);
