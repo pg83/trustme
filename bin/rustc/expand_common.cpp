@@ -2218,9 +2218,16 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     ExpandState es{wb, crate, LList<ASTModule*>(nullptr, &crate.rootModule_), ExpandMode::FirstPass, &crate.rootModule_};
 
     CfgExpandAttrs(es.wb, crate.attrs);
-    ExpandAttrs(es, crate.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-        d.handle(sp, a, es.wb, crate);
-    }));
+    {
+        ExpandState attrState(es);
+        const auto callback = makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, es.wb, crate);
+        });
+        if (ExpandAttrs(attrState, crate.attrs, AttrStage::Pre, callback)) {
+            attrState.mode = ExpandMode::Final;
+            ExpandAttrs(attrState, crate.attrs, AttrStage::Pre, callback);
+        }
+    }
     crate.setCrateName(crate.crateNameSet);
 
     std::vector<std::unique_ptr<ASTNamed<ASTItem>>> newRootItems;
