@@ -4875,9 +4875,6 @@ auto UfcsVisitor::visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPa
             case HIRPathData::TAG_Generic: {
                 break;
             }
-            case HIRPathData::TAG_UfcsUnknown: {
-                BUG(sp, StringView("UfcsUnknown still in pattern value - ") << pat);
-            }
             case HIRPathData::TAG_UfcsInherent: {
                 auto& pe = ve.path.data.as_UfcsInherent();
                 bool rv = crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {

@@ -1254,9 +1254,6 @@ static void enumerateConstRelocations(EnumState& state, const HIRPath& path, con
             enumerateConstRelocations(state, pe.implParams);
             break;
         }
-        case HIRPathData::TAG_UfcsUnknown: {
-            break;
-        }
     }
 }
 
