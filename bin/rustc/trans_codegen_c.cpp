@@ -2595,6 +2595,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("__attribute__((target(\"xsave,xsavec\"))) ");
         } else if (item.linkage.name == "llvm.x86.xsaves" || item.linkage.name == "llvm.x86.xrstors") {
             of << StringView("__attribute__((target(\"xsave,xsaves\"))) ");
+        } else if (item.linkage.name == "llvm.x86.sse.comigt.ss") {
+            of << StringView("__attribute__((target(\"sse\"))) ");
         }
         emitFunctionHeader(p, item, params);
         of << StringView(" {\n");
@@ -2634,6 +2636,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\tfloat lhs[4], rhs[4]; u32 result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n") << StringView("\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
         } else if (item.linkage.name == "llvm.x86.sse.cmp.ss") {
             of << StringView("\tfloat lhs[4], rhs[4]; u32 result[4];\n") << StringView("\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n") << StringView("\tresult[0] = trustme_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n") << StringView("\tmemcpy(&rv, result, sizeof(result));\n") << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.sse.comigt.ss") {
+            of << StringView("\ttypedef float trustme_v4sf __attribute__((vector_size(16)));\n") << StringView("\ttrustme_v4sf lhs, rhs;\n") << StringView("\tmemcpy(&lhs, &arg0, sizeof(lhs)); memcpy(&rhs, &arg1, sizeof(rhs));\n") << StringView("\treturn __builtin_ia32_comigt(lhs, rhs);\n");
         } else if (item.linkage.name == "llvm.x86.sse.comieq.ss" || item.linkage.name == "llvm.x86.sse.comige.ss" || item.linkage.name == "llvm.x86.sse.comile.ss" || item.linkage.name == "llvm.x86.sse.comilt.ss" || item.linkage.name == "llvm.x86.sse.comineq.ss" || item.linkage.name == "llvm.x86.sse.ucomieq.ss" || item.linkage.name == "llvm.x86.sse.ucomige.ss" || item.linkage.name == "llvm.x86.sse.ucomigt.ss" || item.linkage.name == "llvm.x86.sse.ucomile.ss" || item.linkage.name == "llvm.x86.sse.ucomilt.ss" || item.linkage.name == "llvm.x86.sse.ucomineq.ss") {
             const char* op = nullptr;
             if (item.linkage.name == "llvm.x86.sse.comieq.ss" || item.linkage.name == "llvm.x86.sse.ucomieq.ss") {
