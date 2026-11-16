@@ -2883,6 +2883,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\trv._0 = __builtin_sub_overflow(arg1, arg2, &rv._1);\n");
             of << StringView("\tif(arg0) rv._0 |= __builtin_sub_overflow(rv._1, 1, &rv._1);\n");
             of << StringView("\treturn rv;\n");
+        } else if (item.linkage.name == "llvm.x86.fxsave") {
+            of << StringView("\t__builtin_ia32_fxsave(arg0);\n");
         } else if (item.linkage.name == "llvm.x86.xgetbv") {
             of << StringView("\tu32 lo, hi;\n");
             of << StringView("\t__asm__ __volatile__ (\"xgetbv\" : \"=a\" (lo), \"=d\" (hi) : \"c\" (arg0) );\n");
