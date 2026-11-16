@@ -1661,9 +1661,6 @@ namespace {
                 state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                 optVisitMirLvaluesMut(stmt, cb);
             }
-            if (block.terminator.isDead()) {
-                continue;
-            }
             state.setCurStmtTerm(blockIdx);
             optVisitMirLvaluesMut(block.terminator, cb);
         }
@@ -1675,9 +1672,6 @@ namespace {
             for (size_t statementIdx = 0; statementIdx < block.statements.size(); statementIdx++) {
                 state.setCurStmt(blockIdx, statementIdx);
                 optVisitMirLvalues(block.statements[statementIdx], cb);
-            }
-            if (block.terminator.isDead()) {
-                continue;
             }
             state.setCurStmtTerm(blockIdx);
             optVisitMirLvalues(block.terminator, cb);
@@ -4008,9 +4002,6 @@ namespace {
                 }
             };
             for (auto& bb : fcn.blocks) {
-                if (bb.terminator.isDead()) {
-                    continue;
-                }
 
                 struct PatchTargets final: public MIRTargetVisitorMut {
                     decltype(patchTgt)& patchTgt;
