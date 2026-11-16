@@ -2593,6 +2593,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("__attribute__((target(\"xsaveopt\"))) ");
         } else if (item.linkage.name == "llvm.x86.xsavec") {
             of << StringView("__attribute__((target(\"xsave,xsavec\"))) ");
+        } else if (item.linkage.name == "llvm.x86.xsaves") {
+            of << StringView("__attribute__((target(\"xsave,xsaves\"))) ");
         }
         emitFunctionHeader(p, item, params);
         of << StringView(" {\n");
@@ -2900,6 +2902,8 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << StringView("\t__builtin_ia32_xsaveopt(arg0, ((u64)arg1 << 32) | arg2);\n");
         } else if (item.linkage.name == "llvm.x86.xsavec") {
             of << StringView("\t__builtin_ia32_xsavec(arg0, ((u64)arg1 << 32) | arg2);\n");
+        } else if (item.linkage.name == "llvm.x86.xsaves") {
+            of << StringView("\t__builtin_ia32_xsaves(arg0, ((u64)arg1 << 32) | arg2);\n");
         } else if (item.linkage.name == "llvm.x86.xrstor") {
             of << StringView("\t__builtin_ia32_xrstor((void*)arg0, ((u64)arg1 << 32) | arg2);\n");
         } else if (item.linkage.name == "llvm.x86.xsetbv") {
