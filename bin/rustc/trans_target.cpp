@@ -2256,6 +2256,10 @@ void TargetSetCfg(WireBoard& wb, const std::string& targetName) {
     if (tgt.hasThreadLocal) {
         CfgSetFlag(settings, "target_thread_local");
     }
+    if (tgt.arch.atomics.u8 || tgt.arch.atomics.u16 || tgt.arch.atomics.u32 || tgt.arch.atomics.u64 || tgt.arch.atomics.ptr) {
+        CfgSetFlag(settings, "target_has_atomic");
+        CfgSetFlag(settings, "target_has_atomic_load_store");
+    }
     if (tgt.arch.atomics.u8) {
         CfgSetValue(settings, "target_has_atomic", "8");
         CfgSetValue(settings, "target_has_atomic_load_store", "8");
