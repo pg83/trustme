@@ -789,6 +789,7 @@ public:
     FileInfo fileInfo;
 
     bool insertPrelude = true;
+    bool expansionInitialized = false;
     char indexPopulated = 0;
 
     /* The original block lives in the expression pool, beyond the lifetime

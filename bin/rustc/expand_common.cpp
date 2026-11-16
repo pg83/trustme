@@ -1409,17 +1409,16 @@ namespace {
 
         // TODO: Pre-parse all macro_rules invocations into items?
 
-        if (es.mode == ExpandMode::FirstPass) {
-            if (firstItem == 0) {
-                if (es.modstack.prev) {
-                    for (const auto& mac : es.modstack.prev->item->macroImports) {
-                        mod.macroImports.push_back(mac.clone());
-                        DEBUG(mod.path() << StringView(" + Import import ") << mac.name << StringView(" = '") << mod.macroImports.back().path << StringView("'"));
-                    }
-                    for (const auto& mac : es.modstack.prev->item->macros()) {
-                        mod.macroImports.push_back(ASTModule::MacroImport{false, mac.name, es.modstack.prev->item->path() + mac.name, &*mac.data});
-                        DEBUG(mod.path() << StringView(" + Import defined '") << mod.macroImports.back().path << StringView("'"));
-                    }
+        if (!mod.expansionInitialized) {
+            mod.expansionInitialized = true;
+            if (es.modstack.prev) {
+                for (const auto& mac : es.modstack.prev->item->macroImports) {
+                    mod.macroImports.push_back(mac.clone());
+                    DEBUG(mod.path() << StringView(" + Import import ") << mac.name << StringView(" = '") << mod.macroImports.back().path << StringView("'"));
+                }
+                for (const auto& mac : es.modstack.prev->item->macros()) {
+                    mod.macroImports.push_back(ASTModule::MacroImport{false, mac.name, es.modstack.prev->item->path() + mac.name, &*mac.data});
+                    DEBUG(mod.path() << StringView(" + Import defined '") << mod.macroImports.back().path << StringView("'"));
                 }
             }
 
