@@ -663,6 +663,8 @@ struct TraitResolution::NextTraitGoalEvaluator {
 
     bool typeHasUnknown(const HIRType* input) const;
 
+    static bool typeHasKnownRigidOuterConstructor(const HIRType* type);
+
     static bool typeHasCandidatePlaceholder(const HIRType* type);
 
     static bool typeHasUfcsUnknown(const HIRType* type);
@@ -10271,6 +10273,33 @@ auto NextTraitGoalEvaluator::typeHasUnknown(const HIRType* input) const -> bool 
     return false;
 }
 
+auto NextTraitGoalEvaluator::typeHasKnownRigidOuterConstructor(const HIRType* type) -> bool {
+    switch (type->tag()) {
+        case HIRType::TAG_Infer:
+        case HIRType::TAG_Generic:
+        case HIRType::TAG_ErasedType:
+            return false;
+        case HIRType::TAG_Path: {
+            const auto& binding = type->as_Path().binding;
+            return !binding.is_Unbound() && !binding.is_Opaque();
+        }
+        case HIRType::TAG_Diverge:
+        case HIRType::TAG_Primitive:
+        case HIRType::TAG_TraitObject:
+        case HIRType::TAG_Array:
+        case HIRType::TAG_Slice:
+        case HIRType::TAG_Tuple:
+        case HIRType::TAG_Borrow:
+        case HIRType::TAG_Pointer:
+        case HIRType::TAG_NamedFunction:
+        case HIRType::TAG_Function:
+        case HIRType::TAG_NodeType:
+        case HIRType::TAG_Pattern:
+            return true;
+    }
+    BUG(Span(), StringView("Invalid HIR type tag"));
+}
+
 auto NextTraitGoalEvaluator::typeHasCandidatePlaceholder(const HIRType* type) -> bool {
     bool found = false;
     visitTyWith(type, [&](const HIRType* inner) {
@@ -14361,6 +14390,11 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         prepareResponseMemo(goalKey);
         return certainty;
     };
+
+    if (coherenceMode && crate.featureEnabled("with_negative_coherence") && trait == resolve_.board().langItems->fnPtrTrait() &&
+        !resolvedType->is_Function() && typeHasKnownRigidOuterConstructor(resolvedType)) {
+        return cacheResult(Certainty::NoSolution);
+    }
 
     const size_t frameIndex = frameDepth++;
     if (frameIndex == frames.length()) {
