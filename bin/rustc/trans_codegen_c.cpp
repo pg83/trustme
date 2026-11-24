@@ -1563,9 +1563,6 @@ auto CodeGeneratorC::emitTypeProto(const HIRType* ty) -> void {
         case HIRType::TAG_Path: {
             auto& te = (*ty).as_Path();
             switch (te.binding.tag()) {
-                case HIRTypePathBinding::TAG_Unbound: {
-                    UNREACHABLE();
-                }
                 case HIRTypePathBinding::TAG_Struct: {
                     of << StringView("struct s_") << TransMangle(te.path) << StringView(";\n");
                     break;
