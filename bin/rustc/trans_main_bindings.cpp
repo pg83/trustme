@@ -3397,9 +3397,6 @@ auto TypeVisitor::visitType(const HIRType* ty, Mode mode) -> void {
         switch ((*ty).tag()) {
             default:
                 break;
-            case HIRType::TAG_Infer: {
-                BUG(sp, StringView("`_` type hit in enumeration"));
-            }
             case HIRType::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 switch (te.binding.tag()) {
