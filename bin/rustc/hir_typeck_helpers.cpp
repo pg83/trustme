@@ -4861,9 +4861,6 @@ const HIRType* TraitResolution::expandAssociatedTypesInplace(const Span& sp, con
                             H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                             break;
                         }
-                        case HIRPath::Data::TAG_UfcsUnknown: {
-                            break;
-                        }
                     }
                     break;
                 }
